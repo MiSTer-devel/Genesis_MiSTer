@@ -450,10 +450,8 @@ sdc : entity work.sdram_controller generic map (
 		
 	romwr_req	=> ROM_WR_REQ,
 	romwr_ack	=> ROM_WR_ACK,
-	romwr_we 	=> '1',
 	romwr_a		=> ROM_ADDR,
 	romwr_d		=> ROM_DATA,
-	romwr_q		=> open,
 
 	romrd_req	=> romrd_req,
 	romrd_ack	=> romrd_ack,
