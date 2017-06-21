@@ -71,30 +71,71 @@ architecture rtl of sdram_controller is
 	signal romwr_a_u : unsigned(addrwidth downto 1);
 	signal romwr_d_u : unsigned(15 downto 0);
 
-	signal ram68k_a_u : unsigned(addrwidth downto 1);
-	signal ram68k_d_u : unsigned(15 downto 0);
-	signal ram68k_q_u : unsigned(15 downto 0);
+	signal vramwe      : std_logic := '0';
+	signal old_vramreq : std_logic := '0';
 
-	signal vram_a_u : unsigned(addrwidth downto 1);
-	signal vram_d_u : unsigned(15 downto 0);
-	signal vram_q_u : unsigned(15 downto 0);
-
+	signal ram68kwe      : std_logic := '0';
+	signal old_ram68kreq : std_logic := '0';
 	
 begin
-	
+
 	romrd_a_u <= unsigned(std_logic_vector(to_unsigned(0, addrwidth - 21)) & romrd_a);
 	romrd_q <= std_logic_vector(romrd_q_u);
 	
 	romwr_a_u <= unsigned(std_logic_vector(to_unsigned(0, addrwidth - 21)) & romwr_a);
 	romwr_d_u <= unsigned(romwr_d);
 
-	ram68k_a_u <= unsigned(std_logic_vector(to_unsigned(2#1000000#, addrwidth - 15)) & ram68k_a);
-	ram68k_d_u <= unsigned(ram68k_d);
-	ram68k_q <= std_logic_vector(ram68k_q_u);
+	vram : entity work.gen_vram
+	port map
+	(
+		clock	    => clk,
 
-	vram_a_u <= unsigned(std_logic_vector(to_unsigned(2#1100000#, addrwidth - 15)) & vram_a);
-	vram_d_u <= unsigned(vram_d);
-	vram_q <= std_logic_vector(vram_q_u);
+		wraddress => vram_a(15 downto 1),
+		data	    => vram_d,
+		byteena_a => not vram_u_n & not vram_l_n,
+		wren      => vramwe,
+
+		rdaddress => vram_a(15 downto 1),
+		q         => vram_q
+	);
+
+	process(clk)
+	begin
+		if rising_edge(clk) then
+			vram_ack <= old_vramreq;
+			old_vramreq <= vram_req;
+			vramwe <= '0';
+			if(old_vramreq /= vram_req) then
+				vramwe <= vram_we;
+			end if;
+		end if;
+	end process;
+
+	ram68k : entity work.gen_vram
+	port map
+	(
+		clock	    => clk,
+
+		wraddress => ram68k_a(15 downto 1),
+		data	    => ram68k_d,
+		byteena_a => not ram68k_u_n & not ram68k_l_n,
+		wren      => ram68kwe,
+
+		rdaddress => ram68k_a(15 downto 1),
+		q         => ram68k_q
+	);
+
+	process(clk)
+	begin
+		if rising_edge(clk) then
+			ram68k_ack <= old_ram68kreq;
+			old_ram68kreq <= ram68k_req;
+			ram68kwe <= '0';
+			if(old_ram68kreq /= ram68k_req) then
+				ram68kwe <= ram68k_we;
+			end if;
+		end if;
+	end process;
 	
 -- -----------------------------------------------------------------------
 -- SDRAM Controller
@@ -189,24 +230,24 @@ begin
 			romrd_a => romrd_a_u,
 			romrd_q => romrd_q_u,
 	
-			ram68k_req => ram68k_req,
-			ram68k_ack => ram68k_ack,
-			ram68k_we => ram68k_we,
-			ram68k_a => ram68k_a_u,
-			ram68k_d => ram68k_d_u,
-			ram68k_q => ram68k_q_u,
-			ram68k_u_n => ram68k_u_n,
-			ram68k_l_n => ram68k_l_n,
+			ram68k_req => '0',
+			ram68k_ack => open,
+			ram68k_we => '0',
+			ram68k_a => (others => '0'),
+			ram68k_d => (others => '0'),
+			ram68k_q => open,
+			ram68k_u_n => '1',
+			ram68k_l_n => '1',
 
-			vram_req => vram_req,
-			vram_ack => vram_ack,
-			vram_we => vram_we,
-			vram_a => vram_a_u,
-			vram_d => vram_d_u,
-			vram_q => vram_q_u,
-			vram_u_n => vram_u_n,
-			vram_l_n => vram_l_n,
-			
+			vram_req => '0',
+			vram_ack => open,
+			vram_we => '0',
+			vram_a => (others => '0'),
+			vram_d => (others => '0'),
+			vram_q => open,
+			vram_u_n => '1',
+			vram_l_n => '1',
+
 			initDone => initDone,
 			
 			debugIdle => open,

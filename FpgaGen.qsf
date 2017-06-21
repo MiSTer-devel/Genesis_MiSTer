@@ -354,6 +354,7 @@ set_global_assignment -name PRE_FLOW_SCRIPT_FILE "quartus_sh:sys/build_id.tcl"
 set_global_assignment -name CDF_FILE jtag.cdf
 set_global_assignment -name QIP_FILE sys/sys.qip
 set_global_assignment -name QIP_FILE sys/vip.qip
+set_global_assignment -name QIP_FILE gen_vram.qip
 set_global_assignment -name VERILOG_FILE jt12/jt12_timers.v
 set_global_assignment -name VERILOG_FILE jt12/jt12_sumch.v
 set_global_assignment -name VERILOG_FILE jt12/jt12_sh24.v
