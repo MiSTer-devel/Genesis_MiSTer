@@ -155,13 +155,14 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .PS2DIV(1000), .WIDE(1)) hps_io
 
 
 ///////////////////////////////////////////////////
-wire clk_sys, locked;
+wire clk_sys, clk_ram, locked;
 
 pll pll
 (
 	.refclk(CLK_50M),
 	.rst(0),
 	.outclk_0(clk_sys),
+	.outclk_1(clk_ram),
 	.locked(locked)
 );
 
@@ -171,13 +172,14 @@ assign CLK_VIDEO = clk_sys;
 wire [1:0] scale = status[3:2];
 wire [2:0] red, green, blue;
 
-assign DDRAM_CLK = clk_sys;
+assign DDRAM_CLK = clk_ram;
 wire reset = RESET|buttons[1];
 
 Virtual_Toplevel fpgagen
 (
 	.RESET_N(~(reset|ioctl_download)),
 	.MCLK(clk_sys),
+	.RAMCLK(clk_ram),
 
 	.DAC_LDATA(AUDIO_L),
 	.DAC_RDATA(AUDIO_R),

@@ -48,6 +48,7 @@ entity Virtual_Toplevel is
 	port(
 		RESET_N 		: in std_logic;
 		MCLK 			: in std_logic;
+		RAMCLK		: in std_logic;
 
 		DAC_LDATA 	: out std_logic_vector(15 downto 0);
 		DAC_RDATA 	: out std_logic_vector(15 downto 0);
@@ -419,7 +420,7 @@ romrd_ack<= ROM_ACK;
 vram : entity work.gen_ram
 port map
 (
-	clock	    => MCLK,
+	clock	    => RAMCLK,
 
 	wraddress => vram_a(15 downto 1),
 	data	    => vram_d,
@@ -430,9 +431,9 @@ port map
 	q         => vram_q
 );
 
-process(MCLK)
+process(RAMCLK)
 begin
-	if rising_edge(MCLK) then
+	if rising_edge(RAMCLK) then
 		vram_ack <= old_vramreq;
 		old_vramreq <= vram_req;
 		vramwe <= '0';
@@ -445,7 +446,7 @@ end process;
 ram68k : entity work.gen_ram
 port map
 (
-	clock	    => MCLK,
+	clock	    => RAMCLK,
 
 	wraddress => ram68k_a(15 downto 1),
 	data	    => ram68k_d,
@@ -456,9 +457,9 @@ port map
 	q         => ram68k_q
 );
 
-process(MCLK)
+process(RAMCLK)
 begin
-	if rising_edge(MCLK) then
+	if rising_edge(RAMCLK) then
 		ram68k_ack <= old_ram68kreq;
 		old_ram68kreq <= ram68k_req;
 		ram68kwe <= '0';
