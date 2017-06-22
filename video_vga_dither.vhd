@@ -2,7 +2,7 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.numeric_std.ALL;
 
-entity video_vga_dither is
+entity  is
 	generic (
 		outbits : integer :=4
 	);

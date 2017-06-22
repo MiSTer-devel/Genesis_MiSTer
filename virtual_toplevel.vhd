@@ -48,19 +48,6 @@ entity Virtual_Toplevel is
 	port(
 		RESET_N 		: in std_logic;
 		MCLK 			: in std_logic;
-		SDR_CLK 		: in std_logic;
-
-		DRAM_ADDR	: out std_logic_vector(rowAddrBits-1 downto 0);
-		DRAM_BA_0	: out std_logic;
-		DRAM_BA_1	: out std_logic;
-		DRAM_CAS_N	: out std_logic;
-		DRAM_CKE		: out std_logic;
-		DRAM_CS_N	: out std_logic;
-		DRAM_DQ		: inout std_logic_vector(15 downto 0);
-		DRAM_LDQM	: out std_logic;
-		DRAM_RAS_N	: out std_logic;
-		DRAM_UDQM	: out std_logic;
-		DRAM_WE_N	: out std_logic;
 
 		DAC_LDATA 	: out std_logic_vector(15 downto 0);
 		DAC_RDATA 	: out std_logic_vector(15 downto 0);
@@ -211,7 +198,6 @@ constant useCache : boolean := false;
 
 -- Genesis core
 signal NO_DATA			: std_logic_vector(15 downto 0) := x"4E71";	-- SYNTHESIS gp/m68k.c line 12
-signal MRST_N			: std_logic;
 
 -- 68K
 signal TG68_RES_N		: std_logic;
@@ -404,8 +390,6 @@ signal VBUS_DATA	: std_logic_vector(15 downto 0);
 signal VBUS_SEL		: std_logic;
 signal VBUS_DTACK_N	: std_logic;	
 
-signal SDR_INIT_DONE	: std_logic;
-
 type romStates is (ROM_IDLE, ROM_READ);
 signal romState : romStates := ROM_IDLE;
 
@@ -415,22 +399,15 @@ signal romState : romStates := ROM_IDLE;
 signal snd_right : std_logic_vector(11 downto 0);
 signal snd_left  : std_logic_vector(11 downto 0);
 
+signal vramwe      : std_logic := '0';
+signal old_vramreq : std_logic := '0';
+signal ram68kwe      : std_logic := '0';
+signal old_ram68kreq : std_logic := '0';
 
 begin
 
 -- -----------------------------------------------------------------------
--- Global assignments
--- -----------------------------------------------------------------------
-
--- Reset
-MRST_N <= RESET_N and SDR_INIT_DONE;
-
--- SDRAM
-DRAM_CKE <= '1';
-DRAM_CS_N <= '0';
-
--- -----------------------------------------------------------------------
--- SDRAM Controller
+-- RAM
 -- -----------------------------------------------------------------------		
 
 ROM_ADDR <= romrd_a(21 downto 3);
@@ -439,52 +416,58 @@ romrd_q  <= ROM_DATA;
 romrd_ack<= ROM_ACK;
 
 
-sdc : entity work.sdram_controller generic map (
-	colAddrBits => colAddrBits,
-	rowAddrBits => rowAddrBits
-) port map(
-	clk			=> SDR_CLK,
-	
-	std_logic_vector(sd_data)	=> DRAM_DQ,
-	std_logic_vector(sd_addr)	=> DRAM_ADDR,
-	sd_we_n							=> DRAM_WE_N,
-	sd_ras_n							=> DRAM_RAS_N,
-	sd_cas_n							=> DRAM_CAS_N,
-	sd_ba_0							=> DRAM_BA_0,
-	sd_ba_1							=> DRAM_BA_1,
-	sd_ldqm							=> DRAM_LDQM,
-	sd_udqm							=> DRAM_UDQM,
-		
-	romwr_req	=> '0', --ROM_WR_REQ,
-	romwr_ack	=> open, --ROM_WR_ACK,
-	romwr_a		=> (others => '0'), --ROM_ADDR,
-	romwr_d		=> (others => '0'), --ROM_DATA,
+vram : entity work.gen_ram
+port map
+(
+	clock	    => MCLK,
 
-	romrd_req	=> '0', --romrd_req,
-	romrd_ack	=> open, --romrd_ack,
-	romrd_a		=> (others => '0'), --romrd_a,
-	romrd_q		=> open, --romrd_q,
+	wraddress => vram_a(15 downto 1),
+	data	    => vram_d,
+	byteena_a => not vram_u_n & not vram_l_n,
+	wren      => vramwe,
 
-	ram68k_req	=> ram68k_req,
-	ram68k_ack	=> ram68k_ack,
-	ram68k_we	=> ram68k_we,
-	ram68k_a		=> ram68k_a,
-	ram68k_d		=> ram68k_d,
-	ram68k_q		=> ram68k_q,
-	ram68k_u_n	=> ram68k_u_n,
-	ram68k_l_n	=> ram68k_l_n,
-
-	vram_req	=> vram_req,
-	vram_ack => vram_ack,
-	vram_we	=> vram_we,
-	vram_a	=> vram_a,
-	vram_d	=> vram_d,
-	vram_q	=> vram_q,
-	vram_u_n => vram_u_n,
-	vram_l_n => vram_l_n,
-	
-	initDone 	=> SDR_INIT_DONE
+	rdaddress => vram_a(15 downto 1),
+	q         => vram_q
 );
+
+process(MCLK)
+begin
+	if rising_edge(MCLK) then
+		vram_ack <= old_vramreq;
+		old_vramreq <= vram_req;
+		vramwe <= '0';
+		if(old_vramreq /= vram_req) then
+			vramwe <= vram_we;
+		end if;
+	end if;
+end process;
+
+ram68k : entity work.gen_ram
+port map
+(
+	clock	    => MCLK,
+
+	wraddress => ram68k_a(15 downto 1),
+	data	    => ram68k_d,
+	byteena_a => not ram68k_u_n & not ram68k_l_n,
+	wren      => ram68kwe,
+
+	rdaddress => ram68k_a(15 downto 1),
+	q         => ram68k_q
+);
+
+process(MCLK)
+begin
+	if rising_edge(MCLK) then
+		ram68k_ack <= old_ram68kreq;
+		old_ram68kreq <= ram68k_req;
+		ram68kwe <= '0';
+		if(old_ram68kreq /= ram68k_req) then
+			ram68kwe <= ram68k_we;
+		end if;
+	end if;
+end process;
+
 
 -- -----------------------------------------------------------------------
 -- Z80 RAM
@@ -562,7 +545,7 @@ port map(
 -- I/O
 io : entity work.gen_io
 port map(
-	RST_N		=> MRST_N,
+	RST_N		=> RESET_N,
 	CLK		=> VCLK,
 
 	P1_UP		=> not JOY_1(3),
@@ -596,7 +579,7 @@ port map(
 -- VDP
 vdp : entity work.vdp
 port map(
-	RST_N		=> MRST_N,
+	RST_N		=> RESET_N,
 	CLK		=> MCLK,
 		
 	SEL		=> VDP_SEL,
@@ -659,7 +642,7 @@ port map(
 -- FM
 --fm_mixer:jt12_mixer
 --port map(
---	rst			=> not MRST_N,
+--	rst			=> not RESET_N,
 --	clk			=> MCLK,
 --	sample		=> FM_SAMPLE,
 --	left_in 	=> FM_MUX_LEFT,
@@ -716,9 +699,9 @@ port map(
 -- VINT_T80_ACK <= VINT_T80;
 
 -- TG68_IPL_N <= "111";
-process(MRST_N, MCLK)
+process(RESET_N, MCLK)
 begin
-	if MRST_N = '0' then
+	if RESET_N = '0' then
 		TG68_IPL_N <= "111";
 		T80_INT_N <= '1';
 		
@@ -783,9 +766,9 @@ INTERLACE <= '0';
 -- #############################################################################
 -- #############################################################################
 
-process( MRST_N, VCLK )
+process( RESET_N, VCLK )
 begin
-	if MRST_N = '0' then
+	if RESET_N = '0' then
 		RST_VCLK <= '1';
 		RST_VCLK_aux <= '1';
 	elsif rising_edge(VCLK) then
@@ -795,9 +778,9 @@ begin
 end process;
 
 -- CLOCK GENERATION
-process( MRST_N, MCLK, VCLKCNT )
+process( RESET_N, MCLK, VCLKCNT )
 begin
-	if MRST_N = '0' then
+	if RESET_N = '0' then
 		VCLK <= '1';
 		ZCLK <= '0';
 		VCLKCNT <= "001"; -- important for SDRAM controller (EDIT: not needed anymore)
@@ -832,9 +815,9 @@ begin
 	end if;
 end process;
 
-process( MRST_N, ZCLK )
+process( RESET_N, ZCLK )
 begin
-	if MRST_N = '0' then
+	if RESET_N = '0' then
 		T80_CLKEN <= '1';
 		ZCLKCNT <= (others => '0');
 	elsif falling_edge( ZCLK ) then
@@ -856,7 +839,7 @@ VBUS_DATA <= DMA_FLASH_D when DMA_FLASH_SEL = '1'
 	else x"FFFF";
 
 -- 68K INPUTS
-TG68_RES_N <= MRST_N;
+TG68_RES_N <= RESET_N;
 TG68_CLKE <= '1';
 
 TG68_DTACK_N <= TG68_FLASH_DTACK_N when TG68_FLASH_SEL = '1'
@@ -891,9 +874,9 @@ TG68_DI(7 downto 0) <= TG68_FLASH_D(7 downto 0) when TG68_FLASH_SEL = '1' and TG
 	else NO_DATA(7 downto 0);
 
 -- Z80 INPUTS
-process(MRST_N, MCLK, ZRESET_N, ZBUSREQ)
+process(RESET_N, MCLK, ZRESET_N, ZBUSREQ)
 begin
-	if MRST_N = '0' then
+	if RESET_N = '0' then
 		T80_RESET_N <= '0';
 	elsif rising_edge(MCLK) then
 		if T80_RESET_N = '0' then
@@ -937,7 +920,7 @@ T80_DI <= T80_SDRAM_D when T80_SDRAM_SEL = '1'
 -- OPERATING SYSTEM ROM
 TG68_OS_DTACK_N <= '0';
 OS_OEn <= '0';
-process( MRST_N, MCLK, TG68_AS_N, TG68_RNW,
+process( RESET_N, MCLK, TG68_AS_N, TG68_RNW,
 	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N )
 begin
 
@@ -955,7 +938,7 @@ end process;
 
 
 -- CONTROL AREA
-process( MRST_N, MCLK, TG68_AS_N, TG68_RNW,
+process( RESET_N, MCLK, TG68_AS_N, TG68_RNW,
 	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
 	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N)
 begin
@@ -975,7 +958,7 @@ begin
 		T80_CTRL_SEL <= '0';
 	end if;
 	
-	if MRST_N = '0' then
+	if RESET_N = '0' then
 		TG68_CTRL_DTACK_N <= '1';	
 		T80_CTRL_DTACK_N <= '1';	
 		
@@ -1055,7 +1038,7 @@ begin
 end process;
 
 -- I/O AREA
-process( MRST_N, MCLK, TG68_AS_N, TG68_RNW,
+process( RESET_N, MCLK, TG68_AS_N, TG68_RNW,
 	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
 	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N )
 begin
@@ -1075,7 +1058,7 @@ begin
 		T80_IO_SEL <= '0';
 	end if;
 	
-	if MRST_N = '0' then
+	if RESET_N = '0' then
 		TG68_IO_DTACK_N <= '1';	
 		T80_IO_DTACK_N <= '1';	
 		
@@ -1164,7 +1147,7 @@ end process;
 -- 7F = 01111111 000
 -- FF = 11111111 000
 -- VDP AREA
-process( MRST_N, MCLK, TG68_AS_N, TG68_RNW,
+process( RESET_N, MCLK, TG68_AS_N, TG68_RNW,
 	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
 	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N )
 begin
@@ -1192,7 +1175,7 @@ begin
 		T80_VDP_SEL <= '0';
 	end if;
 	
-	if MRST_N = '0' then
+	if RESET_N = '0' then
 		TG68_VDP_DTACK_N <= '1';	
 		T80_VDP_DTACK_N <= '1';	
 		
@@ -1309,7 +1292,7 @@ end process;
 -- C0 = 11000000
 -- DF = 11011111
 -- FM AREA
-process( MRST_N, MCLK, TG68_AS_N, TG68_RNW,
+process( RESET_N, MCLK, TG68_AS_N, TG68_RNW,
 	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
 	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N )
 begin
@@ -1329,7 +1312,7 @@ begin
 		T80_FM_SEL <= '0';
 	end if;
 	
-	if MRST_N = '0' then
+	if RESET_N = '0' then
 		TG68_FM_DTACK_N <= '1';	
 		T80_FM_DTACK_N <= '1';	
 		
@@ -1428,7 +1411,7 @@ end process;
 -- PSG AREA
 -- Z80: 7F11h
 -- 68k: C00011
-process( MRST_N, MCLK, TG68_AS_N, 
+process( RESET_N, MCLK, TG68_AS_N, 
 	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
 	BAR, T80_A, T80_MREQ_N, T80_WR_N )
 begin
@@ -1448,7 +1431,7 @@ begin
 		TG68_PSG_SEL <= '0';
 	end if;	
 	
-	if MRST_N = '0' then
+	if RESET_N = '0' then
 		PSG_SEL<= '0';
 	elsif rising_edge(MCLK) then
 		if VCLK='0' then
@@ -1477,7 +1460,7 @@ end process;
 -- E0 = 11100000
 -- FE = 11111110
 -- BANK ADDRESS REGISTER AND UNUSED AREA IN Z80 ADDRESS SPACE
-process( MRST_N, MCLK, TG68_AS_N, TG68_RNW,
+process( RESET_N, MCLK, TG68_AS_N, TG68_RNW,
 	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
 	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N )
 begin
@@ -1498,7 +1481,7 @@ begin
 		T80_BAR_SEL <= '0';
 	end if;
 	
-	if MRST_N = '0' then
+	if RESET_N = '0' then
 		TG68_BAR_DTACK_N <= '1';	
 		T80_BAR_DTACK_N <= '1';
 		
@@ -1546,7 +1529,7 @@ end process;
 -- -----------------------------------------------------------------------
 
 -- FLASH (SDRAM) CONTROL
-process( MRST_N, MCLK, TG68_AS_N, TG68_RNW,
+process( RESET_N, MCLK, TG68_AS_N, TG68_RNW,
 	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
 	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N,
 	VBUS_SEL, VBUS_ADDR	)
@@ -1578,7 +1561,7 @@ begin
 		DMA_FLASH_SEL <= '0';
 	end if;
 
-	if MRST_N = '0' then
+	if RESET_N = '0' then
 		FC <= FC_IDLE;
 		
 		TG68_FLASH_DTACK_N <= '1';
@@ -1769,7 +1752,7 @@ end process;
 
 
 -- SDRAM (68K RAM) CONTROL
-process( MRST_N, MCLK, TG68_AS_N, TG68_RNW,
+process( RESET_N, MCLK, TG68_AS_N, TG68_RNW,
 	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
 	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N,
 	VBUS_SEL, VBUS_ADDR)
@@ -1798,7 +1781,7 @@ begin
 		DMA_SDRAM_SEL <= '0';
 	end if;
 
-	if MRST_N = '0' then
+	if RESET_N = '0' then
 		TG68_SDRAM_DTACK_N <= '1';
 		T80_SDRAM_DTACK_N <= '1';
 		DMA_SDRAM_DTACK_N <= '1';
@@ -1884,7 +1867,7 @@ end process;
 
 
 -- Z80 RAM CONTROL
-process( MRST_N, MCLK, TG68_AS_N, TG68_RNW,
+process( RESET_N, MCLK, TG68_AS_N, TG68_RNW,
 	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
 	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N,
 	VBUS_SEL, VBUS_ADDR)
@@ -1906,7 +1889,7 @@ begin
 		T80_ZRAM_SEL <= '0';
 	end if;
 	
-	if MRST_N = '0' then
+	if RESET_N = '0' then
 		TG68_ZRAM_DTACK_N <= '1';
 		T80_ZRAM_DTACK_N <= '1';
 	

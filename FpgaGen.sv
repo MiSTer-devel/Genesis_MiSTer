@@ -89,6 +89,9 @@ module emu
 	output        SDRAM_nWE
 );
 
+assign {SDRAM_A, SDRAM_BA, SDRAM_CLK, SDRAM_CKE, SDRAM_DQML, SDRAM_DQMH, SDRAM_nWE, SDRAM_nCAS, SDRAM_nRAS, SDRAM_nCS} = 6'b111111;
+assign SDRAM_DQ = 'Z;
+
 assign VIDEO_ARX = status[1] ? 8'd16 : 8'd4;
 assign VIDEO_ARY = status[1] ? 8'd9  : 8'd3;
 
@@ -152,15 +155,13 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .PS2DIV(1000), .WIDE(1)) hps_io
 
 
 ///////////////////////////////////////////////////
-wire clk_sys, clk_sdram, locked;
+wire clk_sys, locked;
 
 pll pll
 (
 	.refclk(CLK_50M),
 	.rst(0),
-	.outclk_0(clk_sdram),
-	.outclk_1(SDRAM_CLK),
-	.outclk_2(clk_sys),
+	.outclk_0(clk_sys),
 	.locked(locked)
 );
 
@@ -177,19 +178,6 @@ Virtual_Toplevel fpgagen
 (
 	.RESET_N(~(reset|ioctl_download)),
 	.MCLK(clk_sys),
-	.SDR_CLK(clk_sdram),
-
-	.DRAM_ADDR(SDRAM_A),
-	.DRAM_BA_0(SDRAM_BA[0]),
-	.DRAM_BA_1(SDRAM_BA[1]),
-	.DRAM_CAS_N(SDRAM_nCAS),
-	.DRAM_CKE(SDRAM_CKE),
-	.DRAM_CS_N(SDRAM_nCS),
-	.DRAM_DQ(SDRAM_DQ),
-	.DRAM_LDQM(SDRAM_DQML),
-	.DRAM_RAS_N(SDRAM_nRAS),
-	.DRAM_UDQM(SDRAM_DQMH),
-	.DRAM_WE_N(SDRAM_nWE),
 
 	.DAC_LDATA(AUDIO_L),
 	.DAC_RDATA(AUDIO_R),

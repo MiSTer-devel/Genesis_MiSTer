@@ -4,7 +4,7 @@
 -- MODULE: altsyncram 
 
 -- ============================================================
--- File Name: gen_vram.vhd
+-- File Name: gen_ram.vhd
 -- Megafunction Name(s):
 -- 			altsyncram
 --
@@ -40,7 +40,7 @@ USE ieee.std_logic_1164.all;
 LIBRARY altera_mf;
 USE altera_mf.altera_mf_components.all;
 
-ENTITY gen_vram IS
+ENTITY gen_ram IS
 	PORT
 	(
 		byteena_a		: IN STD_LOGIC_VECTOR (1 DOWNTO 0) :=  (OTHERS => '1');
@@ -51,10 +51,10 @@ ENTITY gen_vram IS
 		wren		: IN STD_LOGIC  := '0';
 		q		: OUT STD_LOGIC_VECTOR (15 DOWNTO 0)
 	);
-END gen_vram;
+END gen_ram;
 
 
-ARCHITECTURE SYN OF gen_vram IS
+ARCHITECTURE SYN OF gen_ram IS
 
 	SIGNAL sub_wire0	: STD_LOGIC_VECTOR (15 DOWNTO 0);
 
@@ -195,9 +195,9 @@ END SYN;
 -- Retrieval info: CONNECT: @data_a 0 0 16 0 data 0 0 16 0
 -- Retrieval info: CONNECT: @wren_a 0 0 0 0 wren 0 0 0 0
 -- Retrieval info: CONNECT: q 0 0 16 0 @q_b 0 0 16 0
--- Retrieval info: GEN_FILE: TYPE_NORMAL gen_vram.vhd TRUE
--- Retrieval info: GEN_FILE: TYPE_NORMAL gen_vram.inc FALSE
--- Retrieval info: GEN_FILE: TYPE_NORMAL gen_vram.cmp TRUE
--- Retrieval info: GEN_FILE: TYPE_NORMAL gen_vram.bsf FALSE
--- Retrieval info: GEN_FILE: TYPE_NORMAL gen_vram_inst.vhd FALSE
+-- Retrieval info: GEN_FILE: TYPE_NORMAL gen_ram.vhd TRUE
+-- Retrieval info: GEN_FILE: TYPE_NORMAL gen_ram.inc FALSE
+-- Retrieval info: GEN_FILE: TYPE_NORMAL gen_ram.cmp TRUE
+-- Retrieval info: GEN_FILE: TYPE_NORMAL gen_ram.bsf FALSE
+-- Retrieval info: GEN_FILE: TYPE_NORMAL gen_ram_inst.vhd FALSE
 -- Retrieval info: LIB_FILE: altera_mf
