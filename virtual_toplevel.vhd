@@ -81,10 +81,10 @@ entity Virtual_Toplevel is
 		JOY_1 		: in std_logic_vector(7 downto 0);
 		JOY_2 		: in std_logic_vector(7 downto 0);
 
-		ROM_WR_REQ 	: in std_logic;
-		ROM_WR_ACK 	: out std_logic;
-		ROM_ADDR   	: in std_logic_vector(21 downto 1);
-		ROM_DATA   	: in std_logic_vector(15 downto 0)
+		ROM_ADDR 	: out std_logic_vector(18 downto 0);
+		ROM_DATA 	: in  std_logic_vector(63 downto 0);
+		ROM_REQ		: out std_logic;
+		ROM_ACK 		: in  std_logic
 	);
 end entity;
 
@@ -432,6 +432,13 @@ DRAM_CS_N <= '0';
 -- -----------------------------------------------------------------------
 -- SDRAM Controller
 -- -----------------------------------------------------------------------		
+
+ROM_ADDR <= romrd_a(21 downto 3);
+ROM_REQ  <= romrd_req;
+romrd_q  <= ROM_DATA;
+romrd_ack<= ROM_ACK;
+
+
 sdc : entity work.sdram_controller generic map (
 	colAddrBits => colAddrBits,
 	rowAddrBits => rowAddrBits
@@ -448,15 +455,15 @@ sdc : entity work.sdram_controller generic map (
 	sd_ldqm							=> DRAM_LDQM,
 	sd_udqm							=> DRAM_UDQM,
 		
-	romwr_req	=> ROM_WR_REQ,
-	romwr_ack	=> ROM_WR_ACK,
-	romwr_a		=> ROM_ADDR,
-	romwr_d		=> ROM_DATA,
+	romwr_req	=> '0', --ROM_WR_REQ,
+	romwr_ack	=> open, --ROM_WR_ACK,
+	romwr_a		=> (others => '0'), --ROM_ADDR,
+	romwr_d		=> (others => '0'), --ROM_DATA,
 
-	romrd_req	=> romrd_req,
-	romrd_ack	=> romrd_ack,
-	romrd_a		=> romrd_a,
-	romrd_q		=> romrd_q,
+	romrd_req	=> '0', --romrd_req,
+	romrd_ack	=> open, --romrd_ack,
+	romrd_a		=> (others => '0'), --romrd_a,
+	romrd_q		=> open, --romrd_q,
 
 	ram68k_req	=> ram68k_req,
 	ram68k_ack	=> ram68k_ack,

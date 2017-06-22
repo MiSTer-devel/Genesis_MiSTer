@@ -89,8 +89,6 @@ module emu
 	output        SDRAM_nWE
 );
 
-assign {DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DDRAM_WE, DDRAM_CLK} = 0;
-
 assign VIDEO_ARX = status[1] ? 8'd16 : 8'd4;
 assign VIDEO_ARY = status[1] ? 8'd9  : 8'd3;
 
@@ -172,9 +170,12 @@ assign CLK_VIDEO = clk_sys;
 wire [1:0] scale = status[3:2];
 wire [2:0] red, green, blue;
 
+assign DDRAM_CLK = clk_sys;
+wire reset = RESET|buttons[1];
+
 Virtual_Toplevel fpgagen
 (
-	.RESET_N(~(RESET|ioctl_download|buttons[1])),
+	.RESET_N(~(reset|ioctl_download)),
 	.MCLK(clk_sys),
 	.SDR_CLK(clk_sdram),
 
@@ -209,22 +210,48 @@ Virtual_Toplevel fpgagen
 	.JOY_1((status[4] ? joystick_1 : joystick_0) | (joy_emu_num ? 8'd0 : joystick_emu)),
 	.JOY_2((status[4] ? joystick_0 : joystick_1) | (joy_emu_num ? joystick_emu : 8'd0)),
 
-	.ROM_WR_REQ(rom_wr),
-	.ROM_WR_ACK(rom_ack),
-	.ROM_ADDR(ioctl_addr[21:1]),
-	.ROM_DATA({ioctl_data[7:0],ioctl_data[15:8]})
+	.ROM_ADDR(rom_rdaddr),
+	.ROM_DATA(rom_data),
+	.ROM_REQ(rom_rd),
+	.ROM_ACK(rom_rdack)
 );
 
+wire [18:0] rom_rdaddr;
+wire [63:0] rom_data;
+wire rom_rd, rom_rdack;
+
+ddram ddram
+(
+	.*,
+
+   .wraddr(ioctl_addr),
+   .din({ioctl_data[7:0],ioctl_data[15:8]}),
+   .we_req(rom_wr),
+   .we_ack(rom_wrack),
+
+	
+   .rdaddr({rom_rdaddr, 3'b000}),
+   .dout(rom_data),
+   .rd_req(rom_rd),
+   .rd_ack(rom_rdack)
+);
+
+
 reg  rom_wr;
-wire rom_ack;
+wire rom_wrack;
 
 always @(posedge clk_sys) begin
-	if(RESET) {ioctl_wait, rom_wr} <= 0;
+	reg old_download, old_reset;
+	old_download <= ioctl_download;
+	old_reset <= reset;
+
+	if(~old_reset && reset) ioctl_wait <= 0;
+	if(~old_download && ioctl_download) rom_wr <= 0;
 	else begin
 		if(ioctl_wr) begin
 			ioctl_wait <= 1;
 			rom_wr <= ~rom_wr;
-		end else if(ioctl_wait && (rom_wr == rom_ack)) begin
+		end else if(ioctl_wait && (rom_wr == rom_wrack)) begin
 			ioctl_wait <= 0;
 		end
 	end
