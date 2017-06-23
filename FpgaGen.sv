@@ -112,7 +112,7 @@ localparam CONF_STR = {
 	"-;",
 	"O4,Swap joysticks,No,Yes;",
 	"-;",
-	"V,v1.00.",`BUILD_DATE
+	"V,v1.02.",`BUILD_DATE
 };
 
 
@@ -213,6 +213,7 @@ wire rom_rd, rom_rdack;
 ddram ddram
 (
 	.*,
+	.reset(reset & ~ioctl_download),
 
    .wraddr(ioctl_addr),
    .din({ioctl_data[7:0],ioctl_data[15:8]}),
@@ -225,7 +226,6 @@ ddram ddram
    .rd_req(rom_rd),
    .rd_ack(rom_rdack)
 );
-
 
 reg  rom_wr;
 wire rom_wrack;

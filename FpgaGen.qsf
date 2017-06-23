@@ -339,7 +339,7 @@ set_global_assignment -name SMART_RECOMPILE ON
 set_global_assignment -name SYNTHESIS_EFFORT AUTO
 set_global_assignment -name ECO_REGENERATE_REPORT OFF
 set_global_assignment -name OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"
-set_global_assignment -name FITTER_EFFORT "AUTO FIT"
+set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
 set_global_assignment -name OPTIMIZATION_TECHNIQUE SPEED
 set_global_assignment -name ECO_OPTIMIZE_TIMING ON
 set_global_assignment -name ALM_REGISTER_PACKING_EFFORT LOW
@@ -403,4 +403,5 @@ set_global_assignment -name VHDL_FILE zram.vhd
 set_global_assignment -name VHDL_FILE virtual_toplevel.vhd
 set_global_assignment -name SDC_FILE constraints.sdc
 set_global_assignment -name SYSTEMVERILOG_FILE FpgaGen.sv
+set_global_assignment -name SEED 2
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top

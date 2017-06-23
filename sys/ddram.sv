@@ -71,10 +71,8 @@ reg [1:0]  state  = 0;
 always @(posedge DDRAM_CLK)
 begin
 	reg old_rd, old_we;
-	reg old_reset;
 
-	old_reset <= reset;
-	if(~old_reset && reset)
+	if(reset)
 	begin
 		state  <= 0;
 		rd_ack <= 0;
@@ -82,7 +80,7 @@ begin
 		ram_write <= 0;
 		ram_read  <= 0;
 	end
-
+	else
 	if(!DDRAM_BUSY)
 	begin
 		ram_write <= 0;
