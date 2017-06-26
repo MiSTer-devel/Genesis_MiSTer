@@ -206,7 +206,7 @@ Virtual_Toplevel fpgagen
 	.ROM_ACK(rom_rdack)
 );
 
-wire [18:0] rom_rdaddr;
+wire [19:0] rom_rdaddr;
 wire [63:0] rom_data;
 wire rom_rd, rom_rdack;
 

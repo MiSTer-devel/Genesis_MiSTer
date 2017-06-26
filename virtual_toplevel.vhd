@@ -69,7 +69,7 @@ entity Virtual_Toplevel is
 		JOY_1 		: in std_logic_vector(7 downto 0);
 		JOY_2 		: in std_logic_vector(7 downto 0);
 
-		ROM_ADDR 	: out std_logic_vector(18 downto 0);
+		ROM_ADDR 	: out std_logic_vector(19 downto 0);
 		ROM_DATA 	: in  std_logic_vector(63 downto 0);
 		ROM_REQ		: out std_logic;
 		ROM_ACK 		: in  std_logic
@@ -134,9 +134,9 @@ end component;
 -- "FLASH"
 signal romrd_req : std_logic := '0';
 signal romrd_ack : std_logic;
-signal romrd_a : std_logic_vector(21 downto 3);
+signal romrd_a : std_logic_vector(22 downto 3);
 signal romrd_q : std_logic_vector(63 downto 0);
-signal romrd_a_cached : std_logic_vector(21 downto 3);
+signal romrd_a_cached : std_logic_vector(22 downto 3);
 signal romrd_q_cached : std_logic_vector(63 downto 0);
 type fc_t is ( FC_IDLE, 
 	FC_TG68_RD,
@@ -411,7 +411,7 @@ begin
 -- RAM
 -- -----------------------------------------------------------------------		
 
-ROM_ADDR <= romrd_a(21 downto 3);
+ROM_ADDR <= romrd_a(22 downto 3);
 ROM_REQ  <= romrd_req;
 romrd_q  <= ROM_DATA;
 romrd_ack<= ROM_ACK;
@@ -1536,7 +1536,7 @@ process( RESET_N, MCLK, TG68_AS_N, TG68_RNW,
 	VBUS_SEL, VBUS_ADDR	)
 begin
 
-	if TG68_A(23 downto 22) = "00" 
+	if TG68_A(23) = '0' 
 		and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') 
 		and TG68_RNW = '1' 
 		and CART_EN = '1'
@@ -1546,7 +1546,7 @@ begin
 		TG68_FLASH_SEL <= '0';
 	end if;
 
-	if T80_A(15) = '1' and BAR(23 downto 22) = "00"
+	if T80_A(15) = '1' and BAR(23) = '0'
 		and T80_MREQ_N = '0' and T80_RD_N = '0' 
 	then
 		T80_FLASH_SEL <= '1';
@@ -1554,7 +1554,7 @@ begin
 		T80_FLASH_SEL <= '0';
 	end if;	
 
-	if VBUS_ADDR(23 downto 22) = "00" 
+	if VBUS_ADDR(23) = '0' 
 		and VBUS_SEL = '1'
 	then
 		DMA_FLASH_SEL <= '1';
@@ -1589,7 +1589,7 @@ begin
 			if VCLKCNT = "001" then
 				if TG68_FLASH_SEL = '1' and TG68_FLASH_DTACK_N = '1' then
 					-- FF_FL_ADDR <= TG68_A(21 downto 0);
-					if useCache and (TG68_A(21 downto 3) = romrd_a_cached(21 downto 3)) then
+					if useCache and (TG68_A(22 downto 3) = romrd_a_cached(21 downto 3)) then
 						case TG68_A(2 downto 1) is
 						when "00" =>
 							if TG68_UDS_N = '0' then TG68_FLASH_D(15 downto 8) <= romrd_q_cached(15 downto 8); end if;
@@ -1612,13 +1612,13 @@ begin
 						TG68_FLASH_DTACK_N <= '0';
 					else
 						romrd_req <= not romrd_req;
-						romrd_a <= TG68_A(21 downto 3);
-						romrd_a_cached <= TG68_A(21 downto 3);
+						romrd_a <= TG68_A(22 downto 3);
+						romrd_a_cached <= TG68_A(22 downto 3);
 						FC <= FC_TG68_RD;
 					end if;
 				elsif T80_FLASH_SEL = '1' and T80_FLASH_DTACK_N = '1' then
 					-- FF_FL_ADDR <= BAR(21 downto 15) & T80_A(14 downto 0);
-					if useCache and (BAR(21 downto 15) & T80_A(14 downto 3) = romrd_a_cached(21 downto 3)) then
+					if useCache and (BAR(22 downto 15) & T80_A(14 downto 3) = romrd_a_cached(21 downto 3)) then
 -- /!\
 						case T80_A(2 downto 0) is
 						when "001" =>
@@ -1642,13 +1642,13 @@ begin
 						T80_FLASH_DTACK_N <= '0';
 					else
 						romrd_req <= not romrd_req;
-						romrd_a <= BAR(21 downto 15) & T80_A(14 downto 3);
-						romrd_a_cached <= BAR(21 downto 15) & T80_A(14 downto 3);		
+						romrd_a <= BAR(22 downto 15) & T80_A(14 downto 3);
+						romrd_a_cached <= BAR(22 downto 15) & T80_A(14 downto 3);		
 						FC <= FC_T80_RD;
 					end if;
 				elsif DMA_FLASH_SEL = '1' and DMA_FLASH_DTACK_N = '1' then
 					-- FF_FL_ADDR <= VBUS_ADDR(21 downto 0);
-					if useCache and (VBUS_ADDR(21 downto 3) = romrd_a_cached(21 downto 3)) then
+					if useCache and (VBUS_ADDR(22 downto 3) = romrd_a_cached(21 downto 3)) then
 						case VBUS_ADDR(2 downto 1) is
 						when "00" =>
 							DMA_FLASH_D <= romrd_q_cached(15 downto 0);
@@ -1663,8 +1663,8 @@ begin
 						DMA_FLASH_DTACK_N <= '0';
 					else
 						romrd_req <= not romrd_req;
-						romrd_a <= VBUS_ADDR(21 downto 3);
-						romrd_a_cached <= VBUS_ADDR(21 downto 3);
+						romrd_a <= VBUS_ADDR(22 downto 3);
+						romrd_a_cached <= VBUS_ADDR(22 downto 3);
 						FC <= FC_DMA_RD;
 					end if;					
 				end if;				
