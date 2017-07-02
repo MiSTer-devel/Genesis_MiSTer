@@ -112,7 +112,9 @@ localparam CONF_STR = {
 	"-;",
 	"O4,Swap joysticks,No,Yes;",
 	"-;",
-	"V,v1.02.",`BUILD_DATE
+	"-;",
+	"J,A,B,C,Start;",
+	"V,v1.03.",`BUILD_DATE
 };
 
 
