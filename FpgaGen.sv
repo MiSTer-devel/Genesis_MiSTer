@@ -111,17 +111,17 @@ localparam CONF_STR = {
 	"O23,Scandoubler Fx,None,CRT 25%,CRT 50%,CRT 75%;",
 	"-;",
 	"O4,Swap joysticks,No,Yes;",
+	"O5,3 buttons only,No,Yes;",
 	"-;",
-	"-;",
-	"J,A,B,C,Start;",
-	"V,v1.03.",`BUILD_DATE
+	"J1,A,B,C,Start,Mode,X,Y,Z;",
+	"V,v1.05.",`BUILD_DATE
 };
 
 
 wire [31:0] status;
 wire  [1:0] buttons;
-wire  [7:0] joystick_0;
-wire  [7:0] joystick_1;
+wire [15:0] joystick_0;
+wire [15:0] joystick_1;
 wire        ioctl_download;
 wire        ioctl_wr;
 wire [24:0] ioctl_addr;
@@ -199,8 +199,9 @@ Virtual_Toplevel fpgagen
 	.FM_ENABLE(1),
 	.FM_LIMITER(1),
 
-	.JOY_1((status[4] ? joystick_1 : joystick_0) | (joy_emu_num ? 8'd0 : joystick_emu)),
-	.JOY_2((status[4] ? joystick_0 : joystick_1) | (joy_emu_num ? joystick_emu : 8'd0)),
+	.J3BUT(status[5]),
+	.JOY_1((status[4] ? joystick_1[11:0] : joystick_0[11:0]) | (joy_emu_num ? 12'd0 : joystick_emu)),
+	.JOY_2((status[4] ? joystick_0[11:0] : joystick_1[11:0]) | (joy_emu_num ? joystick_emu : 12'd0)),
 
 	.ROM_ADDR(rom_rdaddr),
 	.ROM_DATA(rom_data),

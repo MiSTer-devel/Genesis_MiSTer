@@ -43,6 +43,8 @@ entity gen_io is
 		RST_N		: in std_logic;
 		CLK		: in std_logic;
 		
+		J3BUT    : in std_logic;
+
 		P1_UP		: in std_logic;
 		P1_DOWN	: in std_logic;
 		P1_LEFT	: in std_logic;
@@ -51,6 +53,10 @@ entity gen_io is
 		P1_B		: in std_logic;
 		P1_C		: in std_logic;
 		P1_START	: in std_logic;
+		P1_MODE	: in std_logic;
+		P1_X	   : in std_logic;
+		P1_Y	   : in std_logic;
+		P1_Z	   : in std_logic;
 
 		P2_UP		: in std_logic;
 		P2_DOWN	: in std_logic;
@@ -60,6 +66,10 @@ entity gen_io is
 		P2_B		: in std_logic;
 		P2_C		: in std_logic;
 		P2_START	: in std_logic;
+		P2_MODE	: in std_logic;
+		P2_X	   : in std_logic;
+		P2_Y	   : in std_logic;
+		P2_Z	   : in std_logic;
 
 		SEL		: in std_logic;
 		A			: in std_logic_vector(4 downto 0);
@@ -92,9 +102,14 @@ signal SCTB			: std_logic_vector(7 downto 0);
 signal SCTC			: std_logic_vector(7 downto 0);
 
 signal REG			: std_logic_vector(3 downto 0);
-signal WD		: std_logic_vector(7 downto 0);
-signal RD		: std_logic_vector(7 downto 0);
+signal WD		   : std_logic_vector(7 downto 0);
+signal RD		   : std_logic_vector(7 downto 0);
 
+signal JCNT1      : integer range 0 to 3;
+signal JCNT2      : integer range 0 to 3;
+
+signal JTMR1      : integer range 0 to 129000;
+signal JTMR2      : integer range 0 to 129000;
 
 begin
 
@@ -131,8 +146,23 @@ begin
 		TXDC <= x"FF";
 		RXDC <= x"00";
 		SCTC <= x"00";
-		
+
+		JCNT1 <= 0;
+		JCNT2 <= 0;
+
 	elsif rising_edge(CLK) then
+		if(JTMR1 > 123000) then
+			JCNT1 <= 0;
+		elsif (DATA(6) = '1') then
+			JTMR1 <= JTMR1 + 1;
+		end if;
+
+		if(JTMR2 > 123000) then
+			JCNT2 <= 0;
+		elsif (DATB(6) = '1') then
+			JTMR2 <= JTMR2 + 1;
+		end if;
+
 		if SEL = '0' then
 			FF_DTACK_N <= '1';
 		elsif SEL = '1' and FF_DTACK_N = '1' then
@@ -144,7 +174,10 @@ begin
 					VERS <= WD; -- Will be set by OS
 				when x"1" =>
 					DATA(7) <= WD(7);
-					if CTLA(6) = '1' then DATA(6) <= WD(6); end if;
+					if CTLA(6) = '1' then 
+						DATA(6) <= WD(6);
+						if(DATA(6)='0' and WD(6)='1') then JTMR1 <= 0; JCNT1 <= JCNT1 + 1; end if;
+					end if;
 					if CTLA(5) = '1' then DATA(5) <= WD(5); end if;
 					if CTLA(4) = '1' then DATA(4) <= WD(4); end if;
 					if CTLA(3) = '1' then DATA(3) <= WD(3); end if;
@@ -153,7 +186,10 @@ begin
 					if CTLA(0) = '1' then DATA(0) <= WD(0); end if;
 				when x"2" =>
 					DATB(7) <= WD(7);
-					if CTLB(6) = '1' then DATB(6) <= WD(6); end if;
+					if CTLB(6) = '1' then
+						DATB(6) <= WD(6);
+						if(DATB(6)='0' and WD(6)='1') then JTMR2 <= 0; JCNT2 <= JCNT2 + 1; end if;
+					end if;
 					if CTLB(5) = '1' then DATB(5) <= WD(5); end if;
 					if CTLB(4) = '1' then DATB(4) <= WD(4); end if;
 					if CTLB(3) = '1' then DATB(3) <= WD(3); end if;
@@ -201,37 +237,87 @@ begin
 					RD <= VERS;
 				when x"1" =>
 					RD <= DATA;
-					if DATA(6) = '0' then -- 3-button pad
-						if CTLA(5) = '0' then RD(5) <= P1_START; end if;
-						if CTLA(4) = '0' then RD(4) <= P1_A; end if;
-						if CTLA(3) = '0' then RD(3) <= '0'; end if;
-						if CTLA(2) = '0' then RD(2) <= '0'; end if;
-						if CTLA(1) = '0' then RD(1) <= P1_DOWN; end if;
-						if CTLA(0) = '0' then RD(0) <= P1_UP; end if;
+					if DATA(6) = '1' then
+						if(J3BUT='1' or JCNT1/=3) then
+							if CTLA(5) = '0' then RD(5) <= P1_C;     end if;
+							if CTLA(4) = '0' then RD(4) <= P1_B;     end if;
+							if CTLA(3) = '0' then RD(3) <= P1_RIGHT; end if;
+							if CTLA(2) = '0' then RD(2) <= P1_LEFT;  end if;
+							if CTLA(1) = '0' then RD(1) <= P1_DOWN;  end if;
+							if CTLA(0) = '0' then RD(0) <= P1_UP;    end if;
+						else
+							if CTLA(5) = '0' then RD(5) <= '1';      end if;
+							if CTLA(4) = '0' then RD(4) <= '1';      end if;
+							if CTLA(3) = '0' then RD(3) <= P1_MODE;  end if;
+							if CTLA(2) = '0' then RD(2) <= P1_X;     end if;
+							if CTLA(1) = '0' then RD(1) <= P1_Y;     end if;
+							if CTLA(0) = '0' then RD(0) <= P1_Z;     end if;
+						end if;
 					else
-						if CTLA(5) = '0' then RD(5) <= P1_C; end if;
-						if CTLA(4) = '0' then RD(4) <= P1_B; end if;
-						if CTLA(3) = '0' then RD(3) <= P1_RIGHT; end if;
-						if CTLA(2) = '0' then RD(2) <= P1_LEFT; end if;
-						if CTLA(1) = '0' then RD(1) <= P1_DOWN; end if;
-						if CTLA(0) = '0' then RD(0) <= P1_UP; end if;					
+						if(J3BUT='1' or JCNT1<2) then
+							if CTLA(5) = '0' then RD(5) <= P1_START; end if;
+							if CTLA(4) = '0' then RD(4) <= P1_A;     end if;
+							if CTLA(3) = '0' then RD(3) <= '0';      end if;
+							if CTLA(2) = '0' then RD(2) <= '0';      end if;
+							if CTLA(1) = '0' then RD(1) <= P1_DOWN;  end if;
+							if CTLA(0) = '0' then RD(0) <= P1_UP;    end if;
+						elsif (JCNT1=2) then
+							if CTLA(5) = '0' then RD(5) <= P1_START; end if;
+							if CTLA(4) = '0' then RD(4) <= P1_A;     end if;
+							if CTLA(3) = '0' then RD(3) <= '0';      end if;
+							if CTLA(2) = '0' then RD(2) <= '0';      end if;
+							if CTLA(1) = '0' then RD(1) <= '0';      end if;
+							if CTLA(0) = '0' then RD(0) <= '0';      end if;
+						else
+							if CTLA(5) = '0' then RD(5) <= P1_START; end if;
+							if CTLA(4) = '0' then RD(4) <= P1_A;     end if;
+							if CTLA(3) = '0' then RD(3) <= '1';      end if;
+							if CTLA(2) = '0' then RD(2) <= '1';      end if;
+							if CTLA(1) = '0' then RD(1) <= '1';      end if;
+							if CTLA(0) = '0' then RD(0) <= '1';      end if;
+						end if;
 					end if;
 				when x"2" =>
 					RD <= DATB;
-					if DATB(6) = '0' then -- 3-button pad
-						if CTLB(5) = '0' then RD(5) <= P2_START; end if;
-						if CTLB(4) = '0' then RD(4) <= P2_A; end if;
-						if CTLB(3) = '0' then RD(3) <= '0'; end if;
-						if CTLB(2) = '0' then RD(2) <= '0'; end if;
-						if CTLB(1) = '0' then RD(1) <= P2_DOWN; end if;
-						if CTLB(0) = '0' then RD(0) <= P2_UP; end if;
+					if DATB(6) = '1' then
+						if(J3BUT='1' or JCNT2/=3) then
+							if CTLB(5) = '0' then RD(5) <= P2_C;     end if;
+							if CTLB(4) = '0' then RD(4) <= P2_B;     end if;
+							if CTLB(3) = '0' then RD(3) <= P2_RIGHT; end if;
+							if CTLB(2) = '0' then RD(2) <= P2_LEFT;  end if;
+							if CTLB(1) = '0' then RD(1) <= P2_DOWN;  end if;
+							if CTLB(0) = '0' then RD(0) <= P2_UP;    end if;
+						else
+							if CTLB(5) = '0' then RD(5) <= '1';      end if;
+							if CTLB(4) = '0' then RD(4) <= '1';      end if;
+							if CTLB(3) = '0' then RD(3) <= P2_MODE;  end if;
+							if CTLB(2) = '0' then RD(2) <= P2_X;     end if;
+							if CTLB(1) = '0' then RD(1) <= P2_Y;     end if;
+							if CTLB(0) = '0' then RD(0) <= P2_Z;     end if;
+						end if;
 					else
-						if CTLB(5) = '0' then RD(5) <= P2_C; end if;
-						if CTLB(4) = '0' then RD(4) <= P2_B; end if;
-						if CTLB(3) = '0' then RD(3) <= P2_RIGHT; end if;
-						if CTLB(2) = '0' then RD(2) <= P2_LEFT; end if;
-						if CTLB(1) = '0' then RD(1) <= P2_DOWN; end if;
-						if CTLB(0) = '0' then RD(0) <= P2_UP; end if;					
+						if(J3BUT='1' or JCNT2<2) then
+							if CTLB(5) = '0' then RD(5) <= P2_START; end if;
+							if CTLB(4) = '0' then RD(4) <= P2_A;     end if;
+							if CTLB(3) = '0' then RD(3) <= '0';      end if;
+							if CTLB(2) = '0' then RD(2) <= '0';      end if;
+							if CTLB(1) = '0' then RD(1) <= P2_DOWN;  end if;
+							if CTLB(0) = '0' then RD(0) <= P2_UP;    end if;
+						elsif (JCNT2=2) then
+							if CTLB(5) = '0' then RD(5) <= P2_START; end if;
+							if CTLB(4) = '0' then RD(4) <= P2_A;     end if;
+							if CTLB(3) = '0' then RD(3) <= '0';      end if;
+							if CTLB(2) = '0' then RD(2) <= '0';      end if;
+							if CTLB(1) = '0' then RD(1) <= '0';      end if;
+							if CTLB(0) = '0' then RD(0) <= '0';      end if;
+						else
+							if CTLB(5) = '0' then RD(5) <= P2_START; end if;
+							if CTLB(4) = '0' then RD(4) <= P2_A;     end if;
+							if CTLB(3) = '0' then RD(3) <= '1';      end if;
+							if CTLB(2) = '0' then RD(2) <= '1';      end if;
+							if CTLB(1) = '0' then RD(1) <= '1';      end if;
+							if CTLB(0) = '0' then RD(0) <= '1';      end if;
+						end if;
 					end if;
 				when x"3" => -- Unconnected port
 					RD <= DATC;

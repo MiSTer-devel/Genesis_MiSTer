@@ -66,8 +66,9 @@ entity Virtual_Toplevel is
 		FM_ENABLE   : in std_logic;
 		FM_LIMITER  : in std_logic;
 
-		JOY_1 		: in std_logic_vector(7 downto 0);
-		JOY_2 		: in std_logic_vector(7 downto 0);
+		J3BUT       : in std_logic;
+		JOY_1 		: in std_logic_vector(11 downto 0);
+		JOY_2 		: in std_logic_vector(11 downto 0);
 
 		ROM_ADDR 	: out std_logic_vector(19 downto 0);
 		ROM_DATA 	: in  std_logic_vector(63 downto 0);
@@ -549,6 +550,8 @@ port map(
 	RST_N		=> RESET_N,
 	CLK		=> VCLK,
 
+	J3BUT    => J3BUT,
+
 	P1_UP		=> not JOY_1(3),
 	P1_DOWN	=> not JOY_1(2),
 	P1_LEFT	=> not JOY_1(1),
@@ -557,6 +560,10 @@ port map(
 	P1_B		=> not JOY_1(5),
 	P1_C		=> not JOY_1(6),
 	P1_START	=> not JOY_1(7),
+	P1_MODE  => not JOY_1(8),
+	P1_X     => not JOY_1(9),
+	P1_Y     => not JOY_1(10),
+	P1_Z     => not JOY_1(11),
 
 	P2_UP		=> not JOY_2(3),
 	P2_DOWN	=> not JOY_2(2),
@@ -566,6 +573,10 @@ port map(
 	P2_B		=> not JOY_2(5),
 	P2_C		=> not JOY_2(6),
 	P2_START	=> not JOY_2(7),
+	P2_MODE  => not JOY_2(8),
+	P2_X     => not JOY_2(9),
+	P2_Y     => not JOY_2(10),
+	P2_Z     => not JOY_2(11),
 
 	SEL		=> IO_SEL,
 	A			=> IO_A,
