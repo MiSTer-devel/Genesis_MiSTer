@@ -99,7 +99,7 @@ assign AUDIO_S = 1;
 
 assign LED_DISK  = 0;
 assign LED_POWER = 0;
-assign LED_USER  = joy_emu_num;
+assign LED_USER  = 0;
 
 `include "build_id.v"
 localparam CONF_STR = {
@@ -127,8 +127,6 @@ wire        ioctl_wr;
 wire [24:0] ioctl_addr;
 wire [15:0] ioctl_data;
 reg         ioctl_wait;
-wire        ps2_kbd_clk;
-wire        ps2_kbd_data;
 wire        forced_scandoubler;
 
 hps_io #(.STRLEN($size(CONF_STR)>>3), .PS2DIV(1000), .WIDE(1)) hps_io
@@ -149,8 +147,6 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .PS2DIV(1000), .WIDE(1)) hps_io
 	.ioctl_dout(ioctl_data),
 	.ioctl_wait(ioctl_wait),
 
-	.ps2_kbd_clk(ps2_kbd_clk),
-	.ps2_kbd_data(ps2_kbd_data),
 	.ps2_kbd_led_use(0),
 	.ps2_kbd_led_status(0)
 );
@@ -200,8 +196,8 @@ Virtual_Toplevel fpgagen
 	.FM_LIMITER(1),
 
 	.J3BUT(status[5]),
-	.JOY_1((status[4] ? joystick_1[11:0] : joystick_0[11:0]) | (joy_emu_num ? 12'd0 : joystick_emu)),
-	.JOY_2((status[4] ? joystick_0[11:0] : joystick_1[11:0]) | (joy_emu_num ? joystick_emu : 12'd0)),
+	.JOY_1((status[4] ? joystick_1[11:0] : joystick_0[11:0])),
+	.JOY_2((status[4] ? joystick_0[11:0] : joystick_1[11:0])),
 
 	.ROM_ADDR(rom_rdaddr),
 	.ROM_DATA(rom_data),
@@ -260,19 +256,5 @@ scanlines scanlines
 	.vs(VGA_VS)
 );
 
-
-///////////////////////////////////////////////////
-wire [7:0] joystick_emu;
-wire       joy_emu_num;
-
-keyboard keyboard
-(
-	.clk(clk_sys),
-	.reset(RESET),
-	.ps2_kbd_clk(ps2_kbd_clk),
-	.ps2_kbd_data(ps2_kbd_data),
-	.joystick(joystick_emu),
-	.joy_num(joy_emu_num)
-);
 
 endmodule

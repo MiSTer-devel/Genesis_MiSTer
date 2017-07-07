@@ -389,7 +389,6 @@ set_global_assignment -name VHDL_FILE psg/psg_tone.vhd
 set_global_assignment -name VHDL_FILE psg/psg_noise.vhd
 set_global_assignment -name VHDL_FILE psg/psg.vhd
 set_global_assignment -name VERILOG_FILE audio_mixer.v
-set_global_assignment -name VERILOG_FILE keyboard.v
 set_global_assignment -name VERILOG_FILE scanlines.v
 set_global_assignment -name VHDL_FILE vdp_common.vhd
 set_global_assignment -name VHDL_FILE vdp.vhd
