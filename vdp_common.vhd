@@ -38,7 +38,7 @@ library IEEE;
 
 package vdp_common is
 
-constant CLOCKS_PER_LINE		: integer := 3420;
+constant CLOCKS_PER_LINE		: integer := 3440;
 constant H_DISP_CLOCKS			: integer := 2560;
 --constant H_DISP_START			: integer := 612;	-- (3.77 + 1.89) * 2 * 54
 constant H_DISP_START			: integer := 580;

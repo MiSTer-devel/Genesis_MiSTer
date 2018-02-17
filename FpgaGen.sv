@@ -108,7 +108,7 @@ assign AUDIO_MIX = 0;
 
 assign LED_DISK  = 0;
 assign LED_POWER = 0;
-assign LED_USER  = 0;
+assign LED_USER  = ioctl_download;
 
 `include "build_id.v"
 localparam CONF_STR = {
@@ -117,7 +117,7 @@ localparam CONF_STR = {
 	"F,BINGEN;",
 	"-;",
 	"O1,Aspect ratio,4:3,16:9;",
-	"O23,Scandoubler Fx,None,CRT 25%,CRT 50%,CRT 75%;",
+	"O23,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%;",
 	"-;",
 	"O4,Swap joysticks,No,Yes;",
 	"O5,3 buttons only,No,Yes;",
@@ -173,11 +173,15 @@ pll pll
 	.locked(locked)
 );
 
-assign CLK_VIDEO = clk_sys;
-
 ///////////////////////////////////////////////////
 wire [1:0] scale = status[3:2];
-wire [2:0] red, green, blue;
+wire [2:0] r, g, b;
+wire vs,hs;
+wire ce_pix;
+wire hblank, vblank;
+
+assign CLK_VIDEO = clk_sys;
+
 
 assign DDRAM_CLK = clk_ram;
 wire reset = RESET|buttons[1];
@@ -191,14 +195,15 @@ Virtual_Toplevel fpgagen
 	.DAC_LDATA(AUDIO_L),
 	.DAC_RDATA(AUDIO_R),
 
-	.RED(red),
-	.GREEN(green),
-	.BLUE(blue),
-	.VS(VGA_VS),
-	.HS(VGA_HS),
-	.DE(VGA_DE),
-	.CE_PIX(CE_PIXEL),
-	.VGA(scale || forced_scandoubler),
+	.RED(r),
+	.GREEN(g),
+	.BLUE(b),
+	.VS(vs),
+	.HS(hs),
+	.HBL(hblank),
+	.VBL(vblank),
+	.CE_PIX(ce_pix),
+	.VGA(0),
 
 	.PSG_ENABLE(1),
 	.FM_ENABLE(1),
@@ -213,6 +218,33 @@ Virtual_Toplevel fpgagen
 	.ROM_REQ(rom_rd),
 	.ROM_ACK(rom_rdack)
 );
+
+video_mixer #(.LINE_LENGTH(320), .HALF_DEPTH(1)) video_mixer
+(
+	.*,
+
+	.ce_pix(ce_pix),
+	.ce_pix_out(CE_PIXEL),
+
+	.scanlines({scale == 3, scale == 2}),
+	.scandoubler(scale || forced_scandoubler),
+	.hq2x(scale==1),
+
+	.mono(0),
+
+	.R({r,r[2]}),
+	.G({g,g[2]}),
+	.B({b,b[2]}),
+
+	// Positive pulses.
+	.HSync(hs),
+	.VSync(vs),
+	.HBlank(hblank),
+	.VBlank(vblank)
+);
+
+
+///////////////////////////////////////////////////
 
 wire [19:0] rom_rdaddr;
 wire [63:0] rom_data;
@@ -254,16 +286,5 @@ always @(posedge clk_sys) begin
 		end
 	end
 end
-
-scanlines scanlines
-(
-	.clk(clk_sys),
-	.scanlines(scale),
-	.din({{red, red, red[2:1]}, {green, green, green[2:1]}, {blue, blue, blue[2:1]}}),
-	.dout({VGA_R, VGA_G, VGA_B}),
-	.hs(VGA_HS),
-	.vs(VGA_VS)
-);
-
 
 endmodule

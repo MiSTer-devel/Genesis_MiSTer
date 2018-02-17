@@ -87,14 +87,14 @@ entity vdp is
 		B		: out std_logic_vector(2 downto 0);
 		HS		: out std_logic;
 		VS		: out std_logic;
-		DE    : out std_logic;
+		HBL   : out std_logic;
+		VBL   : out std_logic;
 		CE_PIX: out std_logic;
 		VGA	: in  std_logic
 	);
 end vdp;
 
 architecture rtl of vdp is
-
 
 signal vram_req_reg : std_logic;
 signal vram_we_reg : std_logic;
@@ -301,6 +301,8 @@ signal H_VGA_CNT	: std_logic_vector(10 downto 0);
 signal V_CNT		: std_logic_vector(9 downto 0);
 
 signal V_ACTIVE		: std_logic;
+signal H_ACTIVE		: std_logic;
+signal VGA_H_ACTIVE	: std_logic;
 signal Y			: std_logic_vector(7 downto 0);
 
 signal PRE_V_ACTIVE	: std_logic;
@@ -2039,10 +2041,22 @@ begin
 			DISP_ACTIVE <= '0';
 		end if;
 
+		if H_CNT = H_DISP_START then
+			H_ACTIVE <= '1';
+		elsif H_CNT = H_DISP_START+H_DISP_CLOCKS then
+			H_ACTIVE <= '0';
+		end if;
+
 		if H_VGA_CNT = H_DISP_START/2 and V_ACTIVE = '1' then
 			VGA_DISP_ACTIVE <= '1';
 		elsif H_VGA_CNT = (H_DISP_START+H_DISP_CLOCKS)/2 then
 			VGA_DISP_ACTIVE <= '0';
+		end if;
+
+		if H_VGA_CNT = H_DISP_START/2 then
+			VGA_H_ACTIVE <= '1';
+		elsif H_VGA_CNT = (H_DISP_START+H_DISP_CLOCKS)/2 then
+			VGA_H_ACTIVE <= '0';
 		end if;
 
 		-- BACKGROUND ACTIVE
@@ -2280,7 +2294,8 @@ G <= COLOR(5 downto 3) when VGA = '0' else FF_VGA_G;
 B <= COLOR(2 downto 0) when VGA = '0' else FF_VGA_B;
 HS <= FF_HS when VGA = '0' else FF_VGA_HS;
 VS <= FF_VS when VGA = '0' else FF_VGA_VS;
-DE <= DISP_ACTIVE when VGA = '0' else VGA_DISP_ACTIVE;
+HBL <= not H_ACTIVE when VGA = '0' else not VGA_H_ACTIVE;
+VBL <= not V_ACTIVE;
 
 ----------------------------------------------------------------
 -- VIDEO DEBUG

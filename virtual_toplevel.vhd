@@ -58,7 +58,8 @@ entity Virtual_Toplevel is
 		BLUE			: out std_logic_vector(2 downto 0);		
 		VS				: out std_logic;
 		HS				: out std_logic;
-		DE				: out std_logic;
+		HBL			: out std_logic;
+		VBL			: out std_logic;
 		CE_PIX		: out std_logic;
 		VGA			: in  std_logic;
 
@@ -636,7 +637,8 @@ port map(
 	HS					=> HS,
 	VS					=> VS,
 	CE_PIX         => CE_PIX,
-	DE					=> DE,
+	HBL				=> HBL,
+	VBL				=> VBL,
 	VGA				=> VGA
 );
 
