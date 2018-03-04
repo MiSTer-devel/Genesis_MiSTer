@@ -21,6 +21,9 @@ create_generated_clock -name fm_clk6 -source [get_nets {emu|fpgagen|VCLK}] -divi
 create_generated_clock -name psg_clk -source [get_nets {emu|fpgagen|ZCLK}] -divide_by 32 [get_nets  {emu|fpgagen|u_psg|clk_divide[4]}]
 #create_generated_clock -name psg_noise -source [get_nets {virtualtoplevel|u_psg|clk_divide[4]}] -divide_by 2 [get_nets {virtualtoplevel|u_psg|t3|v}]
 
+set_clock_groups -asynchronous \
+   -group [get_clocks { *|pll|pll_inst|altera_pll_i|general[0].gpll~PLL_OUTPUT_COUNTER|divclk VCLK ZCLK romrd_req fm_clk6 psg_clk}]
+
 
 #**************************************************************
 # Set False Path
