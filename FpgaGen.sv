@@ -114,7 +114,7 @@ assign LED_USER  = ioctl_download;
 localparam CONF_STR = {
 	"FPGAGEN;;",
 	"-;",
-	"F,BINGEN;",
+	"F,BINGENMD ;",
 	"-;",
 	"O1,Aspect ratio,4:3,16:9;",
 	"O23,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%;",
