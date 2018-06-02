@@ -15,41 +15,28 @@
 
 	Author: Jose Tejada Gomez. Twitter: @topapate
 	Version: 1.0
-	Date: 1-31-2017
+	Date: March, 10th 2017
 	*/
+
+/* Limiting amplifier by 3dB * shift */
 
 `timescale 1ns / 1ps
 
-module jt12_sh6_rst #(parameter width=5 )
-(
-	input					rst,	
-	input 					clk,
-	input		[width-1:0]	din,
-	input					load,
-   	output reg [width-1:0]	st1,
-   	output reg [width-1:0]	st2,
-   	output reg [width-1:0]	st3,
-   	output reg [width-1:0]	st4,
-   	output reg [width-1:0]	st5,
-   	output reg [width-1:0]	st6 					
+module jt12_limitamp #( parameter width=20, shift=5 ) (
+	input signed [width-1:0] left_in,
+	input signed [width-1:0] right_in,
+	output reg signed [width-1:0] left_out,
+	output reg signed [width-1:0] right_out
 );
 
-always @(posedge clk) 
-	if (rst) begin
-		st1 <= {width{1'b0}};
-		st2 <= {width{1'b0}};
-		st3 <= {width{1'b0}};
-		st4 <= {width{1'b0}};
-		st5 <= {width{1'b0}};
-		st6 <= {width{1'b0}};
-	end
-	else begin
-		st6 <= st5;
-		st5 <= st4;
-		st4 <= st3;
-		st3 <= st2;
-		st2 <= st1;
-		st1 <= load ? din : st6;
-	end
+always @(*) begin
+	left_out <= ^left_in[width-1:width-1-shift] ?
+		{ left_in[width-1], {(width-1){~left_in[width-1]}}} :
+		left_in <<< shift;
+
+	right_out <= ^right_in[width-1:width-1-shift] ?
+		{ right_in[width-1], {(width-1){~right_in[width-1]}}} :
+		right_in <<< shift;
+end
 
 endmodule

@@ -170,7 +170,7 @@ jt12_sh #(.width(9),.stages(6)) u_acc(
 );
 
 jt12_sh #(.width(9),.stages(6)) u_buffer(
-	.clk	( clk	),
+	.clk	( clk		),
 	.din	( s3_enters ? total : buffer	),
 	.drop	( buffer	)
 );

@@ -702,7 +702,7 @@ initial begin
 	fmmr=$fopen("mmr_dump.log");
 end
 
-always @(posedge clk)
+always @(posedge clk )
 if (mmr_dump ) begin
 	$fdisplay( fmmr, "-------------------------------");
 	// Channel 0

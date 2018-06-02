@@ -209,19 +209,12 @@ end
 //////////////////////////////////////////////////
 // VIII padding
  
-always @(posedge clk)
+always @(posedge clk) 
 	phase_VIII <= phase_VII;
 
-/* VII-XII delay
-jt12_sh #( .width(10), .stages(12-7) ) u_padding(
+jt12_sh #( .width(20), .stages(24) ) u_phsh(
 	.clk	( clk		),
-	.din	( phase_VII	),
-	.drop	( phase_XII	)
-);
-*/
-jt12_sh_rst #( .width(20), .stages(24) ) u_phsh(
-	.clk	( clk		),
-	.rst	( rst		),
+//	.rst	( rst		),
 	.din	( phase_in	),
 	.drop	( phase_drop)
 );
@@ -236,7 +229,6 @@ jt12_sh #( .width(1), .stages(3) ) u_rstsh(
 
 `ifdef SIMULATION
 reg [4:0] sep24_cnt;
-wire clk_int = clk;
 
 wire [9:0] pg_ch0s1, pg_ch1s1, pg_ch2s1, pg_ch3s1,
 		 pg_ch4s1, pg_ch5s1, pg_ch0s2, pg_ch1s2,
@@ -245,12 +237,12 @@ wire [9:0] pg_ch0s1, pg_ch1s1, pg_ch2s1, pg_ch3s1,
 		 pg_ch4s3, pg_ch5s3, pg_ch0s4, pg_ch1s4,
 		 pg_ch2s4, pg_ch3s4, pg_ch4s4, pg_ch5s4;
 
-always @(posedge clk_int)
+always @(posedge clk)
 	sep24_cnt <= !zero ? sep24_cnt+1'b1 : 5'd0;
 
 sep24 #( .width(10), .pos0(18)) stsep
 (
-	.clk	( clk_int	),
+	.clk	( clk		),
 	.mixed	( phase_VIII),
 	.mask	( 0			),
 	.cnt	( sep24_cnt	),	
@@ -293,7 +285,7 @@ wire [16:0] phinc_ch0s1, phinc_ch1s1, phinc_ch2s1, phinc_ch3s1,
 
 sep24 #( .width(17), .pos0(3+6)) pisep
 (
-	.clk	( clk_int	),
+	.clk	( clk		),
 	.mixed	( phinc_VI),
 	.mask	( 0			),
 	.cnt	( sep24_cnt	),	
@@ -336,7 +328,7 @@ wire [10:0] fnum_ch0s1, fnum_ch1s1, fnum_ch2s1, fnum_ch3s1,
 
 sep24 #( .width(11), .pos0(3+1)) fnsep
 (
-	.clk	( clk_int	),
+	.clk	( clk		),
 	.mixed	( fnum_I),
 	.mask	( 0			),
 	.cnt	( sep24_cnt	),	
@@ -379,7 +371,7 @@ wire pgrst_III_ch0s1, pgrst_III_ch1s1, pgrst_III_ch2s1, pgrst_III_ch3s1,
 
 sep24 #( .width(1), .pos0(23)) pgrstsep
 (
-	.clk	( clk_int	),
+	.clk	( clk		),
 	.mixed	( pg_rst_III),
 	.mask	( 0			),
 	.cnt	( sep24_cnt	),	

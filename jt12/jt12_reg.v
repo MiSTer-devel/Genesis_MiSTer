@@ -128,9 +128,10 @@ end
 // FNUM and BLOCK
 wire	[10:0]	fnum_I_raw;
 wire	[ 2:0]	block_I_raw;
-wire	effect_on_s1 = effect && (cur == {2'd0, 3'd2 } );
-wire	effect_on_s3 = effect && (cur == {2'd1, 3'd2 } ); 
-wire	effect_on_s2 = effect && (cur == {2'd2, 3'd2 } );
+wire    effect_on = effect && (cur_ch==3'd2);
+wire    effect_on_s1 = effect_on && (cur_op == 2'd0 );
+wire    effect_on_s3 = effect_on && (cur_op == 2'd1 );
+wire    effect_on_s2 = effect_on && (cur_op == 2'd2 );
 wire	noeffect	 = ~|{effect_on_s1, effect_on_s3, effect_on_s2};
 assign fnum_I = ( {11{effect_on_s1}} & fnum_ch3op1 ) |
 				( {11{effect_on_s2}} & fnum_ch3op2 ) |
@@ -276,7 +277,7 @@ jt12_kon u_kon(
 	.keyon_II	( keyon_II	)
 );
 
-jt12_fm u_fm(
+jt12_mod u_mod(
 	.alg_I		( alg		),
 	.s1_enters	( s1_enters ),
 	.s3_enters	( s3_enters ),
@@ -295,10 +296,18 @@ parameter regop_width=44;
 
 wire [regop_width-1:0] regop_in, regop_out;
 
+jt12_opram u_opram(
+	.clk	( clk ),
+	.wr_addr	( cur ),
+	.rd_addr	( next ),
+	.data	( regop_in ),
+	.q		( regop_out )
+);
+
 assign regop_in = {
+	up_tl_op		? tl_in : tl_VII, // 7
 	up_dt1_op	? dt1_in : dt1_II,	// 3
 	up_mul_op	? mul_in : mul_V,	// 4 - 7
-	up_tl_op	? tl_in	 : tl_VII,	// 7 - 14
 	up_ks_op	? ks_in	 : ks_III,	// 2 - 16
 	up_ar_op	? ar_in	 : ar_II,	// 5 - 21
 	up_amen_op	? amen_in: amsen_VII,// 1 - 22
@@ -310,46 +319,43 @@ assign regop_in = {
 	up_ssg_op	? ssg_in[2:0] : ssg_eg_II	// 3 - 42
 };
 
-assign { 	dt1_II, mul_V,	tl_VII, ks_III, 
+assign { tl_VII, dt1_II, mul_V, ks_III, 
 			ar_II,	amsen_VII, d1r_II, d2r_II, d1l, rr_II,
 			ssg_en_II,	ssg_eg_II 				} = regop_out;
 
-jt12_sh_rst #(.width(regop_width),.stages(24)) u_regop(
-	.clk	( clk		),
-	.rst	( rst		),
-	.din	( regop_in	),
-	.drop	( regop_out	)
-);
 
 wire [2:0] block_latch, fnum_latch;
 
 // memory for CH registers
 // Block/fnum data is latched until fnum low byte is written to
+// Trying to synthesize this memory as M-9K RAM in Altera devices
+// turns out worse in terms of resource utilization. Probably because
+// this memory is already very small. It is better to leave it as it is.
 parameter regch_width=31;
 wire [regch_width-1:0] regch_out;
-wire [regch_width-1:0] regch_in = { 
+wire [regch_width-1:0] regch_in = {
 	up_block_ch	? { block_in, fnhi_in } : { block_latch, fnum_latch }, // 3+3
 	up_fnumlo_ch? { block_latch, fnum_latch, fnlo_in } : { block_I_raw, fnum_I_raw }, // 14
 	up_alg_ch	? { fb_in, alg_in } : { fb_I, alg },//3+3
 	up_pms_ch	? { ams_in, pms_in } : { ams_VII, pms }//2+2+3
 }; 
-		
-assign { 	block_latch, fnum_latch, 
+
+assign { block_latch, fnum_latch, 
 			block_I_raw, fnum_I_raw, 
 			fb_I, alg, ams_VII, pms } = regch_out;
 
-jt12_sh_rst #(.width(regch_width),.stages(6)) u_regch(
+jt12_sh #(.width(regch_width),.stages(6)) u_regch(
 	.clk	( clk		),
-	.rst	( rst		),
+	//.rst	( rst		),
 	.din	( regch_in	),
 	.drop	( regch_out	)
 );
 
-// RL are on a different register to 
+// RL is on a different register to 
 // have the reset to 1
 jt12_sh_rst #(.width(2),.stages(6),.rstval(1'b1)) u_regch_rl(
 	.clk	( clk		),
-	.rst	( rst		),
+//	.rst	( rst		),
 	.din	( up_pms_ch	? rl_in :  rl	),
 	.drop	( rl	)
 );

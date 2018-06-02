@@ -25,78 +25,102 @@
 
 module jt12_clksync(
 	input			rst,
-	input			clk,
-	input	[7:0]	din,
-	input	[1:0]	addr,
-	input			busy_mmr,
-	input			flag_A,
-	input			flag_B,
-	input			cs_n,
-	input			wr_n,
+	input			cpu_clk,
+	input			syn_clk,
+
+	// CPU interface	
+	input	[7:0]	cpu_din,
+	input	[1:0]	cpu_addr,
+	output	[7:0]	cpu_dout,
+	input			cpu_cs_n,
+	input			cpu_wr_n,
+	output			cpu_irq_n,
+	input			cpu_limiter_en,
 	
-	input			set_n6,
-	input			set_n3,
-	input			set_n2,
-	
-	output			clk_int,
-	output			rst_int,
-	output	reg [7:0]	din_s,
-	output	reg [1:0]	addr_s,
-	output	[7:0]	dout,
-	output	reg		write
+	// Synthesizer interface
+	output	 [7:0]	syn_din,
+	output	 [1:0]	syn_addr,
+	output	reg		syn_rst,
+	output			syn_write,
+	output			syn_limiter_en,
+
+	input			syn_busy,
+	input			syn_flag_A,
+	input			syn_flag_B,
+	input			syn_irq_n
 );
 
-jt12_clk u_clkgen(
-	.rst		( rst		),
-	.clk		( clk		),
+// reset generation
+reg rst_aux;
+
 	
-	.set_n6		( set_n6	),
-	.set_n3		( set_n3	),
-	.set_n2		( set_n2	),
-	
-	.clk_int	( clk_int	),
-	.rst_int	( rst_int	)
-);
+always @(negedge syn_clk or posedge rst) 
+	if( rst ) begin
+		syn_rst <= 1'b1;
+		rst_aux <= 1'b1;
+	end
+	else begin
+		syn_rst <= rst_aux;
+		rst_aux <= 1'b0;
+	end
 
-reg		busy;
-reg	[1:0] busy_mmr_sh;
+reg		cpu_busy;
+wire	cpu_flag_B, cpu_flag_A;
 
-reg		flag_B_s, flag_A_s;
-assign 	dout = { busy, 5'h0, flag_B_s, flag_A_s };
-
+assign 	cpu_dout = { cpu_busy, 5'h0, cpu_flag_B, cpu_flag_A };
+/*
 always @(posedge clk ) 
-	{ flag_B_s, flag_A_s } <= { flag_B, flag_A };
+	
+*/
+//assign	write = !cs_n && !wr_n;
 
-
-wire		write_raw = !cs_n && !wr_n;
+wire		write_raw = !cpu_cs_n && !cpu_wr_n;
 
 reg	[7:0]	din_copy;
 reg	[1:0]	addr_copy;
 reg			write_copy;
 
-always @(posedge clk) begin : cpu_interface
+/* DIN & ADDR do not need synchronizers because there
+is a handshake protocol using the write and busy signals*/
+assign syn_din = din_copy;
+assign syn_addr= addr_copy;
+
+reg aux_irq_n;
+
+reg [1:0]busy_sh;
+always @(posedge cpu_clk) begin
+	busy_sh <= { busy_sh[0], syn_busy };
+end
+
+jt12_sh #(.width(3),.stages(2) ) u_syn2cpu(
+	.clk	( cpu_clk ),
+	.din	( { syn_flag_B, syn_flag_A, syn_irq_n } ),
+	.drop	( { cpu_flag_B, cpu_flag_A, cpu_irq_n } )
+);
+
+jt12_sh #(.width(2),.stages(2) ) u_cpu2syn(
+	.clk	( syn_clk ),
+	.din	( { write_copy, cpu_limiter_en } ),
+	.drop	( { syn_write,  syn_limiter_en } )
+);
+
+always @(posedge cpu_clk) begin : cpu_interface
 	if( rst ) begin
-		busy		<= 1'b0;
-		addr_copy	<= 2'b0;
-		din_copy	<= 8'd0;
+		cpu_busy	<= 1'b0;
 		write_copy	<= 1'b0;
 	end
 	else begin
-		busy_mmr_sh <= { busy_mmr_sh[0], busy_mmr };
-		if( write_raw && !busy ) begin
-			busy 		<= 1'b1;
+		if( write_raw && !cpu_busy ) begin
+			cpu_busy 	<= 1'b1;
 			write_copy	<= 1'b1;
-			addr_copy	<= addr;
-			din_copy	<= din;
+			addr_copy	<= cpu_addr;
+			din_copy	<= cpu_din;
 		end
 		else begin
-			if( busy_mmr ) write_copy	<= 1'b0;
-			if( busy && busy_mmr_sh==2'b10 ) busy <= 1'b0;
+			if( busy_sh[1] ) write_copy	<= 1'b0;
+			if( cpu_busy && busy_sh==2'b10 ) cpu_busy <= 1'b0;
 		end
 	end
 end
-
-always @(posedge clk_int )
-	{ write, addr_s, din_s } <= { write_copy, addr_copy, din_copy };
 
 endmodule

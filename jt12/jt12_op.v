@@ -56,7 +56,7 @@ module jt12_op(
 */
 
 reg [13:0]	op_result_internal, op_XII;
-reg [11:0]	atten_internal;
+reg [11:0]	atten_internal_IX;
 
 assign op_result = op_result_internal[13:5];
 
@@ -65,42 +65,35 @@ parameter NUM_VOICES = 6;
 reg 		signbit_IX, signbit_X, signbit_XI;
 reg [11:0]	totalatten_X;
 
-reg [45:0]	sinetable[31:0];
-reg [44:0]  exptable[31:0], explut_jt51[31:0];
-
-`include "lut.vh"
-
 wire [13:0]	prev1, prevprev1, prev2;
 
-jt12_sh_rst #( .width(14), .stages(NUM_VOICES)) prev1_buffer(
-	.rst	( rst	),
+jt12_sh/*_rst*/ #( .width(14), .stages(NUM_VOICES)) prev1_buffer(
+//	.rst	( rst	),
 	.clk	( clk	),
 	.din	( s2_enters ? op_result_internal : prev1 ),
 	.drop	( prev1	)
 );
 
-jt12_sh_rst #( .width(14), .stages(NUM_VOICES)) prevprev1_buffer(
-	.rst	( rst	),
+jt12_sh/*_rst*/ #( .width(14), .stages(NUM_VOICES)) prevprev1_buffer(
+//	.rst	( rst	),
 	.clk	( clk	),
 	.din	( s2_enters ? prev1 : prevprev1 ),
 	.drop	( prevprev1	)
 );
 
-jt12_sh_rst #( .width(14), .stages(NUM_VOICES)) prev2_buffer(
-	.rst	( rst	),
+jt12_sh/*_rst*/ #( .width(14), .stages(NUM_VOICES)) prev2_buffer(
+//	.rst	( rst	),
 	.clk	( clk	),
 	.din	( s1_enters ? op_result_internal : prev2 ),
 	.drop	( prev2	)
 );
 
 
-reg [45:0]	sta;
 reg [18:0]	stb;
 reg [10:0]	stf, stg;
 reg [11:0]	logsin;
 reg [10:0]	subtresult;
 
-reg [45:0]	eta;
 reg [12:0]	etb;
 reg [ 9:0]	etf, etg, mantissa_XI;
 reg [ 3:0]	exponent_XI;
@@ -165,16 +158,31 @@ jt12_sh #( .width(10), .stages(NUM_VOICES)) phasemod_sh(
 
 // REGISTER/CYCLE 8
 reg [ 9:0]	phase;
-reg [ 7:0]	phaselo_IX;
+// Sets the maximum number of fanouts for a register or combinational
+// cell.  The Quartus II software will replicate the cell and split
+// the fanouts among the duplicates until the fanout of each cell
+// is below the maximum.
+
+reg [ 7:0]	phaselo_IX, aux_VIII;
 
 always @(*) begin
 	phase	<= phasemod_VIII + pg_phase_VIII;
+	aux_VIII<= phase[7:0] ^ {8{~phase[8]}};
 end
 
 always @(posedge clk) begin    
-	phaselo_IX <= phase[7:0] ^ {8{~phase[8]}};
+	phaselo_IX <= aux_VIII;
 	signbit_IX <= phase[9];     
+
 end
+
+wire [45:0] sta_IX;
+
+jt12_phrom u_phrom(
+	.clk	( clk		),
+	.addr	( aux_VIII[5:1] ),
+	.ph		( sta_IX		)
+);
 
 // REGISTER/CYCLE 9
 // Sine table    
@@ -182,22 +190,22 @@ end
 
 
 always @(*) begin
-	sta <= sinetable[ phaselo_IX[5:1] ];
+	//sta_IX <= sinetable[ phaselo_IX[5:1] ];
 	// 2-bit row chooser
 	case( phaselo_IX[7:6] )
-		2'b00: stb <= { 10'b0, sta[29], sta[25], 2'b0, sta[18], 
-        	sta[14], 1'b0, sta[7] , sta[3] };
-		2'b01: stb <= { 6'b0 , sta[37], sta[34], 2'b0, sta[28], 
-        	sta[24], 2'b0, sta[17], sta[13], sta[10], sta[6], sta[2] };
-		2'b10: stb <= { 2'b0, sta[43], sta[41], 2'b0, sta[36],
-        	sta[33], 2'b0, sta[27], sta[23], 1'b0, sta[20],
-            sta[16], sta[12], sta[9], sta[5], sta[1] };
+		2'b00: stb <= { 10'b0, sta_IX[29], sta_IX[25], 2'b0, sta_IX[18], 
+        	sta_IX[14], 1'b0, sta_IX[7] , sta_IX[3] };
+		2'b01: stb <= { 6'b0 , sta_IX[37], sta_IX[34], 2'b0, sta_IX[28], 
+        	sta_IX[24], 2'b0, sta_IX[17], sta_IX[13], sta_IX[10], sta_IX[6], sta_IX[2] };
+		2'b10: stb <= { 2'b0, sta_IX[43], sta_IX[41], 2'b0, sta_IX[36],
+        	sta_IX[33], 2'b0, sta_IX[27], sta_IX[23], 1'b0, sta_IX[20],
+            sta_IX[16], sta_IX[12], sta_IX[9], sta_IX[5], sta_IX[1] };
 		default: stb <= {
-			  sta[45], sta[44], sta[42], sta[40]
-			, sta[39], sta[38], sta[35], sta[32]
-			, sta[31], sta[30], sta[26], sta[22]
-			, sta[21], sta[19], sta[15], sta[11]
-			, sta[8], sta[4], sta[0] };
+			  sta_IX[45], sta_IX[44], sta_IX[42], sta_IX[40]
+			, sta_IX[39], sta_IX[38], sta_IX[35], sta_IX[32]
+			, sta_IX[31], sta_IX[30], sta_IX[26], sta_IX[22]
+			, sta_IX[21], sta_IX[19], sta_IX[15], sta_IX[11]
+			, sta_IX[8], sta_IX[4], sta_IX[0] };
 	endcase
 	// Fixed value to sum
 	stf <= { stb[18:15], stb[12:11], stb[8:7], stb[4:3], stb[0] };
@@ -218,11 +226,19 @@ always @(*) begin
 	subtresult <= eg_atten_IX + logsin[11:2];
 	// Place all but carry bit into result; also two LSBs of logsin
 	// If addition overflowed, make it the largest value (saturate)
-	atten_internal <= { subtresult[9:0], logsin[1:0] } | {12{subtresult[10]}};
+	atten_internal_IX <= { subtresult[9:0], logsin[1:0] } | {12{subtresult[10]}};
 end
 
+wire [44:0] exp_X;
+
+jt12_exprom u_exprom(
+	.clk	( clk		),
+	.addr	( atten_internal_IX[5:1] ),
+	.exp	( exp_X		)
+);
+
 always @(posedge clk) begin
-	totalatten_X <= atten_internal;
+	totalatten_X <= atten_internal_IX;
 	signbit_X <= signbit_IX;    
 end
 
@@ -233,25 +249,24 @@ end
 // Exponential table
 // Main sine table body
 always @(*) begin    
-	// eta <= exptable[ totalatten_X[5:1] ];
-	eta <= explut_jt51[ totalatten_X[5:1] ];
+	//eta <= explut_jt51[ totalatten_X[5:1] ];	
 	// 2-bit row chooser	
 	case( totalatten_X[7:6] )
 		2'b00: begin
-				etf <= { 1'b1, eta[44:36]  };
-				etg <= { 1'b1, eta[35:34] };				
+				etf <= { 1'b1, exp_X[44:36]  };
+				etg <= { 1'b1, exp_X[35:34] };				
 			end
 		2'b01: begin
-				etf <= eta[33:24];
-				etg <= { 2'b10, eta[23] };				
+				etf <= exp_X[33:24];
+				etg <= { 2'b10, exp_X[23] };				
 			end
 		2'b10: begin
-				etf <= { 1'b0, eta[22:14]  };
-				etg <= eta[13:11];				
+				etf <= { 1'b0, exp_X[22:14]  };
+				etg <= exp_X[13:11];				
 			end
 		2'b11: begin
-				etf <= { 2'b00, eta[10:3]  };
-				etg <= eta[2:0];
+				etf <= { 2'b00, exp_X[10:3]  };
+				etg <= exp_X[2:0];
 			end
 
 	endcase	
@@ -295,7 +310,6 @@ end
 
 `ifdef SIMULATION
 reg [4:0] sep24_cnt;
-wire clk_int = clk;
 
 wire signed [13:0] op_ch0s1, op_ch1s1, op_ch2s1, op_ch3s1,
 		 op_ch4s1, op_ch5s1, op_ch0s2, op_ch1s2,
@@ -304,12 +318,12 @@ wire signed [13:0] op_ch0s1, op_ch1s1, op_ch2s1, op_ch3s1,
 		 op_ch4s3, op_ch5s3, op_ch0s4, op_ch1s4,
 		 op_ch2s4, op_ch3s4, op_ch4s4, op_ch5s4;
 
-always @(posedge clk_int)
+always @(posedge clk ) 
 	sep24_cnt <= !zero ? sep24_cnt+1'b1 : 5'd0;
 
 sep24 #( .width(14), .pos0(13)) opsep
 (
-	.clk	( clk_int	),
+	.clk	( clk		),
 	.mixed	( op_result_internal	),
 	.mask	( 0			),
 	.cnt	( sep24_cnt	),	
@@ -352,7 +366,7 @@ wire signed [8:0] acc_ch0s1, acc_ch1s1, acc_ch2s1, acc_ch3s1,
 
 sep24 #( .width(9), .pos0(13)) accsep
 (
-	.clk	( clk_int	),
+	.clk	( clk		),
 	.mixed	( op_result_internal[13:5] ),
 	.mask	( 0			),
 	.cnt	( sep24_cnt	),	
@@ -396,7 +410,7 @@ wire signed [9:0] pm_ch0s1, pm_ch1s1, pm_ch2s1, pm_ch3s1,
 
 sep24 #( .width(10), .pos0( 18 ) ) pmsep
 (
-	.clk	( clk_int	),
+	.clk	( clk		),
 	.mixed	( phasemod_VIII	),
 	.mask	( 0			),
 	.cnt	( sep24_cnt	),	
@@ -440,7 +454,7 @@ wire [9:0] phase_ch0s1, phase_ch1s1, phase_ch2s1, phase_ch3s1,
 
 sep24 #( .width(10), .pos0( 18 ) ) phsep
 (
-	.clk	( clk_int	),
+	.clk	( clk		),
 	.mixed	( phase		),
 	.mask	( 0			),
 	.cnt	( sep24_cnt	),	
@@ -482,7 +496,7 @@ wire [9:0] eg_ch0s1, eg_ch1s1, eg_ch2s1, eg_ch3s1, eg_ch4s1, eg_ch5s1,
 
 sep24 #( .width(10), .pos0(17) ) egsep
 (
-	.clk	( clk_int	),
+	.clk	( clk		),
 	.mixed	( eg_atten_IX		),
 	.mask	( 0			),
 	.cnt	( sep24_cnt	),	

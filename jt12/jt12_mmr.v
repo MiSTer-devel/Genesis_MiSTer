@@ -22,16 +22,12 @@
 
 module jt12_mmr(
 	input		  	rst,
-	input		  	clk,		// Phi 1
+	input		  	clk,
 	input	[7:0]	din,
 	input			write,
 	input	[1:0]	addr,
 	output	reg		busy,
 	output			ch6op,
-	// Clock speed
-	output	reg		set_n6,
-	output	reg		set_n3,
-	output	reg		set_n2,
 	// LFO
 	output	reg	[2:0]	lfo_freq,
 	output	reg		 	lfo_en,
@@ -44,10 +40,6 @@ module jt12_mmr(
 	output	reg	 		enable_irq_B,
 	output	reg			clr_flag_A,
 	output	reg			clr_flag_B,
-	output	reg			clr_run_A,
-	output	reg			clr_run_B,
-	output	reg			set_run_A,
-	output	reg			set_run_B,
 	output	reg			fast_timers,
 	input				flag_A,
 	input				overflow_A,	
@@ -155,8 +147,6 @@ reg [ 5:0] latch_ch3op2,  latch_ch3op3,  latch_ch3op1;
 reg [2:0] up_ch;
 reg [1:0] up_op;
 
-reg [7:0] din_latch;
-
 `include "jt12_mmr_sim.vh"
 
 always @(posedge clk) begin : memory_mapped_registers
@@ -178,7 +168,6 @@ always @(posedge clk) begin : memory_mapped_registers
 		{ value_A, value_B } <= 18'd0;
 		{ clr_flag_B, clr_flag_A,
 		enable_irq_B, enable_irq_A, load_B, load_A } <= 6'd0;
-		{ clr_run_A, clr_run_B, set_run_A, set_run_B } <= 4'b1100;
 		up_clr <= 1'b0;
 		fast_timers <= 1'b0;
 		// LFO
@@ -189,10 +178,6 @@ always @(posedge clk) begin : memory_mapped_registers
 		// PCM
 		pcm			<= 9'h0;
 		pcm_en		<= 1'b0;
-		// clock speed
-		set_n6		<= 1'b1;
-		set_n3		<= 1'b0;
-		set_n2		<= 1'b0;
 		// sch			<= 1'b0;
 		// Original test features
 		eg_stop		<=	1'b0;
@@ -209,7 +194,6 @@ always @(posedge clk) begin : memory_mapped_registers
 				up_ch	<= {addr[1], din[1:0]};
 				up_op	<= din[3:2]; // 0=S1,1=S3,2=S2,3=S4
 			end else begin
-				din_latch <= din;
 				// Global registers
 				if( selected_register < 8'h30 ) begin
 					case( selected_register)
@@ -233,23 +217,11 @@ always @(posedge clk) begin : memory_mapped_registers
 						{ clr_flag_B, clr_flag_A,
 						  enable_irq_B, enable_irq_A,
 						  load_B, load_A } <= din[5:0];
-						  clr_run_A <= ~din[0];
-						  set_run_A <=  din[0];
-						  clr_run_B <= ~din[1];
-						  set_run_B <=  din[1];
 						end
 					REG_LFO:	{ lfo_en, lfo_freq } <= din[3:0];
 					REG_DACTEST:pcm[0] <= din[3];
 					REG_PCM:	pcm[8:1]<= din;
 					REG_PCM_EN:	pcm_en	<= din[7];
-					//REG_CLK_N6:	{ set_n6, set_n3, set_n2 } <= 3'b100;
-					//REG_CLK_N3:	{ set_n6, set_n3, set_n2 } <= 3'b010;
-					//REG_CLK_N2:	{ set_n6, set_n3, set_n2 } <= 3'b001;
-					/*
-					REG_IRQMASK: { sch, irq_zero_en,
-						irq_brdy_en,
-						irq_eos_en,
-						irq_tb_en, irq_ta_en } <= { din[7], din[4:0] }; */
 					endcase
 				end
                 else if( selected_register[1:0]!=2'b11 ) begin
@@ -290,7 +262,6 @@ always @(posedge clk) begin : memory_mapped_registers
 			// csm 	<= 1'b0;
 			// lfo_rst <= 1'b0;
 			{ clr_flag_B, clr_flag_A, load_B, load_A } <= 4'd0;
-			{ clr_run_A, clr_run_B, set_run_A, set_run_B } <= 4'd0;
 			`ifdef SIMULATION
 			mmr_dump <= 1'b0;
 			`endif
@@ -319,7 +290,7 @@ end
 jt12_reg u_reg(
 	.rst		( rst		),
 	.clk		( clk		),		// P1
-	.din		( din_latch	),
+	.din		( din		),
 
 	.up_keyon	( up_keyon	),
 	.up_alg		( up_alg	),

@@ -23,7 +23,7 @@
 
 */
 
-module jt12_fm(
+module jt12_mod(
 	input 		s1_enters,
 	input 		s2_enters,
 	input 		s3_enters,
@@ -38,23 +38,61 @@ module jt12_fm(
 	output reg	use_prev1    	
 );
 
+reg [7:0] alg_hot;
+
 always @(*) begin
-	casex( {s1_enters, s3_enters, s2_enters, s4_enters} )
-		4'b1xxx: begin // S1
+	case( alg_I )
+		3'd0: alg_hot <= 8'h1;  // D0
+		3'd1: alg_hot <= 8'h2;  // D1
+		3'd2: alg_hot <= 8'h4;  // D2
+		3'd3: alg_hot <= 8'h8;  // D3
+		3'd4: alg_hot <= 8'h10; // D4
+		3'd5: alg_hot <= 8'h20; // D5
+		3'd6: alg_hot <= 8'h40; // D6
+		3'd7: alg_hot <= 8'h80; // D7
+	endcase
+end
+
+always @(*) begin
+	use_prevprev1 <= s1_enters | (s3_enters&alg_hot[5]);
+	use_prev2 <= (s3_enters&(|alg_hot[2:0])) | (s4_enters&alg_hot[3]);
+	use_internal_x <= s4_enters & alg_hot[2];
+	use_internal_y <= s4_enters & (|{alg_hot[4:3],alg_hot[1:0]});
+	use_prev1 <= s1_enters | (s3_enters&alg_hot[1]) |
+		(s2_enters&(|{alg_hot[6:3],alg_hot[0]}) )|
+		(s4_enters&(|{alg_hot[5],alg_hot[2]}));
+end
+
+/*
+always @(*) begin
+	use_prevprev1 <= s1_enters || (s3_enters&&(alg_I==3'd5));
+	use_prev2 <= (s3_enters&&(alg_I<=3'd2)) || (s4_enters&&(alg_I==3'd3));
+	use_internal_x <= s4_enters && (alg_I==3'd2);
+	use_internal_y <= s4_enters && (alg_I<=3'd4 && alg_I!=3'd2);
+	use_prev1 <= s1_enters || (s3_enters&&(alg_I==3'd1)) ||
+		(s2_enters&&(alg_I==3'd0 || 
+					alg_I==3'd3 || alg_I==3'd4 ||
+					alg_I==3'd5 || alg_I==3'd6)) ||
+		(s4_enters&&(alg_I==3'd2 || alg_I==3'd5));
+end
+
+always @(*) begin
+case( {s1_enters, s3_enters, s2_enters, s4_enters} ) // synthesis parallel_case
+		4'b1000: begin // S1
 				use_prevprev1 <= 1'b1;
 				use_prev2     <= 1'b0;
 				use_internal_x<= 1'b0;
                 use_internal_y<= 1'b0;
 				use_prev1     <= 1'b1;                
 			end
-		4'b01xx: begin // S3
+		4'b0100: begin // S3
 				use_prevprev1 <= alg_I==3'd5;
 				use_prev2     <= (alg_I<=3'd2);
 				use_internal_x<= 1'b0;
-				use_prev1     <= alg_I==3'd1;                    
     	        use_internal_y<= 1'b0;
+				use_prev1     <= alg_I==3'd1;                    
 				end
-		4'b001x: begin  // S2
+		4'b0010: begin  // S2
 				use_prevprev1 <= 1'b0;
 				use_prev2     <= 1'b0;
 				use_internal_x<= 1'b0;
@@ -71,14 +109,14 @@ always @(*) begin
                 use_internal_y <= ( alg_I<=3'd4 && alg_I!=3'd2);
 			end
 		default:begin
-					use_prevprev1 <= 1'b0;
-					use_prev2     <= 1'b0;
-					use_internal_x<= 1'b0;
-					use_prev1     <= 1'b0;
-	                use_internal_y<= 1'b0;
+					use_prevprev1 <= 1'bx;
+					use_prev2     <= 1'bx;
+					use_internal_x<= 1'bx;
+					use_prev1     <= 1'bx;
+	                use_internal_y<= 1'bx;
 				end
 	endcase
 end
-
+*/
 
 endmodule

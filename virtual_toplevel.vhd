@@ -80,24 +80,24 @@ end entity;
 
 architecture rtl of Virtual_Toplevel is
 component jt12 port(
-	rst	: in std_logic;
-	clk : in std_logic;
-	din : in std_logic_vector(7 downto 0);
-	addr: in std_logic_vector(1 downto 0);
-	cs_n: in std_logic;
-	wr_n: in std_logic;	
-	limiter_en: in std_logic;
+	rst	    : in std_logic;
+	cpu_clk   : in std_logic;
+	cpu_din   : in std_logic_vector(7 downto 0);
+	cpu_dout  : out std_logic_vector(7 downto 0);
+	cpu_addr  : in std_logic_vector(1 downto 0);
+	cpu_cs_n  : in std_logic;
+	cpu_wr_n  : in std_logic;	
+   cpu_irq_n : out std_logic;
+	cpu_limiter_en: in std_logic;
 	
-	dout: out std_logic_vector(7 downto 0);
-	snd_right:out std_logic_vector(11 downto 0);
-	snd_left:out std_logic_vector(11 downto 0);
-	clk_out : out std_logic;
-	sample	: out std_logic;	
+	syn_clk   : in std_logic;
+	syn_snd_right:out std_logic_vector(11 downto 0);
+	syn_snd_left:out std_logic_vector(11 downto 0);
+	syn_snd_sample	: out std_logic;	
 	-- Mux'ed output
-	mux_right	:out std_logic_vector(8 downto 0);
-	mux_left	:out std_logic_vector(8 downto 0);
-	mux_sample	:out std_logic;
-    irq_n:out std_logic
+	syn_mux_right	:out std_logic_vector(8 downto 0);
+	syn_mux_left	:out std_logic_vector(8 downto 0);
+	syn_mux_sample	:out std_logic
 );
 end component;
 
@@ -237,6 +237,10 @@ signal T80_A         : std_logic_vector(15 downto 0);
 signal T80_DI        : std_logic_vector(7 downto 0);
 signal T80_DO        : std_logic_vector(7 downto 0);
 
+signal SCLK			: std_logic;
+signal FCLK			: std_logic;
+signal SCLKCNT		: std_logic_vector(5 downto 0);
+
 -- CLOCK GENERATION
 signal VCLK			: std_logic;
 signal RST_VCLK	: std_logic; -- Reset for blocks using VCLK as clock
@@ -345,9 +349,6 @@ signal FM_UDS_N			: std_logic;
 signal FM_LDS_N			: std_logic;
 signal FM_DI			: std_logic_vector(7 downto 0);
 signal FM_DO			: std_logic_vector(7 downto 0);
-signal FM_SAMPLE		: std_logic;
-signal FM_MUX_LEFT		: std_logic_vector(8 downto 0);
-signal FM_MUX_RIGHT		: std_logic_vector(8 downto 0);
 
 -- PSG
 signal PSG_SEL			: std_logic;
@@ -653,38 +654,48 @@ port map(
 	output	=> PSG_SND
 );
 
--- FM
---fm_mixer:jt12_mixer
---port map(
---	rst			=> not RESET_N,
---	clk			=> MCLK,
---	sample		=> FM_SAMPLE,
---	left_in 	=> FM_MUX_LEFT,
---	right_in	=> FM_MUX_RIGHT,
---	psg			=> PSG_SND,
---	enable_psg	=> PSG_ENABLE,
---	left_out	=> DAC_LDATA,
---	right_out	=> DAC_RDATA
---);
-
 fm : jt12
 port map(
-	rst		=> RST_VCLK,	-- gen-hw.txt line 328
-	clk		=> VCLK,
-	clk_out	=> open,
-	
-	limiter_en => FM_LIMITER,
-	cs_n	=> not FM_SEL,
-	addr	=> FM_A,
-	wr_n	=> FM_RNW,
-	din			=> FM_DI,
-	dout		=> FM_DO,
-	snd_left => snd_left,
-	snd_right => snd_right,
-	mux_left	=> FM_MUX_LEFT,
-	mux_right	=> FM_MUX_RIGHT,
-	mux_sample	=> FM_SAMPLE
+	rst		      => RST_VCLK,	-- gen-hw.txt line 328
+	cpu_clk	      => MCLK and FCLK,
+	cpu_limiter_en => FM_LIMITER,
+	cpu_cs_n	      => not FM_SEL,
+	cpu_addr	      => FM_A,
+	cpu_wr_n	      => FM_RNW,
+	cpu_din	      => FM_DI,
+	cpu_dout	      => FM_DO,
+
+	syn_clk	      => MCLK and SCLK,
+	syn_snd_left   => snd_left,
+	syn_snd_right  => snd_right
 );
+
+process( RESET_N, MCLK )
+begin
+	if RESET_N = '0' then
+		SCLK <= '1';
+		SCLKCNT <= "000001";
+	elsif falling_edge(MCLK) then
+
+		SCLKCNT <= SCLKCNT + 1;
+		if SCLKCNT = X"29" then
+			SCLKCNT <= (others => '0');
+		end if;
+		
+		if SCLKCNT = "0" then
+			SCLK <= '1';
+		else
+			SCLK <= '0';
+		end if;
+		
+		if VCLKCNT = "000" then
+			FCLK <= '1';
+		else
+			FCLK <= '0';
+		end if;
+		
+	end if;
+end process;
 
 
 aud_mixer:audio_mixer
