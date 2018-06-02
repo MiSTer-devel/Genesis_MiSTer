@@ -17,8 +17,8 @@ end entity;
 
 architecture rtl of psg is
 
+	signal clk32_en   : std_logic;
 	signal clk_divide	: unsigned(4 downto 0) := "00000";
-	signal clk32		: std_logic;
 	signal regn			: std_logic_vector(2 downto 0);
 	signal tone0		: std_logic_vector(9 downto 0):="0000100000";
 	signal tone1		: std_logic_vector(9 downto 0):="0000100000";
@@ -33,48 +33,36 @@ architecture rtl of psg is
 	signal output2		: std_logic_vector(3 downto 0);
 	signal output3		: std_logic_vector(3 downto 0);
 	
-
-	component psg_tone is
-   port (clk	: in  STD_LOGIC;
-			tone	: in  STD_LOGIC_VECTOR (9 downto 0);
-			volume: in  STD_LOGIC_VECTOR (3 downto 0);
-			output: out STD_LOGIC_VECTOR (3 downto 0));
-	end component;
-
-	component psg_noise is
-	port (clk	: in  STD_LOGIC;
-			style	: in  STD_LOGIC_VECTOR (2 downto 0);
-			tone	: in  STD_LOGIC_VECTOR (9 downto 0);
-			volume: in  STD_LOGIC_VECTOR (3 downto 0);
-			output: out STD_LOGIC_VECTOR (3 downto 0));
-	end component;
-	
 begin
 
-	t0: psg_tone
+	t0: work.psg_tone
 	port map (
-		clk		=> clk32,
+		clk		=> clk,
+		clk_en	=> clk32_en,
 		tone		=> tone0,
 		volume	=> volume0,
 		output	=> output0);
 		
-	t1: psg_tone
+	t1: work.psg_tone
 	port map (
-		clk		=> clk32,
+		clk		=> clk,
+		clk_en	=> clk32_en,
 		tone		=> tone1,
 		volume	=> volume1,
 		output	=> output1);
 		
-	t2: psg_tone
+	t2: work.psg_tone
 	port map (
-		clk		=> clk32,
+		clk		=> clk,
+		clk_en	=> clk32_en,
 		tone		=> tone2,
 		volume	=> volume2,
 		output	=> output2);
 
-	t3: psg_noise
+	t3: work.psg_noise
 	port map(
-		clk		=> clk32,
+		clk		=> clk,
+		clk_en	=> clk32_en,
 		style		=> ctrl3,
 		tone		=> tone2,
 		volume	=> volume3,
@@ -88,7 +76,7 @@ begin
 			end if;
 		end if;
 	end process;
-	clk32 <= std_logic(clk_divide(4));
+	clk32_en <= '1' when clk_divide = "00000" else '0';
 
 	process (clk, WR_n)
 	begin
