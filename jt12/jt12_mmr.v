@@ -150,6 +150,9 @@ reg [1:0] up_op;
 `include "jt12_mmr_sim.vh"
 
 always @(posedge clk) begin : memory_mapped_registers
+	reg old_write;
+	old_write <= write;
+
 	if( rst ) begin
 		selected_register 	<= 8'h0;
 		busy				<= 1'b0;
@@ -187,7 +190,7 @@ always @(posedge clk) begin : memory_mapped_registers
 		`endif
 	end else begin
 		// WRITE IN REGISTERS
-		if( write && !busy ) begin
+		if( old_write ^ write ) begin
 			busy <= 1'b1;
 			if( !addr[0] ) begin
 				selected_register <= din;
@@ -269,7 +272,7 @@ always @(posedge clk) begin : memory_mapped_registers
 			if( |{  up_keyon,	up_alg, 	up_block, 	up_fnumlo,
 					up_pms, 	up_dt1, 	up_tl, 		up_ks_ar,
 					up_amen_d1r,up_d2r,		up_d1l,		up_ssgeg } == 1'b0 )
-				busy	<= busy_reg | write;
+				busy	<= 0;
 			else
 				busy	<= 1'b1;
 

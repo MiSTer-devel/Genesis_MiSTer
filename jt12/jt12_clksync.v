@@ -31,18 +31,18 @@ module jt12_clksync(
 	// CPU interface	
 	input	[7:0]	cpu_din,
 	input	[1:0]	cpu_addr,
-	output	[7:0]	cpu_dout,
+	output[7:0]	cpu_dout,
 	input			cpu_cs_n,
 	input			cpu_wr_n,
-	output			cpu_irq_n,
+	output		cpu_irq_n,
 	input			cpu_limiter_en,
 	
 	// Synthesizer interface
-	output	 [7:0]	syn_din,
-	output	 [1:0]	syn_addr,
-	output	reg		syn_rst,
-	output			syn_write,
-	output			syn_limiter_en,
+	output reg [7:0]	syn_din,
+	output reg [1:0]	syn_addr,
+	output reg 			syn_rst,
+	output reg			syn_write,
+	output				syn_limiter_en,
 
 	input			syn_busy,
 	input			syn_flag_A,
@@ -53,7 +53,8 @@ module jt12_clksync(
 // reset generation
 reg rst_aux;
 
-	
+assign syn_limiter_en = cpu_limiter_en;
+
 always @(negedge syn_clk or posedge rst) 
 	if( rst ) begin
 		syn_rst <= 1'b1;
@@ -65,27 +66,11 @@ always @(negedge syn_clk or posedge rst)
 	end
 
 reg		cpu_busy;
-wire	cpu_flag_B, cpu_flag_A;
+wire		cpu_flag_B, cpu_flag_A;
 
 assign 	cpu_dout = { cpu_busy, 5'h0, cpu_flag_B, cpu_flag_A };
-/*
-always @(posedge clk ) 
-	
-*/
-//assign	write = !cs_n && !wr_n;
 
 wire		write_raw = !cpu_cs_n && !cpu_wr_n;
-
-reg	[7:0]	din_copy;
-reg	[1:0]	addr_copy;
-reg			write_copy;
-
-/* DIN & ADDR do not need synchronizers because there
-is a handshake protocol using the write and busy signals*/
-assign syn_din = din_copy;
-assign syn_addr= addr_copy;
-
-reg aux_irq_n;
 
 reg [1:0]busy_sh;
 always @(posedge cpu_clk) begin
@@ -98,28 +83,23 @@ jt12_sh #(.width(3),.stages(2) ) u_syn2cpu(
 	.drop	( { cpu_flag_B, cpu_flag_A, cpu_irq_n } )
 );
 
-jt12_sh #(.width(2),.stages(2) ) u_cpu2syn(
-	.clk	( syn_clk ),
-	.din	( { write_copy, cpu_limiter_en } ),
-	.drop	( { syn_write,  syn_limiter_en } )
-);
+always @(posedge cpu_clk) begin
+	reg old_write;
+	
+	old_write <= write_raw;
 
-always @(posedge cpu_clk) begin : cpu_interface
 	if( rst ) begin
 		cpu_busy	<= 1'b0;
-		write_copy	<= 1'b0;
 	end
 	else begin
-		if( write_raw && !cpu_busy ) begin
-			cpu_busy 	<= 1'b1;
-			write_copy	<= 1'b1;
-			addr_copy	<= cpu_addr;
-			din_copy	<= cpu_din;
+		if( ~old_write & write_raw ) begin
+			cpu_busy  <= 1;
+			syn_write <= ~syn_write;
+			syn_addr	 <= cpu_addr;
+			syn_din	 <= cpu_din;
 		end
-		else begin
-			if( busy_sh[1] ) write_copy	<= 1'b0;
-			if( cpu_busy && busy_sh==2'b10 ) cpu_busy <= 1'b0;
-		end
+
+		if(cpu_busy && busy_sh==2'b10) cpu_busy <= 0;
 	end
 end
 
