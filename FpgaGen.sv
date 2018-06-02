@@ -182,9 +182,10 @@ wire hblank, vblank;
 
 assign CLK_VIDEO = clk_sys;
 
-
 assign DDRAM_CLK = clk_ram;
 wire reset = RESET|buttons[1];
+
+wire [15:0] audio_l, audio_r;
 
 Virtual_Toplevel fpgagen
 (
@@ -192,8 +193,8 @@ Virtual_Toplevel fpgagen
 	.MCLK(clk_sys),
 	.RAMCLK(clk_ram),
 
-	.DAC_LDATA(AUDIO_L),
-	.DAC_RDATA(AUDIO_R),
+	.DAC_LDATA(audio_l),
+	.DAC_RDATA(audio_r),
 
 	.RED(r),
 	.GREEN(g),
@@ -243,6 +244,12 @@ video_mixer #(.LINE_LENGTH(320), .HALF_DEPTH(1)) video_mixer
 	.VBlank(vblank)
 );
 
+compressor compressor
+(
+	clk_sys,
+	audio_l[15:4], audio_r[15:4],
+	AUDIO_L,       AUDIO_R
+);
 
 ///////////////////////////////////////////////////
 
