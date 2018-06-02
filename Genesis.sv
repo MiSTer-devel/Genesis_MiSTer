@@ -1,8 +1,9 @@
 //============================================================================
-//  FPPGAGen port to MiSTer by Sorgelig
+//  FPGAGen port to MiSTer
+//  Copyright (c) 2017,2018 Sorgelig
 //
 //  YM2612 implementation by Jose Tejada Gomez. Twitter: @topapate
-//  Original FPGAGen code: Copyright (c) 2010-2013 Gregory Estrade (greg@torlus.com) 
+//  Original Genesis code: Copyright (c) 2010-2013 Gregory Estrade (greg@torlus.com) 
 //
 //  This program is free software; you can redistribute it and/or modify it
 //  under the terms of the GNU General Public License as published by the Free
@@ -112,7 +113,7 @@ assign LED_USER  = ioctl_download;
 
 `include "build_id.v"
 localparam CONF_STR = {
-	"FPGAGEN;;",
+	"Genesis;;",
 	"-;",
 	"F,BINGENMD ;",
 	"-;",
@@ -187,7 +188,7 @@ wire reset = RESET|buttons[1];
 
 wire [15:0] audio_l, audio_r;
 
-Virtual_Toplevel fpgagen
+Virtual_Toplevel Genesis
 (
 	.RESET_N(~(reset|ioctl_download)),
 	.MCLK(clk_sys),
