@@ -123,7 +123,7 @@ localparam CONF_STR = {
 	"O5,3 buttons only,No,Yes;",
 	"-;",
 	"J1,A,B,C,Start,Mode,X,Y,Z;",
-	"V,v1.06.",`BUILD_DATE
+	"V,v1.20.",`BUILD_DATE
 };
 
 

@@ -200,7 +200,7 @@ signal ZRCP : zrcp_t;
 constant useCache : boolean := false;
 
 -- Genesis core
-signal NO_DATA			: std_logic_vector(15 downto 0) := x"4E71";	-- SYNTHESIS gp/m68k.c line 12
+constant NO_DATA	: std_logic_vector(15 downto 0) := x"4E71";	-- SYNTHESIS gp/m68k.c line 12
 
 -- 68K
 signal TG68_RES_N		: std_logic;
@@ -237,8 +237,9 @@ signal T80_A         : std_logic_vector(15 downto 0);
 signal T80_DI        : std_logic_vector(7 downto 0);
 signal T80_DO        : std_logic_vector(7 downto 0);
 
-signal SCLK			: std_logic;
-signal FCLK			: std_logic;
+signal SCLK_EN		: std_logic;
+signal FCLK_EN		: std_logic;
+signal ZCLK_EN		: std_logic;
 signal SCLKCNT		: std_logic_vector(5 downto 0);
 
 -- CLOCK GENERATION
@@ -338,8 +339,6 @@ signal T80_VDP_DTACK_N		: std_logic;
 
 type vdpc_t is ( VDPC_IDLE, VDPC_TG68_ACC, VDPC_T80_ACC, VDPC_DESEL );
 signal VDPC : vdpc_t;
-
-signal INTERLACE	: std_logic;
 
 -- FM AREA
 signal FM_SEL			: std_logic;
@@ -550,7 +549,7 @@ port map(
 io : entity work.gen_io
 port map(
 	RST_N		=> RESET_N,
-	CLK		=> VCLK,
+	CLK		=> MCLK and FCLK_EN,
 
 	J3BUT    => J3BUT,
 
@@ -614,7 +613,7 @@ port map(
 	vram_u_n	=> vram_u_n,
 	vram_l_n	=> vram_l_n,
 	
-	INTERLACE	=> INTERLACE,
+	INTERLACE	=> '0',
 
 	HINT			=> HINT,
 	HINT_ACK		=> HINT_ACK,
@@ -657,7 +656,7 @@ port map(
 fm : jt12
 port map(
 	rst		      => RST_VCLK,	-- gen-hw.txt line 328
-	cpu_clk	      => MCLK and FCLK,
+	cpu_clk	      => MCLK and FCLK_EN,
 	cpu_limiter_en => FM_LIMITER,
 	cpu_cs_n	      => not FM_SEL,
 	cpu_addr	      => FM_A,
@@ -665,7 +664,7 @@ port map(
 	cpu_din	      => FM_DI,
 	cpu_dout	      => FM_DO,
 
-	syn_clk	      => MCLK and SCLK,
+	syn_clk	      => MCLK and SCLK_EN,
 	syn_snd_left   => snd_left,
 	syn_snd_right  => snd_right
 );
@@ -673,8 +672,10 @@ port map(
 process( RESET_N, MCLK )
 begin
 	if RESET_N = '0' then
-		SCLK <= '1';
+		SCLK_EN <= '1';
 		SCLKCNT <= "000001";
+		T80_CLKEN <= '1';
+		ZCLKCNT <= (others => '0');
 	elsif falling_edge(MCLK) then
 
 		SCLKCNT <= SCLKCNT + 1;
@@ -683,15 +684,30 @@ begin
 		end if;
 		
 		if SCLKCNT = "0" then
-			SCLK <= '1';
+			SCLK_EN <= '1';
 		else
-			SCLK <= '0';
+			SCLK_EN <= '0';
 		end if;
 		
-		if VCLKCNT = "000" then
-			FCLK <= '1';
+		if VCLKCNT = "001" then
+			FCLK_EN <= '1';
 		else
-			FCLK <= '0';
+			FCLK_EN <= '0';
+		end if;
+
+		if (VCLKCNT = "000") and (ZCLK = '0') then
+			ZCLK_EN <= '1';
+		else
+			ZCLK_EN <= '0';
+		end if;
+		
+		if (VCLKCNT = "000") and (ZCLK = '1') then
+			ZCLKCNT <= ZCLKCNT + 1;
+			T80_CLKEN <= '1';
+			if ZCLKCNT = "1110" then
+				ZCLKCNT <= (others => '0');
+				T80_CLKEN <= '0';
+			end if;
 		end if;
 		
 	end if;
@@ -781,22 +797,16 @@ begin
 	end if;
 end process;
 
-----------------------------------------------------------------
--- SWITCHES CONTROL
-----------------------------------------------------------------
-INTERLACE <= '0';
-
-
 -- #############################################################################
 -- #############################################################################
 -- #############################################################################
 
-process( RESET_N, VCLK )
+process( RESET_N, MCLK )
 begin
 	if RESET_N = '0' then
 		RST_VCLK <= '1';
 		RST_VCLK_aux <= '1';
-	elsif rising_edge(VCLK) then
+	elsif rising_edge(MCLK) then
 		RST_VCLK_aux <= '0';
 		RST_VCLK <= RST_VCLK_aux;
 	end if;
@@ -837,21 +847,6 @@ begin
 			TG68_ENARDREG <= '0';
 		end if;
 		
-	end if;
-end process;
-
-process( RESET_N, ZCLK )
-begin
-	if RESET_N = '0' then
-		T80_CLKEN <= '1';
-		ZCLKCNT <= (others => '0');
-	elsif falling_edge( ZCLK ) then
-		ZCLKCNT <= ZCLKCNT + 1;
-		T80_CLKEN <= '1';
-		if ZCLKCNT = "1110" then
-			ZCLKCNT <= (others => '0');
-			T80_CLKEN <= '0';
-		end if;
 	end if;
 end process;
 
@@ -918,7 +913,7 @@ begin
 	end if;
 end process;
 
-T80_CLK_N <= ZCLK;
+T80_CLK_N <= MCLK and ZCLK_EN;
 --T80_INT_N <= '1';
 T80_NMI_N <= '1';
 T80_BUSRQ_N <= not ZBUSREQ;
@@ -945,21 +940,11 @@ T80_DI <= T80_SDRAM_D when T80_SDRAM_SEL = '1'
 -- OPERATING SYSTEM ROM
 TG68_OS_DTACK_N <= '0';
 OS_OEn <= '0';
-process( RESET_N, MCLK, TG68_AS_N, TG68_RNW,
-	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N )
-begin
 
-	if TG68_A(23 downto 22) = "00" 
-		and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') 
-		and TG68_RNW = '1' 
-		and CART_EN = '0'
-	then
-		TG68_OS_SEL <= '1';
-	else
-		TG68_OS_SEL <= '0';
-	end if;
-
-end process;
+TG68_OS_SEL <= '1' when  TG68_A(23 downto 22) = "00" 
+							and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') 
+							and TG68_RNW = '1' 
+							and CART_EN = '0' else '0';
 
 
 -- CONTROL AREA
@@ -1091,7 +1076,7 @@ begin
 		IO_RNW <= '1';
 		IO_UDS_N <= '1';
 		IO_LDS_N <= '1';
-		IO_A <= (others => 'Z');
+		IO_A <= (others => '0');
 
 		IOC <= IOC_IDLE;
 		
@@ -1153,7 +1138,7 @@ begin
 				IO_RNW <= '1';
 				IO_UDS_N <= '1';
 				IO_LDS_N <= '1';
-				IO_A <= (others => 'Z');
+				IO_A <= (others => '0');
 
 				IOC <= IOC_IDLE;
 			end if;
@@ -1208,7 +1193,7 @@ begin
 		VDP_RNW <= '1';
 		VDP_UDS_N <= '1';
 		VDP_LDS_N <= '1';
-		VDP_A <= (others => 'Z');
+		VDP_A <= (others => '0');
 
 		VDPC <= VDPC_IDLE;
 
@@ -1297,7 +1282,7 @@ begin
 				VDP_RNW <= '1';
 				VDP_UDS_N <= '1';
 				VDP_LDS_N <= '1';
-				VDP_A <= (others => 'Z');
+				VDP_A <= (others => '0');
 
 				VDPC <= VDPC_IDLE;
 			end if;
@@ -1345,7 +1330,7 @@ begin
 		FM_RNW <= '1';
 --		FM_UDS_N <= '1';
 --		FM_LDS_N <= '1';
-		FM_A <= (others => 'Z');
+		FM_A <= (others => '0');
 		
 		FMC <= FMC_IDLE;
 		
@@ -1422,7 +1407,7 @@ begin
 				FM_RNW <= '1';
 --				FM_UDS_N <= '1';
 --				FM_LDS_N <= '1';
-				FM_A <= (others => 'Z');
+				FM_A <= (others => '0');
 
 				FMC <= FMC_IDLE;
 --			end if;
@@ -1557,7 +1542,8 @@ end process;
 process( RESET_N, MCLK, TG68_AS_N, TG68_RNW,
 	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
 	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N,
-	VBUS_SEL, VBUS_ADDR	)
+	VBUS_SEL, VBUS_ADDR,
+	CART_EN )
 begin
 
 	if TG68_A(23) = '0' 
