@@ -1,4 +1,6 @@
-# This is a port of fpgagen core to MiSTer by Sorgelig.
+# SEGA Megadrive/Genesis for MiSTer.
+
+This is the port of fpgagen core.
 
 fpgagen - a SEGA Megadrive/Genesis clone in a FPGA.
 Copyright (c) 2010-2013 Gregory Estrade (greg@torlus.com)
