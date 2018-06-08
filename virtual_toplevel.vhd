@@ -594,7 +594,8 @@ vdp : entity work.vdp
 port map(
 	RST_N		=> RESET_N,
 	CLK		=> MCLK,
-		
+	MEMCLK   => RAMCLK,
+
 	SEL		=> VDP_SEL,
 	A			=> VDP_A,
 	RNW		=> VDP_RNW,
