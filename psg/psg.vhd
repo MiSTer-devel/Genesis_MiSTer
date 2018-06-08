@@ -71,9 +71,9 @@ begin
 	process (clk)
 	begin
 		if rising_edge(clk) then
-			if clken='1' then
+			--if clken='1' then
 				clk_divide <= clk_divide+1;
-			end if;
+			--end if;
 		end if;
 	end process;
 	clk32_en <= '1' when clk_divide = "00000" else '0';
