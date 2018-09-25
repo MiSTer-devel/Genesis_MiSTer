@@ -194,6 +194,8 @@ signal IM			: std_logic;
 signal IM2			: std_logic;
 signal ODD			: std_logic;
 
+signal HV8			: std_logic;
+
 signal HV			: std_logic_vector(15 downto 0);
 signal STATUS		: std_logic_vector(15 downto 0);
 
@@ -296,7 +298,6 @@ signal DMA_SOURCE	: std_logic_vector(15 downto 0);
 -- VIDEO COUNTING
 ----------------------------------------------------------------
 signal H_CNT		: std_logic_vector(11 downto 0);
-signal H_VGA_CNT	: std_logic_vector(10 downto 0);
 signal V_CNT		: std_logic_vector(9 downto 0);
 
 signal V_ACTIVE		: std_logic;
@@ -647,7 +648,8 @@ ODD <= FIELD when IM = '1' else '0';
 IN_DMA <= DMA_FILL or DMA_COPY or DMA_VBUS;
 
 STATUS <= "111111" & FIFO_EMPTY & FIFO_FULL & VINT_TG68_PENDING & SOVR & SCOL & ODD & IN_VBL & IN_HBL & IN_DMA & V30;
-HV <= HV_VCNT(8 downto 1) & HV_HCNT(8 downto 1);	-- TODO : Interlace mode
+HV8 <= HV_VCNT(8) when INTERLACE = '1' else HV_VCNT(0);
+HV <= HV_VCNT(7 downto 1) & HV8 & HV_HCNT(8 downto 1);
 
 ----------------------------------------------------------------
 -- CPU INTERFACE
@@ -1788,10 +1790,10 @@ end process;
 ----------------------------------------------------------------
 -- COUNTERS AND INTERRUPTS
 process( RST_N, CLK )
+	variable hcnt1, hcnt2, hcnt3, hcnt4, hcnt5: std_logic_vector(8 downto 0);
 begin
 	if RST_N = '0' then
 		H_CNT <= (others => '0');
-		H_VGA_CNT <= (others => '0');
 		V_CNT <= (others => '0');
 		FIELD <= '0';
 		
@@ -1808,23 +1810,30 @@ begin
 		IN_VBL <= '1';
 		
 	elsif rising_edge(CLK) then
+
 		H_CNT <= H_CNT + 1;
-		H_VGA_CNT <= H_VGA_CNT + 1;
-		if H_VGA_CNT = (CLOCKS_PER_LINE/2)-1 then
-			H_VGA_CNT <= (others => '0');
-			V_CNT <= V_CNT + 1;			
-			if V_CNT = (NTSC_LINES*2)-1 then
-				V_CNT <= (others => '0');
-				FIELD <= not FIELD;
-			end if;
-		end if;
-		
+
 		HINT_PENDING_SET <= '0';
 		VINT_TG68_PENDING_SET <= '0';
 		VINT_T80_SET <= '0';
 		VINT_T80_CLR <= '0';
+
+		if (H40 = '1') then
+			hcnt1 := x"A7" & "0";
+			hcnt2 := x"02" & "0";
+			hcnt3 := x"B5" & "1";
+			hcnt4 := x"08" & "1";
+			hcnt5 := x"E4" & "0";
+		else
+			hcnt1 := x"85" & "0";
+			hcnt2 := x"00" & "0";
+			hcnt3 := x"93" & "1";
+			hcnt4 := x"06" & "0";
+			hcnt5 := x"E9" & "0";
+		end if;
+
 		CE_PIX <= '0';
-		
+
 		-- H-Counter seems fine in H32 mode (342px x 10 = 3420 cycles)
 		-- but not so much in H40 mode (420px x 8 = 3360 cycles)
 		-- counting in H40 is probably not regular
@@ -1837,77 +1846,37 @@ begin
 			else
 				HV_HCNT <= x"EF" & "0";
 			end if;
+
+			V_CNT <= V_CNT + 1;
+			if V_CNT = NTSC_LINES-1 then
+				V_CNT <= (others => '0');
+				FIELD <= not FIELD;
+			end if;
 		else
 			HV_PIXDIV <= HV_PIXDIV + 1;
-			if H40 = '1' and HV_PIXDIV = 8-1 then				
+			if (H40 = '1' and HV_PIXDIV = 8-1) or
+			   (H40 = '0' and HV_PIXDIV = 10-1) then
 				CE_PIX <= '1';
 				HV_PIXDIV <= (others => '0');
 				HV_HCNT <= HV_HCNT + 1;
 
-				if HV_HCNT = x"A7" & "0" then
-					if V_CNT = NTSC_V_DISP_START*2-1 then
-						HV_VCNT <= (others => '0');
-						if HIT = 0 then
-							HINT_PENDING_SET <= '1';
-							HINT_COUNT <= (others => '0');
-						else
-							HINT_COUNT <= HIT - 1;
-						end if;
-						IN_VBL <= '0';
+				if HV_HCNT = hcnt1 then
+					if V_CNT = NTSC_LINES-1 then
+						HV_VCNT <= conv_std_logic_vector(-NTSC_V_DISP_START, 10);
 					else
 						HV_VCNT <= HV_VCNT + 1;
-						if ( V_CNT > NTSC_V_DISP_START*2-1 )
-						and ( ( V30 = '0' and V_CNT <= (NTSC_V_DISP_START+224)*2-1 ) or ( V30 = '1' and V_CNT <= (NTSC_V_DISP_START+240)*2-1 ) )
-						then
-							if HINT_COUNT = 0 then
-								HINT_PENDING_SET <= '1';
-								HINT_COUNT <= HIT;
-							else
-								HINT_COUNT <= HINT_COUNT - 1;
-							end if;
-						end if;
-					end if;					
-				elsif HV_HCNT = x"02" & "0" then
-					if ( V30 = '0' and V_CNT = (NTSC_V_DISP_START+224)*2 ) 
-					or ( V30 = '1' and V_CNT = (NTSC_V_DISP_START+240)*2 )
-					then
-						VINT_TG68_PENDING_SET <= '1';
-						VINT_T80_SET <= '1';
-						IN_VBL <= '1';
-					elsif ( V30 = '0' and V_CNT = (NTSC_V_DISP_START+224)*2+2 ) 
-					or ( V30 = '1' and V_CNT = (NTSC_V_DISP_START+240)*2+2 )
-					then
-						VINT_T80_CLR <= '1';
-					end if;
-				elsif HV_HCNT = x"B5" & "1" then
-					HV_HCNT <= x"E4" & "0";
-					if (V_CNT >= NTSC_V_DISP_START*2-1 )
-					and ( ( V30 = '0' and V_CNT <= (NTSC_V_DISP_START+224)*2-1 ) or ( V30 = '1' and V_CNT <= (NTSC_V_DISP_START+240)*2-1 ) )
-					then
-						IN_HBL <= '1';
-					end if;
-				elsif HV_HCNT = x"08" & "1" then
-					IN_HBL <= '0';
 				end if;
-			elsif H40 = '0' and HV_PIXDIV = 10-1 then				
-				CE_PIX <= '1';
-				HV_PIXDIV <= (others => '0');
-				HV_HCNT <= HV_HCNT + 1;
-				if HV_HCNT = x"85" & "0" then
-					if V_CNT = NTSC_V_DISP_START*2-1 then
-						HV_VCNT <= (others => '0');
-						HINT_COUNT <= HIT;
+					if V_CNT = NTSC_V_DISP_START-1 then
 						if HIT = 0 then
 							HINT_PENDING_SET <= '1';
 							HINT_COUNT <= (others => '0');
 						else
 							HINT_COUNT <= HIT - 1;
-						end if;						
+						end if;
 						IN_VBL <= '0';
 					else
-						HV_VCNT <= HV_VCNT + 1;
-						if ( V_CNT > NTSC_V_DISP_START*2-1 )
-						and ( ( V30 = '0' and V_CNT <= (NTSC_V_DISP_START+224)*2-1 ) or ( V30 = '1' and V_CNT <= (NTSC_V_DISP_START+240)*2-1 ) )
+						if ( V_CNT > NTSC_V_DISP_START-1 )
+						and ( ( V30 = '0' and V_CNT <= (NTSC_V_DISP_START+224)-1 ) or ( V30 = '1' and V_CNT <= (NTSC_V_DISP_START+240)-1 ) )
 						then
 							if HINT_COUNT = 0 then
 								HINT_PENDING_SET <= '1';
@@ -1917,31 +1886,31 @@ begin
 							end if;
 						end if;
 					end if;
-				elsif HV_HCNT = x"00" & "0" then
-					if ( V30 = '0' and V_CNT = (NTSC_V_DISP_START+224)*2 ) 
-					or ( V30 = '1' and V_CNT = (NTSC_V_DISP_START+240)*2 )
+				elsif HV_HCNT = hcnt2 then
+					if ( V30 = '0' and V_CNT = (NTSC_V_DISP_START+224) ) 
+					or ( V30 = '1' and V_CNT = (NTSC_V_DISP_START+240) )
 					then
 						VINT_TG68_PENDING_SET <= '1';
 						VINT_T80_SET <= '1';
 						IN_VBL <= '1';
-					elsif ( V30 = '0' and V_CNT = (NTSC_V_DISP_START+224)*2+2 ) 
-					or ( V30 = '1' and V_CNT = (NTSC_V_DISP_START+240)*2+2 )
+					elsif ( V30 = '0' and V_CNT = (NTSC_V_DISP_START+224)+2 ) 
+					or ( V30 = '1' and V_CNT = (NTSC_V_DISP_START+240)+2 )
 					then
 						VINT_T80_CLR <= '1';
 					end if;
-				elsif HV_HCNT = x"93" & "1" then
-					HV_HCNT <= x"E9" & "0";
-					if (V_CNT >= NTSC_V_DISP_START*2-1 )
-					and ( ( V30 = '0' and V_CNT <= (NTSC_V_DISP_START+224)*2-1 ) or ( V30 = '1' and V_CNT <= (NTSC_V_DISP_START+240)*2-1 ) )
+				elsif HV_HCNT = hcnt3 then
+					HV_HCNT <= hcnt5;
+					if (V_CNT >= NTSC_V_DISP_START-1 )
+					and ( ( V30 = '0' and V_CNT <= (NTSC_V_DISP_START+224)-1 ) or ( V30 = '1' and V_CNT <= (NTSC_V_DISP_START+240)-1 ) )
 					then
 						IN_HBL <= '1';
 					end if;
-				elsif HV_HCNT = x"06" & "0" then
+				elsif HV_HCNT = hcnt4 then
 					IN_HBL <= '0';	
 				end if;
-			end if;		
+			end if;
 		end if;
-				
+
 	end if;
 end process;
 
@@ -1996,18 +1965,18 @@ begin
 		DT_ACTIVE <= '1';
 		
 		-- VERTICAL DISPLAY ACTIVE
-		if V_CNT = NTSC_V_DISP_START*2 then
+		if V_CNT = NTSC_V_DISP_START then
 			V_ACTIVE <= '1';
-		elsif ( V30 = '0' and V_CNT = (NTSC_V_DISP_START+224)*2 )
-		or ( V30 = '1' and V_CNT = (NTSC_V_DISP_START+240)*2 )
+		elsif ( V30 = '0' and V_CNT = (NTSC_V_DISP_START+224) )
+		or ( V30 = '1' and V_CNT = (NTSC_V_DISP_START+240) )
 		then
 			V_ACTIVE <= '0';
 		end if;
 
-		if V_CNT = (NTSC_V_DISP_START*2)-2 then
+		if V_CNT = (NTSC_V_DISP_START)-2 then
 			PRE_V_ACTIVE <= '1';
-		elsif ( V30 = '0' and V_CNT = ((NTSC_V_DISP_START+224)*2)-2 )
-		or ( V30 = '1' and V_CNT = ((NTSC_V_DISP_START+240)*2)-2 )
+		elsif ( V30 = '0' and V_CNT = ((NTSC_V_DISP_START+224))-2 )
+		or ( V30 = '1' and V_CNT = ((NTSC_V_DISP_START+240))-2 )
 		then
 			PRE_V_ACTIVE <= '0';
 		end if;
@@ -2129,7 +2098,7 @@ begin
 		if V_CNT = 0 then
 			FF_VS <= '1';
 		end if;
-		if V_CNT = (VS_LINES*2) then
+		if V_CNT = VS_LINES then
 			FF_VS <= '0';
 		end if;
 	end if;
