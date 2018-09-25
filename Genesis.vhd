@@ -381,9 +381,6 @@ signal VBUS_DTACK_N	: std_logic;
 type romStates is (ROM_IDLE, ROM_READ);
 signal romState : romStates := ROM_IDLE;
 
--- DEBUG
---signal HEXVALUE			: std_logic_vector(15 downto 0);
-
 signal snd_right : std_logic_vector(11 downto 0);
 signal snd_left  : std_logic_vector(11 downto 0);
 
@@ -1312,8 +1309,6 @@ begin
 		
 		FM_SEL <= '0';
 		FM_RNW <= '1';
---		FM_UDS_N <= '1';
---		FM_LDS_N <= '1';
 		FM_A <= (others => '0');
 		
 		FMC <= FMC_IDLE;
@@ -1339,21 +1334,11 @@ begin
 						FM_DI <= TG68_DO(7 downto 0);
 					end if;
 
-	--				FM_UDS_N <= TG68_UDS_N;
-	--				FM_LDS_N <= TG68_LDS_N;
-	--				FM_DI <= TG68_DO(7 downto 0);
 					FMC <= FMC_TG68_ACC;
 				elsif T80_FM_SEL = '1' and T80_FM_DTACK_N = '1' then
 					FM_SEL <= '1';
 					FM_A <= T80_A(1 downto 0);
 					FM_RNW <= T80_WR_N;
-	--				if T80_A(0) = '0' then
-	--					FM_UDS_N <= '0';
-	--					FM_LDS_N <= '1';
-	--				else
-	--					FM_UDS_N <= '1';
-	--					FM_LDS_N <= '0';				
-	--				end if;
 					FM_DI <= T80_DO;
 					FMC <= FMC_T80_ACC;			
 				end if;
@@ -1377,24 +1362,15 @@ begin
 			-- sync this to 8MHz clock
 			if VCLK = '1' then
 				FM_SEL <= '0';
---				if T80_A(0) = '0' then
---					T80_FM_D <= FM_DO(15 downto 8);
---				else
-					T80_FM_D <= FM_DO;
---				end if;
+				T80_FM_D <= FM_DO;
 				T80_FM_DTACK_N <= '0';
 				FMC <= FMC_DESEL;
 			end if;
 
 		when FMC_DESEL =>
---			if FM_DTACK_N = '1' then
-				FM_RNW <= '1';
---				FM_UDS_N <= '1';
---				FM_LDS_N <= '1';
-				FM_A <= (others => '0');
-
-				FMC <= FMC_IDLE;
---			end if;
+			FM_RNW <= '1';
+			FM_A <= (others => '0');
+			FMC <= FMC_IDLE;
 			
 		when others => null;
 		end case;
@@ -1499,46 +1475,18 @@ end process;
 -- ROM Handling
 -------------------------------------------------------------------------
 
-process( RESET_N, MCLK, TG68_AS_N, TG68_RNW,
-	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
-	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N,
-	VBUS_SEL, VBUS_ADDR,
-	CART_EN )
-begin
+TG68_FLASH_SEL <= '1' when TG68_A(23) = '0' and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0')
+									and TG68_RNW = '1' and CART_EN = '1' else '0';
+T80_FLASH_SEL  <= '1' when T80_A(15) = '1' and BAR(23) = '0' and T80_MREQ_N = '0' and T80_RD_N = '0' else '0';
+DMA_FLASH_SEL  <= '1' when VBUS_ADDR(23) = '0' and VBUS_SEL = '1' else '0';
 
-	if TG68_A(23) = '0' 
-		and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') 
-		and TG68_RNW = '1' 
-		and CART_EN = '1'
-	then
-		TG68_FLASH_SEL <= '1';
-	else
-		TG68_FLASH_SEL <= '0';
-	end if;
-
-	if T80_A(15) = '1' and BAR(23) = '0'
-		and T80_MREQ_N = '0' and T80_RD_N = '0' 
-	then
-		T80_FLASH_SEL <= '1';
-	else
-		T80_FLASH_SEL <= '0';
-	end if;	
-
-	if VBUS_ADDR(23) = '0' 
-		and VBUS_SEL = '1'
-	then
-		DMA_FLASH_SEL <= '1';
-	else
-		DMA_FLASH_SEL <= '0';
-	end if;
-
+process (RESET_N, MCLK) begin
 	if RESET_N = '0' then
 		FC <= FC_IDLE;
-		
 		TG68_FLASH_DTACK_N <= '1';
 		T80_FLASH_DTACK_N <= '1';
 		DMA_FLASH_DTACK_N <= '1';
-		
+
 	elsif rising_edge( MCLK ) then
 		if TG68_FLASH_SEL = '0' then 
 			TG68_FLASH_DTACK_N <= '1';
@@ -1552,20 +1500,18 @@ begin
 
 		case FC is
 		when FC_IDLE =>
-			if VCLKCNT = "001" then
-				if TG68_FLASH_SEL = '1' and TG68_FLASH_DTACK_N = '1' then
-					romrd_req <= not romrd_ack;
-					ROM_ADDR <= TG68_A(22 downto 0);
-					FC <= FC_TG68_RD;
-				elsif T80_FLASH_SEL = '1' and T80_FLASH_DTACK_N = '1' then
-					romrd_req <= not romrd_ack;
-					ROM_ADDR <= BAR(22 downto 15) & T80_A(14 downto 0);
-					FC <= FC_T80_RD;
-				elsif DMA_FLASH_SEL = '1' and DMA_FLASH_DTACK_N = '1' then
-					romrd_req <= not romrd_ack;
-					ROM_ADDR <= VBUS_ADDR(22 downto 0);
-					FC <= FC_DMA_RD;
-				end if;
+			if TG68_FLASH_SEL = '1' and TG68_FLASH_DTACK_N = '1' then
+				romrd_req <= not romrd_ack;
+				ROM_ADDR <= TG68_A(22 downto 0);
+				FC <= FC_TG68_RD;
+			elsif T80_FLASH_SEL = '1' and T80_FLASH_DTACK_N = '1' then
+				romrd_req <= not romrd_ack;
+				ROM_ADDR <= BAR(22 downto 15) & T80_A(14 downto 0);
+				FC <= FC_T80_RD;
+			elsif DMA_FLASH_SEL = '1' and DMA_FLASH_DTACK_N = '1' then
+				romrd_req <= not romrd_ack;
+				ROM_ADDR <= VBUS_ADDR(22 downto 0);
+				FC <= FC_DMA_RD;
 			end if;
 
 		when FC_TG68_RD =>
@@ -1595,9 +1541,8 @@ begin
 
 		when others => null;
 		end case;
-	
-	end if;
 
+	end if;
 end process;
 
 MAPPER_A  <= TG68_A(3 downto 1);
@@ -1638,9 +1583,7 @@ begin
 		TG68_SDRAM_DTACK_N <= '1';
 		T80_SDRAM_DTACK_N <= '1';
 		DMA_SDRAM_DTACK_N <= '1';
-
 		ram68k_req <= '0';
-		
 		SDRC <= SDRC_IDLE;
 		
 	elsif rising_edge(MCLK) then
@@ -1712,7 +1655,6 @@ begin
 		end case;
 		
 	end if;
-
 end process;
 
 -- Z80 RAM CONTROL
@@ -1795,7 +1737,6 @@ begin
 		when others => null;
 		end case;
 	end if;
-
 end process;
 
 end rtl;
