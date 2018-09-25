@@ -224,6 +224,7 @@ signal TG68_ENAWRREG	: std_logic;
 
 -- Z80
 signal T80_RESET_N	: std_logic;
+signal T80_CLK_N		: std_logic;
 signal T80_CLKEN		: std_logic;
 signal T80_WAIT_N		: std_logic;
 signal T80_INT_N     : std_logic;
@@ -516,11 +517,11 @@ port map(
 );
 
 -- Z80
-t80 : entity work.t80pa
+t80 : entity work.t80s
 port map(
 	RESET_n	=> T80_RESET_N,
-	CLK		=> MCLK,
-	CEN_p		=> T80_CLKEN and ZCLK_EN,
+	CLK		=> T80_CLK_N,
+	CEN		=> T80_CLKEN,
 	WAIT_n	=> T80_WAIT_N,
 	INT_n		=> T80_INT_N,
 	BUSRQ_n	=> T80_BUSRQ_N,
@@ -816,7 +817,7 @@ begin
 	if RESET_N = '0' then
 		VCLK <= '1';
 		ZCLK <= '0';
-		VCLKCNT <= "001"; -- important for SDRAM controller (EDIT: not needed anymore)
+		VCLKCNT <= "001";
 		TG68_ENARDREG <= '0';
 		TG68_ENAWRREG <= '0';
 	elsif rising_edge(MCLK) then
@@ -911,6 +912,7 @@ begin
 	end if;
 end process;
 
+T80_CLK_N <= MCLK and ZCLK_EN;
 T80_BUSRQ_N <= not ZBUSREQ;
 
 T80_WAIT_N <= not T80_SDRAM_DTACK_N when T80_SDRAM_SEL = '1'
