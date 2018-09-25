@@ -627,7 +627,7 @@ port map(
 ADDR_STEP <= REG(15);
 H40 <= REG(12)(0);
 -- H40 <= '0';
-V30 <= REG(2)(3);
+V30 <= REG(1)(3);
 -- V30 <= '0';
 HSCR <= REG(11)(1 downto 0);
 HSIZE <= REG(16)(1 downto 0);
