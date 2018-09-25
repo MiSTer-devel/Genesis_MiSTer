@@ -8,11 +8,14 @@ use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 
 entity psg is
-	port (	clk		: in  STD_LOGIC;
-			clken	: in  STD_LOGIC;
-			WR_n	: in  STD_LOGIC;
-			D_in	: in  STD_LOGIC_VECTOR (7 downto 0);
-			output	: out STD_LOGIC_VECTOR(5 downto 0));
+	port (
+		clk	: in  STD_LOGIC;
+		clken	: in  STD_LOGIC;
+		reset	: in  STD_LOGIC;
+		WR_n	: in  STD_LOGIC;
+		D_in	: in  STD_LOGIC_VECTOR (7 downto 0);
+		output: out STD_LOGIC_VECTOR(5 downto 0)
+	);
 end entity;
 
 architecture rtl of psg is
@@ -81,7 +84,12 @@ begin
 	process (clk, WR_n)
 	begin
 		if rising_edge(clk) and WR_n='0' then
-			--if clken then
+			if reset = '1' then
+				volume0 <= (others => '1');
+				volume1 <= (others => '1');
+				volume2 <= (others => '1');
+				volume3 <= (others => '1');
+			else
 				if D_in(7)='1' then
 					case D_in(6 downto 4) is
 						when "000" => tone0(3 downto 0) <= D_in(3 downto 0);
@@ -108,7 +116,7 @@ begin
 						when others =>
 					end case;
 				end if;
-			--end if;
+			end if;
 		end if;
 	end process;
 	

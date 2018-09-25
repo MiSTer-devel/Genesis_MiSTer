@@ -32,5 +32,5 @@ begin
 		end if;
 	end process;
 
-	output <= (v&v&v&v) or volume;
+	output <= not volume when v = '1' else "0000";
 end rtl;

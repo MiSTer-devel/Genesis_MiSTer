@@ -186,7 +186,7 @@ assign CLK_VIDEO = clk_sys;
 assign DDRAM_CLK = clk_ram;
 wire reset = RESET|buttons[1];
 
-wire [15:0] audio_l, audio_r;
+wire [12:0] audio_l, audio_r;
 
 Virtual_Toplevel Genesis
 (
@@ -251,7 +251,7 @@ video_mixer #(.LINE_LENGTH(320), .HALF_DEPTH(1)) video_mixer
 compressor compressor
 (
 	clk_sys,
-	audio_l[15:4], audio_r[15:4],
+	audio_l[12:1], audio_r[12:1],
 	AUDIO_L,       AUDIO_R
 );
 

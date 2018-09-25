@@ -56,7 +56,6 @@ begin
 		end if;
 	end process;
 
-	output <= (shift(0)&shift(0)&shift(0)&shift(0)) or volume;
-
+	output <= not volume when shift(0) = '1' else "0000";
 end rtl;
 

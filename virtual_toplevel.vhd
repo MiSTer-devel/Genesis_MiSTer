@@ -50,8 +50,8 @@ entity Virtual_Toplevel is
 		MCLK 			: in std_logic;
 		RAMCLK		: in std_logic;
 
-		DAC_LDATA 	: out std_logic_vector(15 downto 0);
-		DAC_RDATA 	: out std_logic_vector(15 downto 0);
+		DAC_LDATA 	: out std_logic_vector(12 downto 0);
+		DAC_RDATA 	: out std_logic_vector(12 downto 0);
 
 		RED			: out std_logic_vector(2 downto 0);
 		GREEN			: out std_logic_vector(2 downto 0);
@@ -126,14 +126,6 @@ component jt12_mixer port(
 	enable_psg	: in std_logic;
 	left_out	: out std_logic_vector(15 downto 0);
 	right_out	: out std_logic_vector(15 downto 0) );	
-end component;
-
-component audio_mixer port(
-	left_in 		: in  std_logic_vector(11 downto 0);
-	right_in		: in  std_logic_vector(11 downto 0);
-	psg			: in  std_logic_vector(5 downto 0);
-	left_out		: out std_logic_vector(15 downto 0);
-	right_out	: out std_logic_vector(15 downto 0) );
 end component;
 
 -- "FLASH"
@@ -645,8 +637,9 @@ port map(
 
 u_psg : work.psg
 port map(
-	clk		=> MCLK,
-	clken		=> T80_CLKEN and ZCLK_EN,
+	clk		=> T80_CLK_N,
+	clken		=> T80_CLKEN,
+	reset    => not RESET_N,
 	WR_n		=> not PSG_SEL,
 	D_in		=> PSG_DI,
 	output	=> PSG_SND
@@ -667,6 +660,9 @@ port map(
 	syn_snd_left   => snd_left,
 	syn_snd_right  => snd_right
 );
+
+DAC_LDATA <= (snd_left(11)  &  snd_left) + ("000"&PSG_SND&"000");
+DAC_RDATA <= (snd_right(11) & snd_right) + ("000"&PSG_SND&"000");
 
 process( RESET_N, MCLK )
 begin
@@ -711,16 +707,6 @@ begin
 		
 	end if;
 end process;
-
-
-aud_mixer:audio_mixer
-port map(
-	left_in 		=> snd_left,
-	right_in		=> snd_right,
-	psg			=> PSG_SND,
-	left_out		=> DAC_LDATA,
-	right_out	=> DAC_RDATA
-);
 
 -- #############################################################################
 -- #############################################################################
@@ -1418,26 +1404,10 @@ end process;
 -- PSG AREA
 -- Z80: 7F11h
 -- 68k: C00011
-process( RESET_N, MCLK, TG68_AS_N, 
-	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
-	BAR, T80_A, T80_MREQ_N, T80_WR_N )
-begin
-	if T80_A = x"7F11" 
-		and T80_MREQ_N = '0' and T80_WR_N = '0'
-	then
-		T80_PSG_SEL <= '1';			
-	else
-		T80_PSG_SEL <= '0';
-	end if;	
+T80_PSG_SEL  <= '1' when T80_A = x"7F11" and T80_MREQ_N = '0' and T80_WR_N = '0' else '0';
+TG68_PSG_SEL <= '1' when TG68_A = x"C00011" and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') else '0';
 
-	if TG68_A = x"C00011"
-		and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') 
-	then	
-		TG68_PSG_SEL <= '1';		
-	else
-		TG68_PSG_SEL <= '0';
-	end if;	
-	
+process( RESET_N, MCLK ) begin
 	if RESET_N = '0' then
 		PSG_SEL<= '0';
 	elsif rising_edge(MCLK) then
@@ -1455,7 +1425,6 @@ begin
 			end if;
 		end if;
 	end if;
-	
 end process;
 
 -- Z80:
