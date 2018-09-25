@@ -68,7 +68,7 @@ always @(negedge syn_clk or posedge rst)
 reg		cpu_busy;
 wire		cpu_flag_B, cpu_flag_A;
 
-assign 	cpu_dout = { cpu_busy, 5'h0, cpu_flag_B, cpu_flag_A };
+assign 	cpu_dout = cpu_cs_n ? 8'hFF : { cpu_busy, 5'h0, cpu_flag_B, cpu_flag_A };
 
 wire		write_raw = !cpu_cs_n && !cpu_wr_n;
 
