@@ -61,7 +61,6 @@ entity Virtual_Toplevel is
 		HBL			: out std_logic;
 		VBL			: out std_logic;
 		CE_PIX		: out std_logic;
-		VGA			: in  std_logic;
 
 		PSG_ENABLE	: in std_logic;
 		FM_ENABLE   : in std_logic;
@@ -638,8 +637,7 @@ port map(
 	VS					=> VS,
 	CE_PIX         => CE_PIX,
 	HBL				=> HBL,
-	VBL				=> VBL,
-	VGA				=> VGA
+	VBL				=> VBL
 );
 
 -- PSG

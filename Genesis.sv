@@ -205,7 +205,6 @@ Virtual_Toplevel Genesis
 	.HBL(hblank),
 	.VBL(vblank),
 	.CE_PIX(ce_pix),
-	.VGA(0),
 
 	.PSG_ENABLE(1),
 	.FM_ENABLE(1),
