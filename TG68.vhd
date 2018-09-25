@@ -42,109 +42,76 @@ use ieee.std_logic_unsigned.all;
 
 entity TG68 is
    port(        
-		clk           : in std_logic;
-		reset         : in std_logic;
-        clkena_in     : in std_logic:='1';
-        data_in       : in std_logic_vector(15 downto 0);
-        IPL           : in std_logic_vector(2 downto 0):="111";
-        dtack         : in std_logic;
-        addr          : out std_logic_vector(31 downto 0);
-        data_out      : out std_logic_vector(15 downto 0);
-        as            : out std_logic;
-        uds           : out std_logic;
-        lds           : out std_logic;
-        rw            : out std_logic;
-        enaRDreg     : in std_logic:='1';
-        enaWRreg     : in std_logic:='1';
- --       wr            : buffer std_logic
-		intack		: out std_logic --GE
-        );
+		clk        : in std_logic;
+		reset      : in std_logic;
+		clkena_in  : in std_logic:='1';
+		data_in    : in std_logic_vector(15 downto 0);
+		IPL        : in std_logic_vector(2 downto 0):="111";
+		dtack      : in std_logic;
+		addr       : out std_logic_vector(31 downto 0);
+		data_out   : out std_logic_vector(15 downto 0);
+		as         : out std_logic;
+		uds        : out std_logic;
+		lds        : out std_logic;
+		rw         : out std_logic;
+		enaRDreg   : in std_logic:='1';
+		enaWRreg   : in std_logic:='1';
+		intack     : out std_logic --GE
+	);
 end TG68;
 
 ARCHITECTURE logic OF TG68 IS
 
-	COMPONENT TG68_fast
-    PORT (
-        clk           : in std_logic;
-        reset         : in std_logic;
-        clkena_in     : in std_logic;
-        data_in       : in std_logic_vector(15 downto 0);
-		IPL			  : in std_logic_vector(2 downto 0);
-        test_IPL      : in std_logic;
-        address       : out std_logic_vector(31 downto 0);
-        data_write    : out std_logic_vector(15 downto 0);
-        state_out     : out std_logic_vector(1 downto 0);
-        decodeOPC     : buffer std_logic;
-		wr			  : out std_logic;
-		UDS, LDS	  : out std_logic;
-        enaRDreg      : in std_logic;
-        enaWRreg      : in std_logic;
-		intack		: out std_logic --GE
-        );
-	END COMPONENT;
-
-
-   SIGNAL as_s        : std_logic;
-   SIGNAL as_e        : std_logic;
-   SIGNAL uds_s       : std_logic;
-   SIGNAL uds_e       : std_logic;
-   SIGNAL lds_s       : std_logic;
-   SIGNAL lds_e       : std_logic;
-   SIGNAL rw_s        : std_logic;
-   SIGNAL rw_e        : std_logic;
-   SIGNAL waitm       : std_logic;
-   SIGNAL clkena_e    : std_logic;
-   SIGNAL S_state     : std_logic_vector(1 downto 0);
-   SIGNAL decode	  : std_logic;
-   SIGNAL wr	      : std_logic;
---   SIGNAL rw	      : std_logic;
+   SIGNAL as_s      : std_logic;
+   SIGNAL as_e      : std_logic;
+   SIGNAL uds_s     : std_logic;
+   SIGNAL uds_e     : std_logic;
+   SIGNAL lds_s     : std_logic;
+   SIGNAL lds_e     : std_logic;
+   SIGNAL rw_s      : std_logic;
+   SIGNAL rw_e      : std_logic;
+   SIGNAL waitm     : std_logic;
+   SIGNAL clkena_e  : std_logic;
+   SIGNAL S_state   : std_logic_vector(1 downto 0);
+   SIGNAL decode    : std_logic;
+   SIGNAL wr	     : std_logic;
    SIGNAL uds_in	  : std_logic;
    SIGNAL lds_in	  : std_logic;
-   SIGNAL state       : std_logic_vector(1 downto 0);
+   SIGNAL state     : std_logic_vector(1 downto 0);
    SIGNAL clkena	  : std_logic;
-   SIGNAL n_clk		  : std_logic;
-
 
 BEGIN  
 
-	n_clk <= NOT clk;
-
-TG68_fast_inst: TG68_fast
-	PORT MAP (
---		clk => n_clk, 			-- : in std_logic;
-		clk => clk, 			-- : in std_logic;
-        reset => reset, 		-- : in std_logic;
-        clkena_in => clkena, 	-- : in std_logic;
-        data_in => data_in, 	-- : in std_logic_vector(15 downto 0);
-		IPL => IPL, 			-- : in std_logic_vector(2 downto 0);
-        test_IPL => '0', 		-- : in std_logic;
-        address => addr, 		-- : out std_logic_vector(31 downto 0);
-        data_write => data_out, -- : out std_logic_vector(15 downto 0);
-        state_out => state, 	-- : out std_logic_vector(1 downto 0);
-        decodeOPC => decode, 	-- : buffer std_logic;
-		wr => wr, 				-- : out std_logic;
-		UDS => uds_in, 			-- : out std_logic;
-		LDS => lds_in, 			-- : out std_logic;
-		enaRDreg => enaWRreg,
-		enaWRreg => enaRDreg,
-		intack => intack --GE
-        );
+TG68_fast_inst: work.TG68_fast
+PORT MAP (
+	clk => clk, 			-- : in std_logic;
+	reset => reset, 		-- : in std_logic;
+	clkena_in => clkena, 	-- : in std_logic;
+	data_in => data_in, 	-- : in std_logic_vector(15 downto 0);
+	IPL => IPL, 			-- : in std_logic_vector(2 downto 0);
+	test_IPL => '0', 		-- : in std_logic;
+	address => addr, 		-- : out std_logic_vector(31 downto 0);
+	data_write => data_out, -- : out std_logic_vector(15 downto 0);
+	state_out => state, 	-- : out std_logic_vector(1 downto 0);
+	decodeOPC => decode, 	-- : buffer std_logic;
+	wr => wr, 				-- : out std_logic;
+	UDS => uds_in, 			-- : out std_logic;
+	LDS => lds_in, 			-- : out std_logic;
+	enaRDreg => enaWRreg,
+	enaWRreg => enaRDreg,
+	intack => intack --GE
+);
 	
---	clkena <= '1' WHEN clkena_in='1' AND ((clkena_e OR decode)='1')
---				  ELSE '0';
-
-		
-	PROCESS (clk)
-	BEGIN
-		IF rising_edge(clk) THEN
---			IF clkena_in='1' AND ((clkena_e OR decode)='1') THEN
-			IF clkena_in='1' AND (clkena_e='1' OR state="01") THEN
-				clkena <= '1';
-			ELSE 
-				clkena <= '0';
-			END IF;	
+PROCESS (clk)
+BEGIN
+	IF rising_edge(clk) THEN
+		IF clkena_in='1' AND (clkena_e='1' OR state="01") THEN
+			clkena <= '1';
+		ELSE 
+			clkena <= '0';
 		END IF;	
-	END PROCESS;
+	END IF;	
+END PROCESS;
 				
 PROCESS (clk, reset, state, as_s, as_e, rw_s, rw_e, uds_s, uds_e, lds_s, lds_e)
 	BEGIN
