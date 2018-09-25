@@ -188,7 +188,7 @@ wire reset = RESET|buttons[1];
 
 wire [12:0] audio_l, audio_r;
 
-Virtual_Toplevel Genesis
+Genesis Genesis
 (
 	.RESET_N(~(reset|ioctl_download)),
 	.MCLK(clk_sys),

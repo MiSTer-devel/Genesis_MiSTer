@@ -5,17 +5,17 @@ use IEEE.STD_LOGIC_UNSIGNED.ALL;
 
 entity os_rom is
 	port(
+		CLK	: in std_logic;
 		A 		: in std_logic_vector(7 downto 0);
-		OEn		: in std_logic;
 		D		: out std_logic_vector(15 downto 0)
 	);
 end os_rom;
 
 architecture rtl of os_rom is
 begin
-	process(OEn, A)
+	process(CLK)
 	begin
-		if OEn = '0' then
+		if rising_edge(CLK) then
 			case A is
 				when x"00" => D <= x"1337";
 				when x"01" => D <= x"b00b";
@@ -115,9 +115,6 @@ begin
 				when x"5F" => D <= x"4e75";
 				when others => D <= x"ffff";
 			end case;
-		else
-			D <= (others => '0');
 		end if;
 	end process;
-
 end rtl;

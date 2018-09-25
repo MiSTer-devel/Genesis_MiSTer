@@ -36,10 +36,6 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.STD_LOGIC_ARITH.ALL;
 use IEEE.STD_LOGIC_UNSIGNED.ALL;
-use IEEE.STD_LOGIC_TEXTIO.all;
-library STD;
-use STD.TEXTIO.ALL;
-use work.vdp_common.all;
 
 entity vdp is
 	port(
@@ -95,6 +91,24 @@ entity vdp is
 end vdp;
 
 architecture rtl of vdp is
+
+----------------------------------------------------------------
+-- Video parameters
+----------------------------------------------------------------
+
+constant CLOCKS_PER_LINE	: integer := 3440;
+constant H_DISP_CLOCKS		: integer := 2560;
+constant H_DISP_START		: integer := 600;
+
+constant HS_CLOCKS			: integer := 254; -- 4.7 us
+constant VS_LINES				: integer := 3;
+
+constant NTSC_LINES			: integer := 262;
+constant NTSC_V_DISP_START	: integer := 24;
+
+----------------------------------------------------------------
+----------------------------------------------------------------
+
 
 signal vram_req_reg : std_logic;
 signal vram_we_reg : std_logic;
@@ -439,17 +453,17 @@ type sp1c_t is (
 );
 signal SP1C		: sp1c_t;
 
-signal OBJ_Y_D				: std_logic_vector(15 downto 0);
+signal OBJ_Y_D				: std_logic_vector(8 downto 0);
 signal OBJ_Y_ADDR_RD		: std_logic_vector(8 downto 0);
 signal OBJ_Y_ADDR_WR		: std_logic_vector(8 downto 0);
-signal OBJ_Y_WE				: std_logic;
-signal OBJ_Y_Q				: std_logic_vector(15 downto 0);
+signal OBJ_Y_WE			: std_logic;
+signal OBJ_Y_Q				: std_logic_vector(8 downto 0);
 
-signal OBJ_SZ_LINK_D		: std_logic_vector(15 downto 0);
+signal OBJ_SZ_LINK_D		: std_logic_vector(10 downto 0);
 signal OBJ_SZ_LINK_ADDR_RD	: std_logic_vector(8 downto 0);
 signal OBJ_SZ_LINK_ADDR_WR	: std_logic_vector(8 downto 0);
 signal OBJ_SZ_LINK_WE		: std_logic;
-signal OBJ_SZ_LINK_Q		: std_logic_vector(15 downto 0);
+signal OBJ_SZ_LINK_Q		: std_logic_vector(10 downto 0);
 
 
 -- signal OBJ_COLINFO		: colinfo_t;
@@ -547,63 +561,57 @@ signal FF_B			: std_logic_vector(2 downto 0);
 
 begin
 
-bgb_ci : entity work.vdp_colinfo
+bgb_ci : entity work.dpram generic map(9,7)
 port map(
-	address_a	=> BGB_COLINFO_ADDR_A,
-	address_b	=> BGB_COLINFO_ADDR_B,
 	clock			=> CLK,
+	address_a	=> BGB_COLINFO_ADDR_A,
 	data_a		=> BGB_COLINFO_D_A,
-	data_b		=> (others => '0'),
 	wren_a		=> BGB_COLINFO_WE_A,
-	wren_b		=> '0',
-	q_a			=> open,
+	address_b	=> BGB_COLINFO_ADDR_B,
 	q_b			=> BGB_COLINFO_Q_B
 );
 
-bga_ci : entity work.vdp_colinfo
+bga_ci : entity work.dpram generic map(9,7)
 port map(
-	address_a	=> BGA_COLINFO_ADDR_A,
-	address_b	=> BGA_COLINFO_ADDR_B,
 	clock			=> CLK,
+	address_a	=> BGA_COLINFO_ADDR_A,
 	data_a		=> BGA_COLINFO_D_A,
-	data_b		=> (others => '0'),
 	wren_a		=> BGA_COLINFO_WE_A,
-	wren_b		=> '0',
-	q_a			=> open,
+	address_b	=> BGA_COLINFO_ADDR_B,
 	q_b			=> BGA_COLINFO_Q_B
 );
 
-obj_ci : entity work.vdp_colinfo
+obj_ci : entity work.dpram generic map(9,7," ","CLOCK0")
 port map(
-	address_a	=> OBJ_COLINFO_ADDR_A,
-	address_b	=> OBJ_COLINFO_ADDR_B,
 	clock			=> MEMCLK,
+	address_a	=> OBJ_COLINFO_ADDR_A,
 	data_a		=> OBJ_COLINFO_D_A,
-	data_b		=> OBJ_COLINFO_D_B,
 	wren_a		=> OBJ_COLINFO_WE_A,
-	wren_b		=> OBJ_COLINFO_WE_B,
 	q_a			=> OBJ_COLINFO_Q_A,
+	address_b	=> OBJ_COLINFO_ADDR_B,
+	data_b		=> OBJ_COLINFO_D_B,
+	wren_b		=> OBJ_COLINFO_WE_B,
 	q_b			=> OBJ_COLINFO_Q_B
 );
 
-obj_oi_y : entity work.vdp_objinfo
+obj_oi_y : entity work.dpram generic map(9,9)
 port map(
 	clock			=> MEMCLK,
-	data			=> OBJ_Y_D,
-	rdaddress	=> OBJ_Y_ADDR_RD,
-	wraddress	=> OBJ_Y_ADDR_WR,
-	wren			=> OBJ_Y_WE,
-	q				=> OBJ_Y_Q
+	address_a	=> OBJ_Y_ADDR_WR,
+	wren_a		=> OBJ_Y_WE,
+	data_a		=> OBJ_Y_D,
+	address_b	=> OBJ_Y_ADDR_RD,
+	q_b			=> OBJ_Y_Q
 );
 
-obj_oi_sl : entity work.vdp_objinfo
+obj_oi_sl : entity work.dpram generic map(9,11)
 port map(
 	clock			=> MEMCLK,
-	data			=> OBJ_SZ_LINK_D,
-	rdaddress	=> OBJ_SZ_LINK_ADDR_RD,
-	wraddress	=> OBJ_SZ_LINK_ADDR_WR,
-	wren			=> OBJ_SZ_LINK_WE,
-	q				=> OBJ_SZ_LINK_Q
+	address_a	=> OBJ_SZ_LINK_ADDR_WR,
+	wren_a		=> OBJ_SZ_LINK_WE,
+	data_a		=> OBJ_SZ_LINK_D,
+	address_b	=> OBJ_SZ_LINK_ADDR_RD,
+	q_b			=> OBJ_SZ_LINK_Q
 );
 
 
@@ -1441,7 +1449,7 @@ begin
 			when SP1C_Y_RD =>
 				if early_ack_sp1='0' then
 					OBJ_Y_ADDR_WR <= "00" & SP1_X(7 downto 1);
-					OBJ_Y_D <= "0000000" & SP1_VRAM_DO(8 downto 0);
+					OBJ_Y_D <= SP1_VRAM_DO(8 downto 0);
 					OBJ_Y_WE <= '1';
 					
 					if (H40 = '1' and SP1_X = 160-1) or (H40 = '0' and SP1_X = 128-1) then
@@ -1456,7 +1464,7 @@ begin
 			when SP1C_SZL_RD =>
 				if early_ack_sp1='0' then
 					OBJ_SZ_LINK_ADDR_WR <= "00" & SP1_X(7 downto 1);
-					OBJ_SZ_LINK_D <= "00000" & SP1_VRAM_DO(11 downto 8) & SP1_VRAM_DO(6 downto 0);
+					OBJ_SZ_LINK_D <= SP1_VRAM_DO(11 downto 8) & SP1_VRAM_DO(6 downto 0);
 					OBJ_SZ_LINK_WE <= '1';					
 					
 					OBJ_CUR <= SP1_VRAM_DO(6 downto 0);
@@ -1532,7 +1540,7 @@ begin
 				SP2C <= SP2C_Y_RD4;
 			
 			when SP2C_Y_RD4 =>
-				OBJ_Y_OFS <= "010000000" + ("0" & SP2_Y) - OBJ_Y_Q(8 downto 0);
+				OBJ_Y_OFS <= "010000000" + ("0" & SP2_Y) - OBJ_Y_Q;
 				OBJ_HS <= OBJ_SZ_LINK_Q(10 downto 9);
 				OBJ_VS <= OBJ_SZ_LINK_Q(8 downto 7);
 				OBJ_LINK <= OBJ_SZ_LINK_Q(6 downto 0);				

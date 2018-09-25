@@ -32,15 +32,13 @@
 -- make sure that this is not a derivative work and that
 -- you have the latest version of this file.
 
-library STD;
-use STD.TEXTIO.ALL;
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.STD_LOGIC_UNSIGNED.ALL;
 use IEEE.STD_LOGIC_TEXTIO.all;
 use IEEE.NUMERIC_STD.ALL;
 
-entity Virtual_Toplevel is
+entity Genesis is
 	generic (
 		colAddrBits : integer := 9;
 		rowAddrBits : integer := 13
@@ -81,7 +79,7 @@ entity Virtual_Toplevel is
 	);
 end entity;
 
-architecture rtl of Virtual_Toplevel is
+architecture rtl of Genesis is
 component jt12 port(
 	rst	    : in std_logic;
 	cpu_clk   : in std_logic;
@@ -276,7 +274,6 @@ signal DMA_SDRAM_DTACK_N	: std_logic;
 signal TG68_OS_SEL			: std_logic;
 signal TG68_OS_D			: std_logic_vector(15 downto 0);
 signal TG68_OS_DTACK_N		: std_logic;
-signal OS_OEn				: std_logic;
 
 -- CONTROL AREA
 signal ZBUSREQ				: std_logic;
@@ -412,19 +409,24 @@ ROM_REQ  <= romrd_req;
 romrd_q  <= ROM_DATA;
 romrd_ack<= ROM_ACK;
 
-
-vram : entity work.gen_ram
+vram_l : entity work.dpram generic map(15)
 port map
 (
-	clock	    => RAMCLK,
+	clock		=> RAMCLK,
+	address_a=> vram_a(15 downto 1),
+	data_a	=> vram_d(7 downto 0),
+	wren_a	=> not vram_l_n and vramwe,
+	q_a		=> vram_q(7 downto 0)
+);
 
-	wraddress => vram_a(15 downto 1),
-	data	    => vram_d,
-	byteena_a => not vram_u_n & not vram_l_n,
-	wren      => vramwe,
-
-	rdaddress => vram_a(15 downto 1),
-	q         => vram_q
+vram_r : entity work.dpram generic map(15)
+port map
+(
+	clock		=> RAMCLK,
+	address_a=> vram_a(15 downto 1),
+	data_a	=> vram_d(15 downto 8),
+	wren_a	=> not vram_u_n and vramwe,
+	q_a		=> vram_q(15 downto 8)
 );
 
 process(RAMCLK)
@@ -439,18 +441,24 @@ begin
 	end if;
 end process;
 
-ram68k : entity work.gen_ram
+ram68k_l : entity work.dpram generic map(15)
 port map
 (
-	clock	    => RAMCLK,
+	clock		=> RAMCLK,
+	address_a=> ram68k_a(15 downto 1),
+	data_a	=> ram68k_d(7 downto 0),
+	wren_a	=> not ram68k_l_n and ram68kwe,
+	q_a		=> ram68k_q(7 downto 0)
+);
 
-	wraddress => ram68k_a(15 downto 1),
-	data	    => ram68k_d,
-	byteena_a => not ram68k_u_n & not ram68k_l_n,
-	wren      => ram68kwe,
-
-	rdaddress => ram68k_a(15 downto 1),
-	q         => ram68k_q
+ram68k_r : entity work.dpram generic map(15)
+port map
+(
+	clock		=> RAMCLK,
+	address_a=> ram68k_a(15 downto 1),
+	data_a	=> ram68k_d(15 downto 8),
+	wren_a	=> not ram68k_u_n and ram68kwe,
+	q_a		=> ram68k_q(15 downto 8)
 );
 
 process(RAMCLK)
@@ -469,12 +477,14 @@ end process;
 -- -----------------------------------------------------------------------
 -- Z80 RAM
 -- -----------------------------------------------------------------------
-zr : entity work.zram port map (
-	address	=> zram_a,
+zr : entity work.dpram generic map(13)
+port map
+(
+	address_a=> zram_a,
 	clock		=> MCLK,
-	data		=> zram_d,
-	wren		=> zram_we,
-	q			=> zram_q
+	data_a	=> zram_d,
+	wren_a	=> zram_we,
+	q_a		=> zram_q
 );
 
 -- -----------------------------------------------------------------------
@@ -531,9 +541,9 @@ port map(
 -- OS ROM
 os : entity work.os_rom
 port map(
-	A			=> TG68_A(8 downto 1),
-	OEn		=> OS_OEn,
-	D			=> TG68_OS_D
+	CLK	=> MCLK,
+	A		=> TG68_A(8 downto 1),
+	D		=> TG68_OS_D
 );
 
 -- I/O
@@ -922,7 +932,6 @@ T80_DI <= T80_SDRAM_D when T80_SDRAM_SEL = '1'
 
 -- OPERATING SYSTEM ROM
 TG68_OS_DTACK_N <= '0';
-OS_OEn <= '0';
 
 TG68_OS_SEL <= '1' when  TG68_A(23 downto 22) = "00" 
 							and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') 
@@ -1724,12 +1733,9 @@ begin
 
 end process;
 
-
-
 MAPPER_A  <= TG68_A(3 downto 1);
 MAPPER_WE <= '1' when TG68_AS_N = '0' and TG68_RNW = '0' and TG68_A(23 downto 4) = x"A130F" else '0';
 MAPPER_D  <= TG68_DO(7 downto 0);
-
 
 -- SDRAM (68K RAM) CONTROL
 process( RESET_N, MCLK, TG68_AS_N, TG68_RNW,
@@ -1842,10 +1848,6 @@ begin
 
 end process;
 
-
-
-
-
 -- Z80 RAM CONTROL
 process( RESET_N, MCLK, TG68_AS_N, TG68_RNW,
 	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
@@ -1928,250 +1930,5 @@ begin
 	end if;
 
 end process;
-
-
--- #############################################################################
--- #############################################################################
--- #############################################################################
--- #############################################################################
--- #############################################################################
--- #############################################################################
-
--- DEBUG
-
--- synthesis translate_off
-process( MCLK )
-	file F		: text open write_mode is "gen.out";
-	variable L	: line;
-	variable rom_q : std_logic_vector(15 downto 0);
-begin
-	if rising_edge( MCLK ) then
-
-		-- ROM ACCESS
-		if FC = FC_TG68_RD and romrd_req = romrd_ack then
-			write(L, string'("68K "));
-			write(L, string'("RD"));
-			write(L, string'(" ROM     ["));
-			hwrite(L, TG68_A(23 downto 0));
-			write(L, string'("] = ["));
-			rom_q := x"FFFF";
-			case TG68_A(2 downto 1) is
-			when "00" =>
-				if TG68_UDS_N = '0' then rom_q(15 downto 8) := romrd_q(15 downto 8); end if;
-				if TG68_LDS_N = '0' then rom_q(7 downto 0) := romrd_q(7 downto 0); end if;
-
-			when "01" =>
-				if TG68_UDS_N = '0' then rom_q(15 downto 8) := romrd_q(31 downto 24); end if;
-				if TG68_LDS_N = '0' then rom_q(7 downto 0) := romrd_q(23 downto 16); end if;
-
-			when "10" =>
-				if TG68_UDS_N = '0' then rom_q(15 downto 8) := romrd_q(47 downto 40); end if;
-				if TG68_LDS_N = '0' then rom_q(7 downto 0) := romrd_q(39 downto 32); end if;
-
-			when "11" =>
-				if TG68_UDS_N = '0' then rom_q(15 downto 8) := romrd_q(63 downto 56); end if;
-				if TG68_LDS_N = '0' then rom_q(7 downto 0) := romrd_q(55 downto 48); end if;
-
-			when others => null;
-			end case;				
-			if TG68_UDS_N = '0' and TG68_LDS_N = '0' then
-				hwrite(L, rom_q);
-			elsif TG68_UDS_N = '0' then
-				hwrite(L, rom_q(15 downto 8));
-				write(L, string'("  "));
-			else
-				write(L, string'("  "));
-				hwrite(L, rom_q(7 downto 0));
-			end if;								
-			write(L, string'("]"));
-			writeline(F,L);			
-		end if;		
-
-	
-		-- 68K RAM ACCESS
-		if SDRC = SDRC_TG68 and ram68k_req = ram68k_ack then
-			write(L, string'("68K "));
-			if TG68_RNW = '0' then
-				write(L, string'("WR"));
-			else
-				write(L, string'("RD"));
-			end if;
-			write(L, string'(" RAM-68K ["));
-			hwrite(L, TG68_A(23 downto 0));
-			write(L, string'("] = ["));
-			if TG68_RNW = '0' then
-				if TG68_UDS_N = '0' and TG68_LDS_N = '0' then
-					hwrite(L, TG68_DO);
-				elsif TG68_UDS_N = '0' then
-					hwrite(L, TG68_DO(15 downto 8));
-					write(L, string'("  "));
-				else
-					write(L, string'("  "));
-					hwrite(L, TG68_DO(7 downto 0));
-				end if;				
-			else
-				if TG68_UDS_N = '0' and TG68_LDS_N = '0' then
-					hwrite(L, ram68k_q);
-				elsif TG68_UDS_N = '0' then
-					hwrite(L, ram68k_q(15 downto 8));
-					write(L, string'("  "));
-				else
-					write(L, string'("  "));
-					hwrite(L, ram68k_q(7 downto 0));
-				end if;								
-			end if;
-			write(L, string'("]"));
-			writeline(F,L);			
-		end if;		
-
-		
-		-- Z80 RAM ACCESS
-		if ZRC = ZRC_ACC3 and ZRCP = ZRCP_TG68 then
-			write(L, string'("68K "));
-			if TG68_RNW = '0' then
-				write(L, string'("WR"));
-			else
-				write(L, string'("RD"));
-			end if;
-			write(L, string'(" RAM-Z80 ["));
-			hwrite(L, TG68_A(23 downto 0));
-			write(L, string'("] = ["));
-			if TG68_RNW = '0' then
-				if TG68_UDS_N = '0' and TG68_LDS_N = '0' then
-					hwrite(L, TG68_DO);
-				elsif TG68_UDS_N = '0' then
-					hwrite(L, TG68_DO(15 downto 8));
-					write(L, string'("  "));
-				else
-					write(L, string'("  "));
-					hwrite(L, TG68_DO(7 downto 0));
-				end if;				
-			else
-				if TG68_UDS_N = '0' and TG68_LDS_N = '0' then
-					hwrite(L, zram_q & zram_q);
-				elsif TG68_UDS_N = '0' then
-					hwrite(L, zram_q);
-					write(L, string'("  "));
-				else
-					write(L, string'("  "));
-					hwrite(L, zram_q);
-				end if;				
-			end if;
-			write(L, string'("]"));
-			writeline(F,L);			
-		end if;		
-
-		
-		-- 68K CTRL ACCESS
-		if TG68_CTRL_SEL = '1' and TG68_CTRL_DTACK_N = '1' then
-			write(L, string'("68K "));
-			if TG68_RNW = '0' then
-				write(L, string'("WR"));
-			else
-				write(L, string'("RD"));
-			end if;
-			write(L, string'("    CTRL ["));
-			hwrite(L, TG68_A(23 downto 0));
-			write(L, string'("] = ["));
-			if TG68_RNW = '0' then
-				if TG68_UDS_N = '0' and TG68_LDS_N = '0' then
-					hwrite(L, TG68_DO);
-				elsif TG68_UDS_N = '0' then
-					hwrite(L, TG68_DO(15 downto 8));
-					write(L, string'("  "));
-				else
-					write(L, string'("  "));
-					hwrite(L, TG68_DO(7 downto 0));
-				end if;				
-			else
-				if TG68_UDS_N = '0' and TG68_LDS_N = '0' then
-					write(L, string'("????"));
-				elsif TG68_UDS_N = '0' then
-					write(L, string'("??"));
-					write(L, string'("  "));
-				else
-					write(L, string'("  "));
-					write(L, string'("??"));
-				end if;								
-			end if;
-			write(L, string'("]"));
-			writeline(F,L);							
-		end if;
-
-		-- 68K I/O ACCESS
-		if IOC = IOC_TG68_ACC and IO_DTACK_N = '0' then
-			write(L, string'("68K "));
-			if TG68_RNW = '0' then
-				write(L, string'("WR"));
-			else
-				write(L, string'("RD"));
-			end if;
-			write(L, string'("     I/O ["));
-			hwrite(L, TG68_A(23 downto 0));
-			write(L, string'("] = ["));
-			if TG68_RNW = '0' then
-				if TG68_UDS_N = '0' and TG68_LDS_N = '0' then
-					hwrite(L, TG68_DO);
-				elsif TG68_UDS_N = '0' then
-					hwrite(L, TG68_DO(15 downto 8));
-					write(L, string'("  "));
-				else
-					write(L, string'("  "));
-					hwrite(L, TG68_DO(7 downto 0));
-				end if;				
-			else
-				if TG68_UDS_N = '0' and TG68_LDS_N = '0' then
-					hwrite(L, IO_DO);
-				elsif TG68_UDS_N = '0' then
-					hwrite(L, IO_DO(15 downto 8));
-					write(L, string'("  "));
-				else
-					write(L, string'("  "));
-					hwrite(L, IO_DO(7 downto 0));
-				end if;								
-			end if;
-			write(L, string'("]"));
-			writeline(F,L);					
-		end if;
-		
-		-- 68K VDP ACCESS
-		if VDPC = VDPC_TG68_ACC and VDP_DTACK_N = '0' then
-			write(L, string'("68K "));
-			if TG68_RNW = '0' then
-				write(L, string'("WR"));
-			else
-				write(L, string'("RD"));
-			end if;
-			write(L, string'("     VDP ["));
-			hwrite(L, TG68_A(23 downto 0));
-			write(L, string'("] = ["));
-			if TG68_RNW = '0' then
-				if TG68_UDS_N = '0' and TG68_LDS_N = '0' then
-					hwrite(L, TG68_DO);
-				elsif TG68_UDS_N = '0' then
-					hwrite(L, TG68_DO(15 downto 8));
-					write(L, string'("  "));
-				else
-					write(L, string'("  "));
-					hwrite(L, TG68_DO(7 downto 0));
-				end if;				
-			else
-				if TG68_UDS_N = '0' and TG68_LDS_N = '0' then
-					hwrite(L, VDP_DO);
-				elsif TG68_UDS_N = '0' then
-					hwrite(L, VDP_DO(15 downto 8));
-					write(L, string'("  "));
-				else
-					write(L, string'("  "));
-					hwrite(L, VDP_DO(7 downto 0));
-				end if;								
-			end if;
-			write(L, string'("]"));
-			writeline(F,L);					
-		end if;
-		
-	end if;
-end process;
--- synthesis translate_on
 
 end rtl;
