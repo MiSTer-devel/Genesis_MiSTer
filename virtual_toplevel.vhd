@@ -225,11 +225,9 @@ signal TG68_ENAWRREG	: std_logic;
 
 -- Z80
 signal T80_RESET_N	: std_logic;
-signal T80_CLK_N		: std_logic;
 signal T80_CLKEN		: std_logic;
 signal T80_WAIT_N		: std_logic;
 signal T80_INT_N     : std_logic;
-signal T80_NMI_N     : std_logic;
 signal T80_BUSRQ_N   : std_logic;
 signal T80_M1_N      : std_logic;
 signal T80_MREQ_N    : std_logic;
@@ -519,22 +517,19 @@ port map(
 );
 
 -- Z80
-t80 : entity work.t80se
+t80 : entity work.t80pa
 port map(
 	RESET_n	=> T80_RESET_N,
-	CLK_n		=> T80_CLK_N,
-	CLKEN		=> T80_CLKEN,
+	CLK		=> MCLK,
+	CEN_p		=> T80_CLKEN and ZCLK_EN,
 	WAIT_n	=> T80_WAIT_N,
 	INT_n		=> T80_INT_N,
-	NMI_n		=> T80_NMI_N,
 	BUSRQ_n	=> T80_BUSRQ_N,
 	M1_n		=> T80_M1_N,
 	MREQ_n	=> T80_MREQ_N,
 	IORQ_n	=> T80_IORQ_N,
 	RD_n		=> T80_RD_N,
 	WR_n		=> T80_WR_N,
-	RFSH_n	=> open,
-	HALT_n	=> open,
 	BUSAK_n	=> T80_BUSAK_N,
 	A			=> T80_A,
 	DI			=> T80_DI,
@@ -651,10 +646,10 @@ port map(
 
 u_psg : work.psg
 port map(
-	clk		=> T80_CLK_N,
-	clken	=> T80_CLKEN,
-	WR_n	=> not PSG_SEL,
-	D_in	=> PSG_DI,
+	clk		=> MCLK,
+	clken		=> T80_CLKEN and ZCLK_EN,
+	WR_n		=> not PSG_SEL,
+	D_in		=> PSG_DI,
 	output	=> PSG_SND
 );
 
@@ -918,9 +913,6 @@ begin
 	end if;
 end process;
 
-T80_CLK_N <= MCLK and ZCLK_EN;
---T80_INT_N <= '1';
-T80_NMI_N <= '1';
 T80_BUSRQ_N <= not ZBUSREQ;
 
 T80_WAIT_N <= not T80_SDRAM_DTACK_N when T80_SDRAM_SEL = '1'
