@@ -71,6 +71,10 @@ entity Virtual_Toplevel is
 		JOY_1 		: in std_logic_vector(11 downto 0);
 		JOY_2 		: in std_logic_vector(11 downto 0);
 
+		MAPPER_A		: out std_logic_vector(2 downto 0);
+		MAPPER_WE	: out std_logic;
+		MAPPER_D		: out std_logic_vector(7 downto 0);
+
 		ROM_ADDR 	: out std_logic_vector(19 downto 0);
 		ROM_DATA 	: in  std_logic_vector(63 downto 0);
 		ROM_REQ		: out std_logic;
@@ -1761,6 +1765,9 @@ end process;
 
 
 
+MAPPER_A  <= TG68_A(3 downto 1);
+MAPPER_WE <= '1' when TG68_AS_N = '0' and TG68_RNW = '0' and TG68_A(23 downto 4) = x"A130F" else '0';
+MAPPER_D  <= TG68_DO(7 downto 0);
 
 
 -- SDRAM (68K RAM) CONTROL

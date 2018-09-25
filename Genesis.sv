@@ -215,7 +215,11 @@ Virtual_Toplevel Genesis
 	.JOY_1((status[4] ? joystick_1[11:0] : joystick_0[11:0])),
 	.JOY_2((status[4] ? joystick_0[11:0] : joystick_1[11:0])),
 
-	.ROM_ADDR(rom_rdaddr),
+	.MAPPER_A(mapper_a),
+	.MAPPER_WE(mapper_we),
+	.MAPPER_D(mapper_d),
+
+	.ROM_ADDR(rom_addr),
 	.ROM_DATA(rom_data),
 	.ROM_REQ(rom_rd),
 	.ROM_ACK(rom_rdack)
@@ -254,7 +258,7 @@ compressor compressor
 
 ///////////////////////////////////////////////////
 
-wire [19:0] rom_rdaddr;
+wire [19:0] rom_addr;
 wire [63:0] rom_data;
 wire rom_rd, rom_rdack;
 
@@ -269,7 +273,7 @@ ddram ddram
    .we_ack(rom_wrack),
 
 	
-   .rdaddr({rom_rdaddr, 3'b000}),
+   .rdaddr(rom_rdaddr),
    .dout(rom_data),
    .rd_req(rom_rd),
    .rd_ack(rom_rdack)
@@ -294,5 +298,26 @@ always @(posedge clk_sys) begin
 		end
 	end
 end
+
+wire [2:0] mapper_a;
+wire [5:0] mapper_d;
+wire       mapper_we;
+
+reg  [5:0] map[8] = '{0,1,2,3,4,5,6,7};
+reg        use_map = 0;
+
+always @(posedge clk_sys) begin
+	if(reset) begin
+		map <= '{0,1,2,3,4,5,6,7};
+		use_map <= 0;
+	end
+	else if (mapper_we && mapper_a) begin
+		map[mapper_a] <= mapper_d;
+		use_map <= 1;
+	end
+end
+
+wire [24:0] rom_rdaddr = use_map ? {map[rom_addr[18:16]], rom_addr[15:0], 3'b000} : {rom_addr, 3'b000};
+
 
 endmodule
