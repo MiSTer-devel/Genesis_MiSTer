@@ -257,22 +257,20 @@ compressor compressor
 
 ///////////////////////////////////////////////////
 
-wire [19:0] rom_addr;
-wire [63:0] rom_data;
+wire [22:0] rom_addr;
+wire [15:0] rom_data;
 wire rom_rd, rom_rdack;
 
 ddram ddram
 (
 	.*,
-	.reset(reset & ~ioctl_download),
 
    .wraddr(ioctl_addr),
    .din({ioctl_data[7:0],ioctl_data[15:8]}),
    .we_req(rom_wr),
    .we_ack(rom_wrack),
 
-	
-   .rdaddr(rom_rdaddr),
+   .rdaddr(use_map ? {map[rom_addr[21:19]], rom_addr[18:0]} : rom_addr),
    .dout(rom_data),
    .rd_req(rom_rd),
    .rd_ack(rom_rdack)
@@ -315,8 +313,5 @@ always @(posedge clk_sys) begin
 		use_map <= 1;
 	end
 end
-
-wire [24:0] rom_rdaddr = use_map ? {map[rom_addr[18:16]], rom_addr[15:0], 3'b000} : {rom_addr, 3'b000};
-
 
 endmodule
