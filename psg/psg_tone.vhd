@@ -22,7 +22,7 @@ begin
 	begin
 		if rising_edge(clk) then
 			if clk_en = '1' then 
-				if counter="000000000" then
+				if counter="0000000000" then
 					v <= not v;
 					counter <= unsigned(tone);
 				else
