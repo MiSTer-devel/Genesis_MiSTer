@@ -546,9 +546,6 @@ signal T_PREV_OBJ_COLINFO		: std_logic_vector(6 downto 0);
 -- VIDEO OUTPUT
 ----------------------------------------------------------------
 -- Priority Encoder
-signal T_BGB_COLINFO	: std_logic_vector(6 downto 0);
-signal T_BGA_COLINFO	: std_logic_vector(6 downto 0);
-signal T_OBJ_COLINFO	: std_logic_vector(6 downto 0);
 signal T_COLOR			: std_logic_vector(15 downto 0);
 
 signal COLOR		: std_logic_vector(8 downto 0);
@@ -1213,17 +1210,20 @@ begin
 				
 			when BGAC_CALC_BASE =>
 				if WIN_H = '1' or WIN_V = '1' then
-					V_BGA_BASE := (NTWB & "00000000000") + (BGA_POS(9 downto 3) & "0") + (BGA_Y(9 downto 3) & "000000" & "0");					
-				else 			
-					case HSIZE is
-					when "00" => -- HS 32 cells
-						V_BGA_BASE := (NTAB & "0000000000000") + (BGA_X(9 downto 3) & "0") + (BGA_Y(9 downto 3) & "00000" & "0");
-					when "01" => -- HS 64 cells
-						V_BGA_BASE := (NTAB & "0000000000000") + (BGA_X(9 downto 3) & "0") + (BGA_Y(9 downto 3) & "000000" & "0");
-					when others => -- HS 128 cells
-						V_BGA_BASE := (NTAB & "0000000000000") + (BGA_X(9 downto 3) & "0") + (BGA_Y(9 downto 3) & "0000000" & "0");
-					end case;
+					V_BGA_BASE := (NTWB & "00000000000") + (BGA_POS(9 downto 3) & "0");
+				else
+					V_BGA_BASE := (NTAB & "0000000000000") + (BGA_X(9 downto 3) & "0");
 				end if;
+
+				case HSIZE is
+				when "00" => -- HS 32 cells
+					V_BGA_BASE := V_BGA_BASE + (BGA_Y(9 downto 3) & "00000" & "0");
+				when "01" => -- HS 64 cells
+					V_BGA_BASE := V_BGA_BASE + (BGA_Y(9 downto 3) & "000000" & "0");
+				when others => -- HS 128 cells
+					V_BGA_BASE := V_BGA_BASE + (BGA_Y(9 downto 3) & "0000000" & "0");
+				end case;
+
 				BGA_VRAM_ADDR <= V_BGA_BASE(15 downto 1);
 				BGA_SEL <= '1';
 				BGAC <= BGAC_BASE_RD;
