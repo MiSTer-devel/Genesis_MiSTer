@@ -1779,13 +1779,14 @@ begin
 				OBJ_TOT <= OBJ_TOT + 1;
 				OBJ_NEXT <= OBJ_LINK;
 
-				if (H40 = '1' and OBJ_TOT = 79) or (H40 = '0' and OBJ_TOT = 63) then
-					SP2C <= SP2C_DONE;
-					SOVR_SET <= '1';
-				elsif (H40 = '1' and OBJ_NB >= 20) or (H40 = '0' and OBJ_NB >= 16) then
-					SP2C <= SP2C_DONE;
-					SOVR_SET <= '1';
-				elsif (H40 = '1' and OBJ_PIX >= 320) or (H40 = '0' and OBJ_PIX >= 256) then
+				-- 1) limit number of sprites per frame to 80 / 64
+				-- FIXME: This is supposed to pass test 9 of the sprite
+				--        masking and overflow test rom. But it doesn't in H32
+		      -- 2) limit number of sprites per line to 20 / 16
+ 		      -- 3) limit sprite pixels per line to 320 / 256
+				if (H40 = '1' and OBJ_TOT >=  79) or (H40 = '0' and OBJ_TOT >=  63) or
+				   (H40 = '1' and OBJ_NB  >=  20) or (H40 = '0' and OBJ_NB  >=  16) or
+				   (H40 = '1' and OBJ_PIX >= 320) or (H40 = '0' and OBJ_PIX >= 256) then
 					SP2C <= SP2C_DONE;
 					SOVR_SET <= '1';
 				elsif OBJ_LINK = "0000000" then
