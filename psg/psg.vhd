@@ -63,7 +63,7 @@ begin
 		output	=> output2);
 
 	t3: work.psg_noise
-	port map(
+	port map (
 		clk		=> clk,
 		clk_en	=> div16_en,
 		style		=> ctrl3,
@@ -89,6 +89,10 @@ begin
 				volume1 <= (others => '1');
 				volume2 <= (others => '1');
 				volume3 <= (others => '1');
+				tone0 <= (others => '0');
+				tone1 <= (others => '0');
+				tone2 <= (others => '0');
+				ctrl3 <= (others => '0');
 			else
 				if D_in(7)='1' then
 					case D_in(6 downto 4) is
@@ -128,4 +132,3 @@ begin
 	);
 
 end rtl;
-
