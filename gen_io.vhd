@@ -87,7 +87,6 @@ end gen_io;
 architecture rtl of gen_io is
 signal FF_DTACK_N	: std_logic;
 
-signal VERS			: std_logic_vector(7 downto 0);
 signal DATA			: std_logic_vector(7 downto 0);
 signal DATB			: std_logic_vector(7 downto 0);
 signal DATC			: std_logic_vector(7 downto 0);
@@ -127,8 +126,6 @@ begin
 	if RST_N = '0' then
 		FF_DTACK_N <= '1';
 		RD <= (others => '1');
-
-		VERS <= x"A0";
 
 		DATA <= x"7F";
 		DATB <= x"7F";
