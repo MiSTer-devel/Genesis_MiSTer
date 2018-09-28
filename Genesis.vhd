@@ -102,30 +102,6 @@ component jt12 port(
 );
 end component;
 
-component jt12_amp_stereo port(
-	clk : in std_logic;
-	sample : in std_logic;
-	volume : in std_logic_vector(2 downto 0);
-	psg	   : in std_logic_vector(5 downto 0);
-	enable_psg: in std_logic;
-	fmleft : in std_logic_vector(11 downto 0);
-	fmright: in std_logic_vector(11 downto 0);
-	postleft: out std_logic_vector(15 downto 0);
-	postright: out std_logic_vector(15 downto 0) );	
-end component;
-
-component jt12_mixer port(
-	clk 		: in std_logic;
-	rst			: in std_logic;
-	sample 		: in std_logic;
-	left_in 	: in std_logic_vector(8 downto 0);
-	right_in	: in std_logic_vector(8 downto 0);
-	psg			: in std_logic_vector(5 downto 0);
-	enable_psg	: in std_logic;
-	left_out	: out std_logic_vector(15 downto 0);
-	right_out	: out std_logic_vector(15 downto 0) );	
-end component;
-
 -- "FLASH"
 signal romrd_req : std_logic := '0';
 signal romrd_ack : std_logic;
@@ -326,7 +302,6 @@ type vdpc_t is ( VDPC_IDLE, VDPC_TG68_ACC, VDPC_T80_ACC, VDPC_DESEL );
 signal VDPC : vdpc_t;
 
 -- FM AREA
-signal FM_SEL			: std_logic;
 signal FM_A 			: std_logic_vector(1 downto 0);
 signal FM_RNW			: std_logic;
 signal FM_UDS_N			: std_logic;
@@ -647,9 +622,9 @@ port map(
 fm : jt12
 port map(
 	rst		      => RST_VCLK,	-- gen-hw.txt line 328
-	cpu_clk	      => MCLK and FCLK_EN,
+	cpu_clk	      => MCLK,
 	cpu_limiter_en => FM_LIMITER,
-	cpu_cs_n	      => not FM_SEL,
+	cpu_cs_n	      => '0',
 	cpu_addr	      => FM_A,
 	cpu_wr_n	      => FM_RNW,
 	cpu_din	      => FM_DI,
@@ -1307,7 +1282,6 @@ begin
 		TG68_FM_DTACK_N <= '1';	
 		T80_FM_DTACK_N <= '1';	
 		
-		FM_SEL <= '0';
 		FM_RNW <= '1';
 		FM_A <= (others => '0');
 		
@@ -1325,7 +1299,6 @@ begin
 		when FMC_IDLE =>
 			if VCLK='0' then
 				if TG68_FM_SEL = '1' and TG68_FM_DTACK_N = '1' then
-					FM_SEL <= '1';
 					FM_A <= TG68_A(1 downto 0);
 					FM_RNW <= TG68_RNW;
 					if TG68_A(0)='0' then
@@ -1336,7 +1309,6 @@ begin
 
 					FMC <= FMC_TG68_ACC;
 				elsif T80_FM_SEL = '1' and T80_FM_DTACK_N = '1' then
-					FM_SEL <= '1';
 					FM_A <= T80_A(1 downto 0);
 					FM_RNW <= T80_WR_N;
 					FM_DI <= T80_DO;
@@ -1346,7 +1318,6 @@ begin
 		when FMC_TG68_ACC =>
 			-- sync this to 8MHz clock
 			if VCLK = '1' then
-				FM_SEL <= '0';
 				TG68_FM_D <= (others=>'0');
 				if TG68_A(0)='0' then
 					TG68_FM_D(15 downto 8) <= FM_DO;
@@ -1361,7 +1332,6 @@ begin
 		when FMC_T80_ACC =>
 			-- sync this to 8MHz clock
 			if VCLK = '1' then
-				FM_SEL <= '0';
 				T80_FM_D <= FM_DO;
 				T80_FM_DTACK_N <= '0';
 				FMC <= FMC_DESEL;
@@ -1379,10 +1349,10 @@ begin
 end process;
 
 -- PSG AREA
--- Z80: 7F11h
--- 68k: C00011
-T80_PSG_SEL  <= '1' when T80_A = x"7F11" and T80_MREQ_N = '0' and T80_WR_N = '0' else '0';
-TG68_PSG_SEL <= '1' when TG68_A = x"C00011" and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') else '0';
+-- Z80: 7F11/3/5/7
+-- 68k: C00011/3/5/7
+T80_PSG_SEL  <= '1' when T80_A(15 downto 3) = x"7F1"&'0' and T80_MREQ_N = '0' and T80_WR_N = '0' else '0';
+TG68_PSG_SEL <= '1' when TG68_A(31 downto 3) = x"C0001"&'0' and TG68_AS_N = '0' and TG68_RNW='0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') else '0';
 
 process( RESET_N, MCLK ) begin
 	if RESET_N = '0' then

@@ -65,32 +65,19 @@ always @(negedge syn_clk or posedge rst)
 		rst_aux <= 1'b0;
 	end
 
-reg		cpu_busy;
-wire		cpu_flag_B, cpu_flag_A;
+reg	 cpu_busy;
+assign cpu_dout = cpu_cs_n ? 8'hFF : { cpu_busy, 5'h0, syn_flag_B, syn_flag_A };
+assign cpu_irq_n = syn_irq_n;
 
-assign 	cpu_dout = cpu_cs_n ? 8'hFF : { cpu_busy, 5'h0, cpu_flag_B, cpu_flag_A };
-
-wire		write_raw = !cpu_cs_n && !cpu_wr_n;
-
-reg [1:0]busy_sh;
-always @(posedge cpu_clk) begin
-	busy_sh <= { busy_sh[0], syn_busy };
-end
-
-jt12_sh #(.width(3),.stages(2) ) u_syn2cpu(
-	.clk	( cpu_clk ),
-	.din	( { syn_flag_B, syn_flag_A, syn_irq_n } ),
-	.drop	( { cpu_flag_B, cpu_flag_A, cpu_irq_n } )
-);
-
+wire write_raw = !cpu_cs_n && !cpu_wr_n;
 always @(posedge cpu_clk) begin
 	reg old_write;
+	reg old_busy;
 	
 	old_write <= write_raw;
+	old_busy  <= syn_busy;
 
-	if( rst ) begin
-		cpu_busy	<= 1'b0;
-	end
+	if( rst ) cpu_busy	<= 0;
 	else begin
 		if( ~old_write & write_raw ) begin
 			cpu_busy  <= 1;
@@ -99,7 +86,7 @@ always @(posedge cpu_clk) begin
 			syn_din	 <= cpu_din;
 		end
 
-		if(cpu_busy && busy_sh==2'b10) cpu_busy <= 0;
+		if(cpu_busy & old_busy & ~syn_busy) cpu_busy <= 0;
 	end
 end
 
