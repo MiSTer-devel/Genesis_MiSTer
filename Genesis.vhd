@@ -46,7 +46,6 @@ entity Genesis is
 	port(
 		RESET_N 		: in std_logic;
 		MCLK 			: in std_logic;
-		RAMCLK		: in std_logic;
 
 		DAC_LDATA 	: out std_logic_vector(12 downto 0);
 		DAC_RDATA 	: out std_logic_vector(12 downto 0);
@@ -361,11 +360,6 @@ signal romState : romStates := ROM_IDLE;
 signal snd_right : std_logic_vector(11 downto 0);
 signal snd_left  : std_logic_vector(11 downto 0);
 
-signal vramwe      : std_logic := '0';
-signal old_vramreq : std_logic := '0';
-signal ram68kwe      : std_logic := '0';
-signal old_ram68kreq : std_logic := '0';
-
 begin
 
 -- -----------------------------------------------------------------------
@@ -378,76 +372,52 @@ romrd_ack<= ROM_ACK;
 vram_l : entity work.dpram generic map(15)
 port map
 (
-	clock		=> RAMCLK,
+	clock		=> MCLK,
 	address_a=> vram_a(15 downto 1),
 	data_a	=> vram_d(7 downto 0),
-	wren_a	=> not vram_l_n and vramwe,
+	wren_a	=> not vram_l_n and vram_we and (vram_ack xor vram_req),
 	q_a		=> vram_q(7 downto 0)
 );
 
 vram_r : entity work.dpram generic map(15)
 port map
 (
-	clock		=> RAMCLK,
+	clock		=> MCLK,
 	address_a=> vram_a(15 downto 1),
 	data_a	=> vram_d(15 downto 8),
-	wren_a	=> not vram_u_n and vramwe,
+	wren_a	=> not vram_u_n and vram_we and (vram_ack xor vram_req),
 	q_a		=> vram_q(15 downto 8)
 );
 
-process(RAMCLK)
-begin
-	if rising_edge(RAMCLK) then
-		vram_ack <= old_vramreq;
-		old_vramreq <= vram_req;
-		vramwe <= '0';
-		if(old_vramreq /= vram_req) then
-			vramwe <= vram_we;
-		end if;
-	end if;
-end process;
+vram_ack <= vram_req when rising_edge(MCLK);
 
 ram68k_l : entity work.dpram generic map(15)
 port map
 (
-	clock		=> RAMCLK,
+	clock		=> MCLK,
 	address_a=> ram68k_a(15 downto 1),
 	data_a	=> ram68k_d(7 downto 0),
-	wren_a	=> not ram68k_l_n and ram68kwe,
+	wren_a	=> not ram68k_l_n and ram68k_we and (ram68k_ack xor ram68k_req),
 	q_a		=> ram68k_q(7 downto 0)
 );
 
 ram68k_r : entity work.dpram generic map(15)
 port map
 (
-	clock		=> RAMCLK,
+	clock		=> MCLK,
 	address_a=> ram68k_a(15 downto 1),
 	data_a	=> ram68k_d(15 downto 8),
-	wren_a	=> not ram68k_u_n and ram68kwe,
+	wren_a	=> not ram68k_u_n and ram68k_we and (ram68k_ack xor ram68k_req),
 	q_a		=> ram68k_q(15 downto 8)
 );
 
-process(RAMCLK)
-begin
-	if rising_edge(RAMCLK) then
-		ram68k_ack <= old_ram68kreq;
-		old_ram68kreq <= ram68k_req;
-		ram68kwe <= '0';
-		if(old_ram68kreq /= ram68k_req) then
-			ram68kwe <= ram68k_we;
-		end if;
-	end if;
-end process;
+ram68k_ack <= ram68k_req when rising_edge(MCLK);
 
-
--- -----------------------------------------------------------------------
--- Z80 RAM
--- -----------------------------------------------------------------------
-zr : entity work.dpram generic map(13)
+ramZ80 : entity work.dpram generic map(13)
 port map
 (
-	address_a=> zram_a,
 	clock		=> MCLK,
+	address_a=> zram_a,
 	data_a	=> zram_d,
 	wren_a	=> zram_we,
 	q_a		=> zram_q
@@ -564,7 +534,7 @@ vdp : entity work.vdp
 port map(
 	RST_N		=> RESET_N,
 	CLK		=> MCLK,
-	MEMCLK   => RAMCLK,
+	MEMCLK   => MCLK,
 
 	SEL		=> VDP_SEL,
 	A			=> VDP_A,
