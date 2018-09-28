@@ -120,6 +120,7 @@ localparam CONF_STR = {
 	"O1,Aspect ratio,4:3,16:9;",
 	"O23,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%;",
 	"-;",
+	"O67,Region,JP,US,EU;",
 	"O4,Swap joysticks,No,Yes;",
 	"O5,3 buttons only,No,Yes;",
 	"-;",
@@ -193,6 +194,9 @@ Genesis Genesis
 	.RESET_N(~(reset|ioctl_download)),
 	.MCLK(clk_sys),
 	.RAMCLK(clk_ram),
+	
+	.EXPORT(|status[7:6]),
+	.PAL(status[7]),
 
 	.DAC_LDATA(audio_l),
 	.DAC_RDATA(audio_r),

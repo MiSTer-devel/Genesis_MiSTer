@@ -51,6 +51,8 @@ entity Genesis is
 		DAC_LDATA 	: out std_logic_vector(12 downto 0);
 		DAC_RDATA 	: out std_logic_vector(12 downto 0);
 
+		PAL         : in  std_logic;
+		EXPORT      : in  std_logic;
 		RED			: out std_logic_vector(2 downto 0);
 		GREEN			: out std_logic_vector(2 downto 0);
 		BLUE			: out std_logic_vector(2 downto 0);		
@@ -551,7 +553,10 @@ port map(
 	LDS_N		=> IO_LDS_N,
 	DI			=> IO_DI,
 	DO			=> IO_DO,
-	DTACK_N	=> IO_DTACK_N
+	DTACK_N	=> IO_DTACK_N,
+
+	PAL		=> PAL,
+	EXPORT	=> EXPORT
 );
 
 -- VDP
@@ -597,6 +602,7 @@ port map(
 	VBUS_SEL			=> VBUS_SEL,
 	VBUS_DTACK_N	=> VBUS_DTACK_N,
 
+	PAL					=> PAL,
 	R					=> RED,
 	G					=> GREEN,
 	B					=> BLUE,

@@ -78,7 +78,10 @@ entity gen_io is
 		LDS_N		: in std_logic;
 		DI			: in std_logic_vector(15 downto 0);
 		DO			: out std_logic_vector(15 downto 0);
-		DTACK_N	: out std_logic		
+		DTACK_N	: out std_logic;
+
+		PAL		: in std_logic;
+		EXPORT   : in std_logic
 	);
 end gen_io;
 architecture rtl of gen_io is
@@ -170,8 +173,6 @@ begin
 			if RNW = '0' then
 				-- Write
 				case REG is
-				when x"0" =>
-					VERS <= WD; -- Will be set by OS
 				when x"1" =>
 					DATA(7) <= WD(7);
 					if CTLA(6) = '1' then 
@@ -234,7 +235,7 @@ begin
 			else
 				case REG is
 				when x"0" =>
-					RD <= VERS;
+					RD <= EXPORT & PAL & "100000";
 				when x"1" =>
 					RD <= DATA;
 					if DATA(6) = '1' then
