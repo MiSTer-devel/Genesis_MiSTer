@@ -13,14 +13,14 @@ entity psg is
 		clken	: in  STD_LOGIC;
 		reset	: in  STD_LOGIC;
 		WR_n	: in  STD_LOGIC;
-		D_in	: in  STD_LOGIC_VECTOR (7 downto 0);
+		D_in	: in  STD_LOGIC_VECTOR(7 downto 0);
 		output: out STD_LOGIC_VECTOR(5 downto 0)
 	);
 end entity;
 
 architecture rtl of psg is
 
-	signal div16_en   : std_logic;
+	signal en         : std_logic;
 	signal clk_divide	: unsigned(3 downto 0) := "0000";
 	signal regn			: std_logic_vector(2 downto 0);
 	signal tone0		: std_logic_vector(9 downto 0):="0000100000";
@@ -41,7 +41,7 @@ begin
 	t0: work.psg_tone
 	port map (
 		clk		=> clk,
-		clk_en	=> div16_en,
+		clk_en	=> en,
 		tone		=> tone0,
 		volume	=> volume0,
 		output	=> output0);
@@ -49,7 +49,7 @@ begin
 	t1: work.psg_tone
 	port map (
 		clk		=> clk,
-		clk_en	=> div16_en,
+		clk_en	=> en,
 		tone		=> tone1,
 		volume	=> volume1,
 		output	=> output1);
@@ -57,7 +57,7 @@ begin
 	t2: work.psg_tone
 	port map (
 		clk		=> clk,
-		clk_en	=> div16_en,
+		clk_en	=> en,
 		tone		=> tone2,
 		volume	=> volume2,
 		output	=> output2);
@@ -65,7 +65,7 @@ begin
 	t3: work.psg_noise
 	port map (
 		clk		=> clk,
-		clk_en	=> div16_en,
+		clk_en	=> en,
 		style		=> ctrl3,
 		tone		=> tone2,
 		volume	=> volume3,
@@ -74,12 +74,15 @@ begin
 	process (clk)
 	begin
 		if rising_edge(clk) then
+			en <= '0';
 			if clken='1' then
 				clk_divide <= clk_divide+1;
+				if clk_divide = 0 then
+					en <= '1';
+				end if;
 			end if;
 		end if;
 	end process;
-	div16_en <= '1' when clk_divide = "0000" else '0';
 
 	process (clk, WR_n)
 	begin

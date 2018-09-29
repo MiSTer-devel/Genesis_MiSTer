@@ -201,14 +201,14 @@ signal T80_DI        : std_logic_vector(7 downto 0);
 signal T80_DO        : std_logic_vector(7 downto 0);
 
 signal SCLK_EN		: std_logic;
+signal PCLK_EN		: std_logic;
 signal FCLK_EN		: std_logic;
 signal ZCLK_EN		: std_logic;
-signal SCLKCNT		: std_logic_vector(5 downto 0);
+signal SCLKCNT		: std_logic_vector(5 downto 0) := (others => '0');
+signal PCLKCNT		: std_logic_vector(5 downto 0) := (others => '0');
 
 -- CLOCK GENERATION
 signal VCLK			: std_logic;
-signal RST_VCLK	: std_logic; -- Reset for blocks using VCLK as clock
-signal RST_VCLK_aux : std_logic;
 signal VCLKCNT		: std_logic_vector(2 downto 0);
 -- signal VCLKCNT		: unsigned(2 downto 0);
 signal ZCLK			: std_logic := '0';
@@ -572,7 +572,7 @@ port map(
 	VBUS_SEL			=> VBUS_SEL,
 	VBUS_DTACK_N	=> VBUS_DTACK_N,
 
-	PAL					=> PAL,
+	PAL				=> PAL,
 	R					=> RED,
 	G					=> GREEN,
 	B					=> BLUE,
@@ -587,8 +587,8 @@ port map(
 
 u_psg : work.psg
 port map(
-	clk		=> T80_CLK_N,
-	clken		=> T80_CLKEN,
+	clk		=> MCLK,
+	clken		=> PCLK_EN,
 	reset    => not RESET_N,
 	WR_n		=> not PSG_SEL,
 	D_in		=> PSG_DI,
@@ -597,7 +597,7 @@ port map(
 
 fm : jt12
 port map(
-	rst		      => RST_VCLK,	-- gen-hw.txt line 328
+	rst		      => not RESET_N,
 	cpu_clk	      => MCLK,
 	cpu_limiter_en => FM_LIMITER,
 	cpu_cs_n	      => '0',
@@ -611,29 +611,34 @@ port map(
 	syn_snd_right  => snd_right
 );
 
-DAC_LDATA <= (snd_left(11)  &  snd_left) + ("000"&PSG_SND&"000");
-DAC_RDATA <= (snd_right(11) & snd_right) + ("000"&PSG_SND&"000");
+DAC_LDATA <= (snd_left(11)  &  snd_left) + (PSG_SND&"00");
+DAC_RDATA <= (snd_right(11) & snd_right) + (PSG_SND&"00");
+
+process( RESET_N, MCLK )
+begin
+	if falling_edge(MCLK) then
+		SCLKCNT <= SCLKCNT + 1;
+		SCLK_EN <= '0';
+		if SCLKCNT = 41 then
+			SCLKCNT <= (others => '0');
+			SCLK_EN <= '1';
+		end if;
+		PCLKCNT <= PCLKCNT + 1;
+		PCLK_EN <= '0';
+		if PCLKCNT = 14 then
+			PCLKCNT <= (others => '0');
+			PCLK_EN <= '1';
+		end if;
+	end if;
+end process;
 
 process( RESET_N, MCLK )
 begin
 	if RESET_N = '0' then
-		SCLK_EN <= '1';
-		SCLKCNT <= "000001";
 		T80_CLKEN <= '1';
 		ZCLKCNT <= (others => '0');
 	elsif falling_edge(MCLK) then
 
-		SCLKCNT <= SCLKCNT + 1;
-		if SCLKCNT = X"29" then
-			SCLKCNT <= (others => '0');
-		end if;
-		
-		if SCLKCNT = "0" then
-			SCLK_EN <= '1';
-		else
-			SCLK_EN <= '0';
-		end if;
-		
 		if VCLKCNT = "001" then
 			FCLK_EN <= '1';
 		else
@@ -735,17 +740,6 @@ end process;
 -- #############################################################################
 -- #############################################################################
 -- #############################################################################
-
-process( RESET_N, MCLK )
-begin
-	if RESET_N = '0' then
-		RST_VCLK <= '1';
-		RST_VCLK_aux <= '1';
-	elsif rising_edge(MCLK) then
-		RST_VCLK_aux <= '0';
-		RST_VCLK <= RST_VCLK_aux;
-	end if;
-end process;
 
 -- CLOCK GENERATION
 process( RESET_N, MCLK, VCLKCNT )
