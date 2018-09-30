@@ -125,7 +125,7 @@ localparam CONF_STR = {
 	"O5,3 buttons only,No,Yes;",
 	"-;",
 	"J1,A,B,C,Start,Mode,X,Y,Z;",
-	"V,v1.23.",`BUILD_DATE
+	"V,v1.30.",`BUILD_DATE
 };
 
 
@@ -139,6 +139,7 @@ wire [24:0] ioctl_addr;
 wire [15:0] ioctl_data;
 reg         ioctl_wait;
 wire        forced_scandoubler;
+wire [10:0] ps2_key;
 
 hps_io #(.STRLEN($size(CONF_STR)>>3), .PS2DIV(1000), .WIDE(1)) hps_io
 (
@@ -149,8 +150,11 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .PS2DIV(1000), .WIDE(1)) hps_io
 	.joystick_0(joystick_0),
 	.joystick_1(joystick_1),
 	.buttons(buttons),
-	.status(status),
 	.forced_scandoubler(forced_scandoubler),
+
+	.status(status),
+	.status_in({status[31:8],region_req,status[5:0]}),
+	.status_set(region_set),
 
 	.ioctl_download(ioctl_download),
 	.ioctl_wr(ioctl_wr),
@@ -158,8 +162,7 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .PS2DIV(1000), .WIDE(1)) hps_io
 	.ioctl_dout(ioctl_data),
 	.ioctl_wait(ioctl_wait),
 
-	.ps2_kbd_led_use(0),
-	.ps2_kbd_led_status(0)
+	.ps2_key(ps2_key)
 );
 
 
@@ -185,7 +188,7 @@ wire hblank, vblank;
 assign CLK_VIDEO = clk_sys;
 
 assign DDRAM_CLK = clk_ram;
-wire reset = RESET|buttons[1];
+wire reset = RESET | status[0] | buttons[1] | region_set;
 
 wire [12:0] audio_l, audio_r;
 
@@ -315,6 +318,24 @@ always @(posedge clk_sys) begin
 	else if (mapper_we && mapper_a) begin
 		map[mapper_a] <= mapper_d;
 		use_map <= 1;
+	end
+end
+
+reg  [1:0] region_req;
+reg        region_set = 0;
+
+wire       pressed = ps2_key[9];
+wire [8:0] code    = ps2_key[8:0];
+always @(posedge clk_sys) begin
+	reg old_state;
+	old_state <= ps2_key[10];
+	
+	if(old_state != ps2_key[10]) begin
+		casex(code)
+			'h005: begin region_req <= 0; region_set <= pressed; end // F1
+			'h006: begin region_req <= 1; region_set <= pressed; end // F2
+			'h004: begin region_req <= 2; region_set <= pressed; end // F3
+		endcase
 	end
 end
 
