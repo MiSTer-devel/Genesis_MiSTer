@@ -46,6 +46,7 @@ entity Genesis is
 	port(
 		RESET_N 		: in std_logic;
 		MCLK 			: in std_logic;
+		RAMCLK		: in std_logic;
 
 		DAC_LDATA 	: out std_logic_vector(12 downto 0);
 		DAC_RDATA 	: out std_logic_vector(12 downto 0);
@@ -372,7 +373,7 @@ romrd_ack<= ROM_ACK;
 vram_l : entity work.dpram generic map(15)
 port map
 (
-	clock		=> MCLK,
+	clock		=> RAMCLK,
 	address_a=> vram_a(15 downto 1),
 	data_a	=> vram_d(7 downto 0),
 	wren_a	=> not vram_l_n and vram_we and (vram_ack xor vram_req),
@@ -382,19 +383,19 @@ port map
 vram_r : entity work.dpram generic map(15)
 port map
 (
-	clock		=> MCLK,
+	clock		=> RAMCLK,
 	address_a=> vram_a(15 downto 1),
 	data_a	=> vram_d(15 downto 8),
 	wren_a	=> not vram_u_n and vram_we and (vram_ack xor vram_req),
 	q_a		=> vram_q(15 downto 8)
 );
 
-vram_ack <= vram_req when rising_edge(MCLK);
+vram_ack <= vram_req when rising_edge(RAMCLK);
 
 ram68k_l : entity work.dpram generic map(15)
 port map
 (
-	clock		=> MCLK,
+	clock		=> RAMCLK,
 	address_a=> ram68k_a(15 downto 1),
 	data_a	=> ram68k_d(7 downto 0),
 	wren_a	=> not ram68k_l_n and ram68k_we and (ram68k_ack xor ram68k_req),
@@ -404,14 +405,14 @@ port map
 ram68k_r : entity work.dpram generic map(15)
 port map
 (
-	clock		=> MCLK,
+	clock		=> RAMCLK,
 	address_a=> ram68k_a(15 downto 1),
 	data_a	=> ram68k_d(15 downto 8),
 	wren_a	=> not ram68k_u_n and ram68k_we and (ram68k_ack xor ram68k_req),
 	q_a		=> ram68k_q(15 downto 8)
 );
 
-ram68k_ack <= ram68k_req when rising_edge(MCLK);
+ram68k_ack <= ram68k_req when rising_edge(RAMCLK);
 
 ramZ80 : entity work.dpram generic map(13)
 port map
@@ -534,7 +535,7 @@ vdp : entity work.vdp
 port map(
 	RST_N		=> RESET_N,
 	CLK		=> MCLK,
-	MEMCLK   => MCLK,
+	MEMCLK   => RAMCLK,
 
 	SEL		=> VDP_SEL,
 	A			=> VDP_A,
