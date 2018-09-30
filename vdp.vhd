@@ -229,6 +229,7 @@ signal HIT			: std_logic_vector(7 downto 0);
 signal IE1			: std_logic;
 signal IE0			: std_logic;
 signal DE			: std_logic;
+signal M3			: std_logic;
 
 signal DMA			: std_logic;
 
@@ -617,39 +618,43 @@ port map(
 ----------------------------------------------------------------
 -- REGISTERS
 ----------------------------------------------------------------
-ADDR_STEP <= REG(15);
-H40 <= REG(12)(0);
--- H40 <= '0';
-V30 <= REG(1)(3) and PAL;
--- V30 <= '0';
-HSCR <= REG(11)(1 downto 0);
-HSIZE <= REG(16)(1 downto 0);
-VSIZE <= REG(16)(5 downto 4);
-VSCR <= REG(11)(2);
 
-WVP <= REG(18)(4 downto 0);
-WDOWN <= REG(18)(7);
-WHP <= REG(17)(4 downto 0);
-WRIGT <= REG(17)(7);
+M3    <= REG(0)(1);
+IE1   <= REG(0)(4);
+
+V30   <= REG(1)(3) and PAL;
+DMA   <= REG(1)(4);
+IE0   <= REG(1)(5);
+DE    <= REG(1)(6);
+
+NTAB  <= REG(2)(5 downto 3);
+NTWB  <= REG(3)(5 downto 1);
+NTBB  <= REG(4)(2 downto 0);
+SATB  <= REG(5)(6 downto 0);
 
 BGCOL <= REG(7)(5 downto 0);
 
-HIT <= REG(10);
-IE1 <= REG(0)(4);
-IE0 <= REG(1)(5);
-DE  <= REG(1)(6);
+HIT   <= REG(10);
 
-DMA <= REG(1)(4);
-
-IM <= REG(12)(1);
+HSCR  <= REG(11)(1 downto 0);
+VSCR  <= REG(11)(2);
+H40   <= REG(12)(0);
+IM    <= REG(12)(1);
 --IM2 <= REG(12)(2);
 
--- Base addresses
-HSCB <= REG(13)(5 downto 0);
-NTBB <= REG(4)(2 downto 0);
-NTWB <= REG(3)(5 downto 1);
-NTAB <= REG(2)(5 downto 3);
-SATB <= REG(5)(6 downto 0);
+HSCB  <= REG(13)(5 downto 0);
+
+ADDR_STEP <= REG(15);
+
+HSIZE <= REG(16)(1 downto 0);
+VSIZE <= REG(16)(5 downto 4);
+
+WHP   <= REG(17)(4 downto 0);
+WRIGT <= REG(17)(7);
+
+WVP   <= REG(18)(4 downto 0);
+WDOWN <= REG(18)(7);
+
 
 -- Read-only registers
 ODD <= FIELD when IM = '1' else '0';
@@ -664,8 +669,6 @@ STATUS <= "111111" & FIFO_EMPTY & FIFO_FULL & VINT_TG68_PENDING & SOVR & SCOL & 
 DTACK_N <= FF_DTACK_N;
 DO <= FF_DO;
 process( RST_N, CLK )
-	variable hcnt,vcnt : std_logic_vector(8 downto 0);
-	variable v8 : std_logic;
 begin
 	if RST_N = '0' then
 		FF_DTACK_N <= '1';
@@ -687,7 +690,7 @@ begin
 	elsif rising_edge(CLK) then
 		SOVR_CLR <= '0';
 		SCOL_CLR <= '0';
-	
+
 		if SEL = '0' then
 			FF_DTACK_N <= '1';
 		elsif SEL = '1' and FF_DTACK_N = '1' then			
@@ -795,16 +798,7 @@ begin
 					SCOL_CLR <= '1';
 					FF_DTACK_N <= '0';
 				elsif A(3) = '1' then
-					-- HV Counter
-					hcnt := H_CNT - HDISP_START;
-					vcnt := V_CNT - VDISP_START;
-					if INTERLACE = '1' then
-						v8 := vcnt(8);
-					else
-						v8 := vcnt(0);
-					end if;
-
-					FF_DO <= vcnt(7 downto 1) & v8 & hcnt(8 downto 1);
+					FF_DO <= HV;
 					FF_DTACK_N <= '0';
 				end if;
 			end if;
@@ -1908,17 +1902,27 @@ end process;
 -- PIXEL COUNTER AND OUTPUT
 -- ALSO CLEARS THE SPRITE COLINFO BUFFER RIGHT AFTER RENDERING
 process( RST_N, CLK )
+	variable hcnt,vcnt : std_logic_vector(8 downto 0);
+	variable v8 : std_logic;
 begin
 	if rising_edge(CLK) then
 		OBJ_COLINFO_WE_B <= '0';
 
 		case PIXDIV is
 		when "0000" =>
-			BGB_COLINFO_ADDR_B <= H_CNT-HDISP_START;
-			BGA_COLINFO_ADDR_B <= H_CNT-HDISP_START;
-			OBJ_COLINFO_ADDR_B <= H_CNT-HDISP_START;
-			OBJ_COLINFO_WE_B <= '0';
-			
+			hcnt := H_CNT - HDISP_START;
+			vcnt := V_CNT - VDISP_START;
+
+			BGB_COLINFO_ADDR_B <= hcnt;
+			BGA_COLINFO_ADDR_B <= hcnt;
+			OBJ_COLINFO_ADDR_B <= hcnt;
+
+			if M3 = '0' then
+				-- HV Counter
+				if INTERLACE = '1' then v8 := vcnt(8); else v8 := vcnt(0); end if;
+				HV <= vcnt(7 downto 1) & v8 & hcnt(8 downto 1);
+			end if;
+
 		when "0011" =>
 			if OBJ_COLINFO_Q_B(3 downto 0) /= "0000" and OBJ_COLINFO_Q_B(6) = '1' then
 				T_COLOR <= CRAM( CONV_INTEGER(OBJ_COLINFO_Q_B(5 downto 0)) );
@@ -1940,9 +1944,7 @@ begin
 			HBL <= IN_HBL;
 			VBL <= IN_VBL;
 
-			if IN_HBL = '0' then
-				OBJ_COLINFO_WE_B <= '1';
-			end if;
+			OBJ_COLINFO_WE_B <= not IN_HBL;
 
 			if IN_VBL = '1' or IN_HBL = '1' or DE = '0' then
 				R <= (others => '0');
