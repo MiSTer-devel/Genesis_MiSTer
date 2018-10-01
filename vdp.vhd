@@ -251,33 +251,16 @@ signal DT_ACTIVE	: std_logic;
 
 type dtc_t is (
 	DTC_IDLE,
-	DTC_FIFO_RD,
-	DTC_VRAM_WR1,
-	DTC_VRAM_WR2,
-	DTC_CRAM_WR,
-	DTC_VSRAM_WR,
-	DTC_VRAM_RD1,
-	DTC_VRAM_RD2,
-	DTC_CRAM_RD,
-	DTC_VSRAM_RD,
-	DTC_DMA_FILL_INIT,
+	DTC_VRAM_WR,
+	DTC_VRAM_RD,
 	DTC_DMA_FILL_WR,
-	DTC_DMA_FILL_WR2,
 	DTC_DMA_FILL_LOOP,
-	DTC_DMA_COPY_INIT,
 	DTC_DMA_COPY_RD,
 	DTC_DMA_COPY_RD2,
 	DTC_DMA_COPY_WR,
-	DTC_DMA_COPY_WR2,
 	DTC_DMA_COPY_LOOP,
-	DTC_DMA_VBUS_INIT,
 	DTC_DMA_VBUS_RD,
 	DTC_DMA_VBUS_RD2,
-	DTC_DMA_VBUS_SEL,
-	DTC_DMA_VBUS_CRAM_WR,
-	DTC_DMA_VBUS_VSRAM_WR,
-	DTC_DMA_VBUS_VRAM_WR1,
-	DTC_DMA_VBUS_VRAM_WR2,
 	DTC_DMA_VBUS_LOOP
 );
 signal DTC	: dtc_t;
@@ -291,10 +274,6 @@ signal DT_VRAM_RNW	: std_logic;
 signal DT_VRAM_UDS_N	: std_logic;
 signal DT_VRAM_LDS_N	: std_logic;
 signal DT_VRAM_DTACK_N: std_logic;
-
-signal DT_WR_ADDR		: std_logic_vector(15 downto 0);
-signal DT_WR_DATA		: std_logic_vector(15 downto 0);
-signal DT_WR_SIZE		: std_logic;
 
 signal DT_FF_DATA		: std_logic_vector(15 downto 0);
 signal DT_FF_CODE		: std_logic_vector(2 downto 0);
@@ -313,7 +292,6 @@ signal REG_SET_REQ	: std_logic;
 signal REG_SET_ACK	: std_logic;
 
 signal DT_DMAF_DATA	: std_logic_vector(15 downto 0);
-signal DT_DMAV_DATA	: std_logic_vector(15 downto 0);
 signal DMAF_SET_REQ	: std_logic;
 signal DMAF_SET_ACK	: std_logic;
 
@@ -325,9 +303,6 @@ signal DMA_VBUS		: std_logic;
 signal DMA_FILL_PRE	: std_logic;
 signal DMA_FILL		: std_logic;
 signal DMA_COPY		: std_logic;
-
-signal DMA_LENGTH		: std_logic_vector(15 downto 0);
-signal DMA_SOURCE		: std_logic_vector(15 downto 0);
 
 ----------------------------------------------------------------
 -- VIDEO COUNTING
@@ -1863,6 +1838,11 @@ VBUS_ADDR <= FF_VBUS_ADDR;
 VBUS_SEL <= FF_VBUS_SEL;
 
 process( RST_N, CLK )
+	variable DT_WR_ADDR : std_logic_vector(15 downto 0);
+	variable DT_WR_DATA : std_logic_vector(15 downto 0);
+	variable DMA_LENGTH : std_logic_vector(15 downto 0);
+	variable DMA_SOURCE : std_logic_vector(15 downto 0);
+	variable need_wait  : std_logic;
 begin
 	if RST_N = '0' then
 
@@ -1891,8 +1871,8 @@ begin
 		DMA_FILL <= '0';
 		DMA_COPY <= '0';
 		DMA_VBUS <= '0';
-		DMA_SOURCE <= (others => '0');
-		DMA_LENGTH <= (others => '0');
+		DMA_SOURCE := (others => '0');
+		DMA_LENGTH := (others => '0');
 		
 		DTC <= DTC_IDLE;
 		
@@ -1937,18 +1917,64 @@ begin
 			case DTC is
 			when DTC_IDLE =>
 				if DMA_VBUS = '1' then
-					DTC <= DTC_DMA_VBUS_INIT;
+					DMA_LENGTH := REG(20) & REG(19);
+					DMA_SOURCE := REG(22) & REG(21);
+					DTC <= DTC_DMA_VBUS_RD;
+
 				elsif DMA_FILL = '1' then
-					DTC <= DTC_DMA_FILL_INIT;
+					DMA_LENGTH := REG(20) & REG(19);
+					DTC <= DTC_DMA_FILL_WR;
+
 				elsif DMA_COPY = '1' then
-					DTC <= DTC_DMA_COPY_INIT;
+					DMA_LENGTH := REG(20) & REG(19);
+					DMA_SOURCE := REG(22) & REG(21);
+					DTC <= DTC_DMA_COPY_RD;
+
 				elsif FIFO_RD_POS /= FIFO_WR_POS then
-					DTC <= DTC_FIFO_RD;
+					DT_WR_ADDR := FIFO_ADDR( CONV_INTEGER( FIFO_RD_POS ) );
+					DT_WR_DATA := FIFO_DATA( CONV_INTEGER( FIFO_RD_POS ) );
+					FIFO_RD_POS <= FIFO_RD_POS + 1;
+					case FIFO_CODE( CONV_INTEGER( FIFO_RD_POS ) ) is
+					when "011"  =>
+						CRAM( CONV_INTEGER(DT_WR_ADDR(6 downto 1)) ) <= DT_WR_DATA;
+
+					when "101"  =>
+						VSRAM( CONV_INTEGER(DT_WR_ADDR(6 downto 1)) ) <= DT_WR_DATA;
+
+					when others => 
+						DT_VRAM_SEL <= '1';
+						DT_VRAM_ADDR <= DT_WR_ADDR(15 downto 1);
+						DT_VRAM_RNW <= '0';
+						if DT_WR_ADDR(0) = '0' then 
+							DT_VRAM_DI <= DT_WR_DATA;
+						else
+							DT_VRAM_DI <= DT_WR_DATA(7 downto 0) & DT_WR_DATA(15 downto 8);
+						end if;
+						DT_VRAM_UDS_N <= '0';
+						DT_VRAM_LDS_N <= '0';
+
+						DTC <= DTC_VRAM_WR;
+					end case;
+					
 				elsif DT_RD_SEL = '1' and DT_RD_DTACK_N = '1' then
 					case DT_RD_CODE is
-					when "1000" => DTC <= DTC_CRAM_RD;
-					when "0100" => DTC <= DTC_VSRAM_RD;
-					when others => DTC <= DTC_VRAM_RD1;
+					when "1000" => 
+						DT_RD_DATA <= CRAM( CONV_INTEGER(ADDR(6 downto 1)) );
+						DT_RD_DTACK_N <= '0';
+						ADDR <= ADDR + ADDR_STEP;	
+
+					when "0100" =>
+						DT_RD_DATA <= VSRAM( CONV_INTEGER(ADDR(6 downto 1)) );
+						DT_RD_DTACK_N <= '0';
+						ADDR <= ADDR + ADDR_STEP;	
+
+					when others =>
+						DT_VRAM_SEL <= '1';
+						DT_VRAM_ADDR <= ADDR(15 downto 1);
+						DT_VRAM_RNW <= '1';
+						DT_VRAM_UDS_N <= '0';
+						DT_VRAM_LDS_N <= '0';
+						DTC <= DTC_VRAM_RD;
 					end case;					
 				else
 					if ADDR_SET_REQ = '1' and ADDR_SET_ACK = '0' and IN_DMA = '0' then
@@ -1980,55 +2006,13 @@ begin
 					end if;				
 				end if;
 			
-			when DTC_FIFO_RD =>
-				DT_WR_ADDR <= FIFO_ADDR( CONV_INTEGER( FIFO_RD_POS ) );
-				DT_WR_DATA <= FIFO_DATA( CONV_INTEGER( FIFO_RD_POS ) );
-				--DT_WR_SIZE <= FIFO_SIZE( CONV_INTEGER( FIFO_RD_POS ) );				
-				FIFO_RD_POS <= FIFO_RD_POS + 1;
-				case FIFO_CODE( CONV_INTEGER( FIFO_RD_POS ) ) is
-				when "011"  => DTC <= DTC_CRAM_WR;
-				when "101"  => DTC <= DTC_VSRAM_WR;
-				when others => DTC <= DTC_VRAM_WR1;
-				end case;
-			
-			when DTC_VRAM_WR1 =>
-				DT_VRAM_SEL <= '1';
-				DT_VRAM_ADDR <= DT_WR_ADDR(15 downto 1);
-				DT_VRAM_RNW <= '0';
-				-- if DT_WR_SIZE = '1' then
-					if DT_WR_ADDR(0) = '0' then 
-						DT_VRAM_DI <= DT_WR_DATA;
-					else
-						DT_VRAM_DI <= DT_WR_DATA(7 downto 0) & DT_WR_DATA(15 downto 8);
-					end if;
-					DT_VRAM_UDS_N <= '0';
-					DT_VRAM_LDS_N <= '0';
-					
-				DTC <= DTC_VRAM_WR2;
-			
-			when DTC_VRAM_WR2 =>
+			when DTC_VRAM_WR =>
 				if early_ack_dt='0' then
 					DT_VRAM_SEL <= '0';	
 					DTC <= DTC_IDLE;
 				end if;
 
-			when DTC_CRAM_WR =>
-				CRAM( CONV_INTEGER(DT_WR_ADDR(6 downto 1)) ) <= DT_WR_DATA;
-				DTC <= DTC_IDLE;
-				
-			when DTC_VSRAM_WR =>
-				VSRAM( CONV_INTEGER(DT_WR_ADDR(6 downto 1)) ) <= DT_WR_DATA;
-				DTC <= DTC_IDLE;
-			
-			when DTC_VRAM_RD1 =>
-				DT_VRAM_SEL <= '1';
-				DT_VRAM_ADDR <= ADDR(15 downto 1);
-				DT_VRAM_RNW <= '1';
-				DT_VRAM_UDS_N <= '0';
-				DT_VRAM_LDS_N <= '0';
-				DTC <= DTC_VRAM_RD2;
-			
-			when DTC_VRAM_RD2 =>
+			when DTC_VRAM_RD =>
 				if early_ack_dt='0' then
 					DT_VRAM_SEL <= '0';	
 					DT_RD_DATA <= DT_VRAM_DO;
@@ -2036,26 +2020,10 @@ begin
 					ADDR <= ADDR + ADDR_STEP;
 					DTC <= DTC_IDLE;
 				end if;
-			
-			when DTC_CRAM_RD =>
-				DT_RD_DATA <= CRAM( CONV_INTEGER(ADDR(6 downto 1)) );
-				DT_RD_DTACK_N <= '0';
-				ADDR <= ADDR + ADDR_STEP;	
-				DTC <= DTC_IDLE;
-				
-			when DTC_VSRAM_RD =>
-				DT_RD_DATA <= VSRAM( CONV_INTEGER(ADDR(6 downto 1)) );
-				DT_RD_DTACK_N <= '0';
-				ADDR <= ADDR + ADDR_STEP;	
-				DTC <= DTC_IDLE;
 
 ----------------------------------------------------------------
 -- DMA FILL
 ----------------------------------------------------------------
-				
-			when DTC_DMA_FILL_INIT =>
-				DMA_LENGTH <= REG(20) & REG(19);
-				DTC <= DTC_DMA_FILL_WR;
 				
 			when DTC_DMA_FILL_WR =>
 				DT_VRAM_SEL <= '1';
@@ -2069,36 +2037,29 @@ begin
 					DT_VRAM_UDS_N <= '0';
 					DT_VRAM_LDS_N <= '1';									
 				end if;					
-				DTC <= DTC_DMA_FILL_WR2;
+				DTC <= DTC_DMA_FILL_LOOP;
 				
-			when DTC_DMA_FILL_WR2 =>	
+			when DTC_DMA_FILL_LOOP =>	
 				if early_ack_dt='0' then
 					DT_VRAM_SEL <= '0';	
 					ADDR <= ADDR + ADDR_STEP;
-					DMA_LENGTH <= DMA_LENGTH - 1;
+					DMA_LENGTH := DMA_LENGTH - 1;
 					DTC <= DTC_DMA_FILL_LOOP;
-				end if;
-			
-			when DTC_DMA_FILL_LOOP =>
-				if DMA_LENGTH = 0 then
-					DMA_FILL_PRE <= '0';
-					DMA_FILL <= '0';
-					REG(20) <= x"00";
-					REG(19) <= x"00";
-					DTC <= DTC_IDLE;
-				else
-					DTC <= DTC_DMA_FILL_WR;
+					if DMA_LENGTH = 0 then
+						DMA_FILL_PRE <= '0';
+						DMA_FILL <= '0';
+						REG(20) <= x"00";
+						REG(19) <= x"00";
+						DTC <= DTC_IDLE;
+					else
+						DTC <= DTC_DMA_FILL_WR;
+					end if;
 				end if;
 
 ----------------------------------------------------------------
 -- DMA COPY
 ----------------------------------------------------------------
 
-			when DTC_DMA_COPY_INIT =>
-				DMA_LENGTH <= REG(20) & REG(19);
-				DMA_SOURCE <= REG(22) & REG(21);
-				DTC <= DTC_DMA_COPY_RD;
-				
 			when DTC_DMA_COPY_RD =>
 				DT_VRAM_SEL <= '1';
 				DT_VRAM_ADDR <= DMA_SOURCE(15 downto 1);
@@ -2130,37 +2091,30 @@ begin
 					DT_VRAM_UDS_N <= '0';
 					DT_VRAM_LDS_N <= '1';									
 				end if;					
-				DTC <= DTC_DMA_COPY_WR2;
+				DTC <= DTC_DMA_COPY_LOOP;
 
-			when DTC_DMA_COPY_WR2 =>	
+			when DTC_DMA_COPY_LOOP =>	
 				if early_ack_dt='0' then
 					DT_VRAM_SEL <= '0';	
 					ADDR <= ADDR + ADDR_STEP;
-					DMA_LENGTH <= DMA_LENGTH - 1;
-					DMA_SOURCE <= DMA_SOURCE + 1;
+					DMA_LENGTH := DMA_LENGTH - 1;
+					DMA_SOURCE := DMA_SOURCE + 1;
 					DTC <= DTC_DMA_COPY_LOOP;
-				end if;
-			
-			when DTC_DMA_COPY_LOOP =>
-				if DMA_LENGTH = 0 then
-					DMA_COPY <= '0';
-					REG(20) <= x"00";
-					REG(19) <= x"00";
-					REG(22) <= DMA_SOURCE(15 downto 8);
-					REG(21) <= DMA_SOURCE(7 downto 0);
-					DTC <= DTC_IDLE;
-				else
-					DTC <= DTC_DMA_COPY_RD;
+					if DMA_LENGTH = 0 then
+						DMA_COPY <= '0';
+						REG(20) <= x"00";
+						REG(19) <= x"00";
+						REG(22) <= DMA_SOURCE(15 downto 8);
+						REG(21) <= DMA_SOURCE(7 downto 0);
+						DTC <= DTC_IDLE;
+					else
+						DTC <= DTC_DMA_COPY_RD;
+					end if;
 				end if;
 
 ----------------------------------------------------------------
 -- DMA VBUS
 ----------------------------------------------------------------
-				
-			when DTC_DMA_VBUS_INIT =>
-				DMA_LENGTH <= REG(20) & REG(19);
-				DMA_SOURCE <= REG(22) & REG(21);
-				DTC <= DTC_DMA_VBUS_RD;
 				
 			when DTC_DMA_VBUS_RD =>
 				FF_VBUS_SEL <= '1';
@@ -2170,64 +2124,50 @@ begin
 			when DTC_DMA_VBUS_RD2 =>	
 				if VBUS_DTACK_N = '0' then
 					FF_VBUS_SEL <= '0';
-					DT_DMAV_DATA <= VBUS_DATA;
-					DTC <= DTC_DMA_VBUS_SEL;
-				end if;
-	
-			when DTC_DMA_VBUS_SEL =>
-				case CODE(2 downto 0) is
-				when "011"  => DTC <= DTC_DMA_VBUS_CRAM_WR;
-				when "101"  => DTC <= DTC_DMA_VBUS_VSRAM_WR;
-				when others => DTC <= DTC_DMA_VBUS_VRAM_WR1;
-				end case;					
-				
-	
-			when DTC_DMA_VBUS_CRAM_WR =>
-				CRAM( CONV_INTEGER(ADDR(6 downto 1)) ) <= DT_DMAV_DATA;
-				ADDR <= ADDR + ADDR_STEP;
-				DMA_LENGTH <= DMA_LENGTH - 1;
-				DMA_SOURCE <= DMA_SOURCE + 1;
-				DTC <= DTC_DMA_VBUS_LOOP;
+					need_wait := '0';
 
-			when DTC_DMA_VBUS_VSRAM_WR =>
-				VSRAM( CONV_INTEGER(ADDR(6 downto 1)) ) <= DT_DMAV_DATA;
-				ADDR <= ADDR + ADDR_STEP;
-				DMA_LENGTH <= DMA_LENGTH - 1;
-				DMA_SOURCE <= DMA_SOURCE + 1;
-				DTC <= DTC_DMA_VBUS_LOOP;
-			
-			when DTC_DMA_VBUS_VRAM_WR1 =>
-				DT_VRAM_SEL <= '1';
-				DT_VRAM_ADDR <= ADDR(15 downto 1);
-				DT_VRAM_RNW <= '0';
-				if ADDR(0) = '0' then 
-					DT_VRAM_DI <= DT_DMAV_DATA;
-				else
-					DT_VRAM_DI <= DT_DMAV_DATA(7 downto 0) & DT_DMAV_DATA(15 downto 8);
+					case CODE(2 downto 0) is
+					when "011"  => 
+						CRAM( CONV_INTEGER(ADDR(6 downto 1)) ) <= VBUS_DATA;
+
+					when "101"  =>
+						VSRAM( CONV_INTEGER(ADDR(6 downto 1)) ) <= VBUS_DATA;
+
+					when others =>
+						DT_VRAM_SEL <= '1';
+						DT_VRAM_ADDR <= ADDR(15 downto 1);
+						DT_VRAM_RNW <= '0';
+						if ADDR(0) = '0' then 
+							DT_VRAM_DI <= VBUS_DATA;
+						else
+							DT_VRAM_DI <= VBUS_DATA(7 downto 0) & VBUS_DATA(15 downto 8);
+						end if;
+						DT_VRAM_UDS_N <= '0';
+						DT_VRAM_LDS_N <= '0';
+						need_wait := '1';
+
+					end case;
+
+					DTC <= DTC_DMA_VBUS_LOOP;
 				end if;
-				DT_VRAM_UDS_N <= '0';
-				DT_VRAM_LDS_N <= '0';
-				DTC <= DTC_DMA_VBUS_VRAM_WR2;
-			
-			when DTC_DMA_VBUS_VRAM_WR2 =>
-				if early_ack_dt='0' then
-					DT_VRAM_SEL <= '0';	
-					ADDR <= ADDR + ADDR_STEP;
-					DMA_LENGTH <= DMA_LENGTH - 1;
-					DMA_SOURCE <= DMA_SOURCE + 1;
-					DTC <= DTC_DMA_VBUS_LOOP;					
-				end if;
-			
+
 			when DTC_DMA_VBUS_LOOP =>
-				if DMA_LENGTH = 0 then
-					DMA_VBUS <= '0';
-					REG(20) <= x"00";
-					REG(19) <= x"00";
-					REG(22) <= DMA_SOURCE(15 downto 8);
-					REG(21) <= DMA_SOURCE(7 downto 0);
-					DTC <= DTC_IDLE;
-				else
-					DTC <= DTC_DMA_VBUS_RD;
+				if need_wait='0' or early_ack_dt='0' then
+					DT_VRAM_SEL <= '0';
+					ADDR <= ADDR + ADDR_STEP;
+					DMA_LENGTH := DMA_LENGTH - 1;
+					DMA_SOURCE := DMA_SOURCE + 1;
+					DTC <= DTC_DMA_VBUS_LOOP;					
+					if DMA_LENGTH = 0 then
+						DMA_VBUS <= '0';
+						REG(20) <= x"00";
+						REG(19) <= x"00";
+						REG(22) <= DMA_SOURCE(15 downto 8);
+						REG(21) <= DMA_SOURCE(7 downto 0);
+						DTC <= DTC_IDLE;
+					else
+						DTC <= DTC_DMA_VBUS_RD;
+					end if;
 				end if;
 				
 			when others => null;
