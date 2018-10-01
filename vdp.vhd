@@ -47,8 +47,6 @@ entity vdp is
 		SEL			: in std_logic;
 		A				: in std_logic_vector(4 downto 0);
 		RNW			: in std_logic;
-		UDS_N			: in std_logic;
-		LDS_N			: in std_logic;
 		DI				: in std_logic_vector(15 downto 0);
 		DO				: out std_logic_vector(15 downto 0);
 		DTACK_N		: out std_logic;

@@ -286,8 +286,6 @@ signal IOC : ioc_t;
 signal VDP_SEL				: std_logic;
 signal VDP_A 				: std_logic_vector(4 downto 0);
 signal VDP_RNW				: std_logic;
-signal VDP_UDS_N			: std_logic;
-signal VDP_LDS_N			: std_logic;
 signal VDP_DI				: std_logic_vector(15 downto 0);
 signal VDP_DO				: std_logic_vector(15 downto 0);
 signal VDP_DTACK_N			: std_logic;
@@ -540,8 +538,6 @@ port map(
 	SEL		=> VDP_SEL,
 	A			=> VDP_A,
 	RNW		=> VDP_RNW,
-	UDS_N		=> VDP_UDS_N,
-	LDS_N		=> VDP_LDS_N,
 	DI			=> VDP_DI,
 	DO			=> VDP_DO,
 	DTACK_N		=> VDP_DTACK_N,
@@ -1113,8 +1109,6 @@ begin
 		
 		VDP_SEL <= '0';
 		VDP_RNW <= '1';
-		VDP_UDS_N <= '1';
-		VDP_LDS_N <= '1';
 		VDP_A <= (others => '0');
 
 		VDPC <= VDPC_IDLE;
@@ -1147,33 +1141,17 @@ begin
 					VDP_SEL <= '1';
 					VDP_A <= TG68_A(4 downto 0);
 					VDP_RNW <= TG68_RNW;
-					VDP_UDS_N <= TG68_UDS_N;
-					VDP_LDS_N <= TG68_LDS_N;
 					VDP_DI <= TG68_DO;
 					VDPC <= VDPC_TG68_ACC;
 				end if;				
 			elsif T80_VDP_SEL = '1' and T80_VDP_DTACK_N = '1' then
 				if T80_A(4) = '1' then
-					-- PSG (used for debug)
-					if T80_A(3 downto 0) = "0001" and T80_WR_N = '0' then
-						--HEXVALUE(15 downto 8) <= T80_DO;
-					end if;
-					if T80_A(3 downto 0) = "0011" and T80_WR_N = '0' then
-						--HEXVALUE(7 downto 0) <= T80_DO;
-					end if;					
 					T80_VDP_D <= x"FF";
 					T80_VDP_DTACK_N <= '0';
 				else
 					VDP_SEL <= '1';
 					VDP_A <= T80_A(4 downto 0);
 					VDP_RNW <= T80_WR_N;
-					if T80_A(0) = '0' then
-						VDP_UDS_N <= '0';
-						VDP_LDS_N <= '1';
-					else
-						VDP_UDS_N <= '1';
-						VDP_LDS_N <= '0';				
-					end if;
 					VDP_DI <= T80_DO & T80_DO;
 					VDPC <= VDPC_T80_ACC;			
 				end if;
@@ -1202,8 +1180,6 @@ begin
 		when VDPC_DESEL =>
 			if VDP_DTACK_N = '1' then
 				VDP_RNW <= '1';
-				VDP_UDS_N <= '1';
-				VDP_LDS_N <= '1';
 				VDP_A <= (others => '0');
 
 				VDPC <= VDPC_IDLE;
