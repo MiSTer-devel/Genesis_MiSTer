@@ -555,8 +555,6 @@ port map(
 	vram_u_n	=> vram_u_n,
 	vram_l_n	=> vram_l_n,
 	
-	INTERLACE	=> '0',
-
 	HINT			=> HINT,
 	HINT_ACK		=> HINT_ACK,
 
@@ -566,10 +564,7 @@ port map(
 	VINT_T80_ACK	=> VINT_T80_ACK,
 		
 	VBUS_ADDR		=> VBUS_ADDR,
-	VBUS_UDS_N		=> open,
-	VBUS_LDS_N		=> open,
 	VBUS_DATA		=> VBUS_DATA,
-		
 	VBUS_SEL			=> VBUS_SEL,
 	VBUS_DTACK_N	=> VBUS_DTACK_N,
 

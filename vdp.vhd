@@ -62,8 +62,6 @@ entity vdp is
 		vram_u_n 	: out std_logic;
 		vram_l_n 	: out std_logic;
 
-		INTERLACE	: in std_logic;
-
 		HINT			: out std_logic;
 		HINT_ACK		: in std_logic;
 
@@ -73,10 +71,7 @@ entity vdp is
 		VINT_T80_ACK	: in std_logic;
 
 		VBUS_ADDR		: out std_logic_vector(23 downto 0);
-		VBUS_UDS_N		: out std_logic;
-		VBUS_LDS_N		: out std_logic;
 		VBUS_DATA		: in std_logic_vector(15 downto 0);
-
 		VBUS_SEL			: out std_logic;
 		VBUS_DTACK_N	: in std_logic;
 
@@ -234,8 +229,7 @@ signal M3			: std_logic;
 
 signal DMA			: std_logic;
 
-signal IM			: std_logic;
-signal IM2			: std_logic;
+signal LSM			: std_logic_vector(1 downto 0);
 signal ODD			: std_logic;
 
 signal HV8			: std_logic;
@@ -326,8 +320,6 @@ signal DMAF_SET_ACK	: std_logic;
 
 
 signal FF_VBUS_ADDR	: std_logic_vector(23 downto 0);
-signal FF_VBUS_UDS_N	: std_logic;
-signal FF_VBUS_LDS_N	: std_logic;
 signal FF_VBUS_SEL	: std_logic;
 
 signal DMA_VBUS		: std_logic;
@@ -586,8 +578,7 @@ HIT   <= REG(10);
 HSCR  <= REG(11)(1 downto 0);
 VSCR  <= REG(11)(2);
 H40   <= REG(12)(0);
-IM    <= REG(12)(1);
---IM2 <= REG(12)(2);
+LSM   <= REG(12)(2 downto 1);
 
 HSCB  <= REG(13)(5 downto 0);
 
@@ -604,7 +595,7 @@ WDOWN <= REG(18)(7);
 
 
 -- Read-only registers
-ODD <= FIELD when IM = '1' else '0';
+ODD <= FIELD when LSM(0) = '1' else '0';
 IN_DMA <= DMA_FILL or DMA_COPY or DMA_VBUS;
 
 STATUS <= "111111" & FIFO_EMPTY & FIFO_FULL & VINT_TG68_PENDING & SOVR & SCOL & ODD & IN_VBL & IN_HBL & IN_DMA & PAL;
@@ -1824,7 +1815,7 @@ begin
 
 			if M3 = '0' then
 				-- HV Counter
-				if INTERLACE = '1' then v8 := vcnt(8); else v8 := vcnt(0); end if;
+				if LSM = "11" then v8 := vcnt(8); else v8 := vcnt(0); end if;
 				HV <= vcnt(7 downto 1) & v8 & hcnt(8 downto 1);
 			end if;
 
@@ -1870,8 +1861,6 @@ end process;
 -- DATA TRANSFER CONTROLLER
 ----------------------------------------------------------------
 VBUS_ADDR <= FF_VBUS_ADDR;
-VBUS_UDS_N <= FF_VBUS_UDS_N;
-VBUS_LDS_N <= FF_VBUS_LDS_N;
 VBUS_SEL <= FF_VBUS_SEL;
 
 process( RST_N, CLK )
@@ -1897,8 +1886,6 @@ begin
 		DT_FF_DTACK_N <= '1';
 
 		FF_VBUS_ADDR <= (others => '0');
-		FF_VBUS_UDS_N <= '1';
-		FF_VBUS_LDS_N <= '1';
 		FF_VBUS_SEL	<= '0';
 		
 		DMA_FILL_PRE <= '0';
@@ -2180,8 +2167,6 @@ begin
 			when DTC_DMA_VBUS_RD =>
 				FF_VBUS_SEL <= '1';
 				FF_VBUS_ADDR <= REG(23)(6 downto 0) & DMA_SOURCE & '0';
-				FF_VBUS_UDS_N <= '0';
-				FF_VBUS_LDS_N <= '0';
 				DTC <= DTC_DMA_VBUS_RD2;
 
 			when DTC_DMA_VBUS_RD2 =>	
