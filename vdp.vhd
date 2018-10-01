@@ -72,6 +72,7 @@ entity vdp is
 		VBUS_DATA		: in std_logic_vector(15 downto 0);
 		VBUS_SEL			: out std_logic;
 		VBUS_DTACK_N	: in std_logic;
+		VBUS_BUSY      : out std_logic;
 
 		PAL		: in std_logic := '0';
 		R			: out std_logic_vector(2 downto 0);
@@ -2133,7 +2134,6 @@ begin
 
 			when DTC_DMA_COPY_WR2 =>	
 				if early_ack_dt='0' then
---				if DT_VRAM_DTACK_N = '0' then
 					DT_VRAM_SEL <= '0';	
 					ADDR <= ADDR + ADDR_STEP;
 					DMA_LENGTH <= DMA_LENGTH - 1;
@@ -2237,6 +2237,8 @@ begin
 		end if;
 	end if;
 end process;
+
+VBUS_BUSY <= DMA_VBUS;
 
 ----------------------------------------------------------------
 -- INTERRUPTS AND VARIOUS LATCHES

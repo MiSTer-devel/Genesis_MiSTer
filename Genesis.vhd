@@ -351,7 +351,8 @@ signal VINT_T80_ACK	: std_logic;
 signal VBUS_ADDR	: std_logic_vector(23 downto 0);
 signal VBUS_DATA	: std_logic_vector(15 downto 0);		
 signal VBUS_SEL		: std_logic;
-signal VBUS_DTACK_N	: std_logic;	
+signal VBUS_DTACK_N	: std_logic;
+signal VBUS_BUSY		: std_logic;
 
 type romStates is (ROM_IDLE, ROM_READ);
 signal romState : romStates := ROM_IDLE;
@@ -540,7 +541,7 @@ port map(
 	RNW		=> VDP_RNW,
 	DI			=> VDP_DI,
 	DO			=> VDP_DO,
-	DTACK_N		=> VDP_DTACK_N,
+	DTACK_N	=> VDP_DTACK_N,
 
 	vram_req => vram_req,
 	vram_ack => vram_ack,
@@ -559,6 +560,7 @@ port map(
 	VINT_TG68_ACK	=> VINT_TG68_ACK,
 	VINT_T80_ACK	=> VINT_T80_ACK,
 		
+	VBUS_BUSY		=> VBUS_BUSY,
 	VBUS_ADDR		=> VBUS_ADDR,
 	VBUS_DATA		=> VBUS_DATA,
 	VBUS_SEL			=> VBUS_SEL,
@@ -1412,7 +1414,13 @@ process (RESET_N, MCLK) begin
 
 		case FC is
 		when FC_IDLE =>
-			if TG68_FLASH_SEL = '1' and TG68_FLASH_DTACK_N = '1' then
+			if VBUS_BUSY = '1' then
+				if DMA_FLASH_SEL = '1' and DMA_FLASH_DTACK_N = '1' then
+					romrd_req <= not romrd_ack;
+					ROM_ADDR <= VBUS_ADDR(22 downto 0);
+					FC <= FC_DMA_RD;
+				end if;
+			elsif TG68_FLASH_SEL = '1' and TG68_FLASH_DTACK_N = '1' then
 				romrd_req <= not romrd_ack;
 				ROM_ADDR <= TG68_A(22 downto 0);
 				FC <= FC_TG68_RD;
@@ -1420,10 +1428,6 @@ process (RESET_N, MCLK) begin
 				romrd_req <= not romrd_ack;
 				ROM_ADDR <= BAR(22 downto 15) & T80_A(14 downto 0);
 				FC <= FC_T80_RD;
-			elsif DMA_FLASH_SEL = '1' and DMA_FLASH_DTACK_N = '1' then
-				romrd_req <= not romrd_ack;
-				ROM_ADDR <= VBUS_ADDR(22 downto 0);
-				FC <= FC_DMA_RD;
 			end if;
 
 		when FC_TG68_RD =>
@@ -1512,7 +1516,16 @@ begin
 		case SDRC is
 		when SDRC_IDLE =>
 			if VCLKCNT = "001" then
-				if TG68_SDRAM_SEL = '1' and TG68_SDRAM_DTACK_N = '1' then
+				if VBUS_BUSY = '1' then
+					if DMA_SDRAM_SEL = '1' and DMA_SDRAM_DTACK_N = '1' then
+						ram68k_req <= not ram68k_req;
+						ram68k_a <= VBUS_ADDR(15 downto 1);
+						ram68k_we <= '0';
+						ram68k_u_n <= '0';
+						ram68k_l_n <= '0';					
+						SDRC <= SDRC_DMA;
+					end if;
+				elsif TG68_SDRAM_SEL = '1' and TG68_SDRAM_DTACK_N = '1' then
 					ram68k_req <= not ram68k_req;
 					ram68k_a <= TG68_A(15 downto 1);
 					ram68k_d <= TG68_DO;
@@ -1528,13 +1541,6 @@ begin
 					ram68k_u_n <= T80_A(0);
 					ram68k_l_n <= not T80_A(0);
 					SDRC <= SDRC_T80;
-				elsif DMA_SDRAM_SEL = '1' and DMA_SDRAM_DTACK_N = '1' then
-					ram68k_req <= not ram68k_req;
-					ram68k_a <= VBUS_ADDR(15 downto 1);
-					ram68k_we <= '0';
-					ram68k_u_n <= '0';
-					ram68k_l_n <= '0';					
-					SDRC <= SDRC_DMA;
 				end if;
 			end if;
 
