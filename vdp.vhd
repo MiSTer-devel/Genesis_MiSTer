@@ -1549,53 +1549,53 @@ begin
 
 		-- loop over all sprite pixels on the current line
 		when SP2C_LOOP =>
-			OBJ_COLINFO_ADDR_A <= OBJ_POS;
-			if (OBJ_X_OFS(1 downto 0) = "00" and OBJ_HF = '0') or (OBJ_X_OFS(1 downto 0) = "11" and OBJ_HF = '1') then
-
-				case OBJ_VS is
-				-- 8 pixels
-				when "000"       => SP2_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "000" & OBJ_X_OFS(2));
-				-- 16 pixels
-				when "001"|"100" => SP2_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "0000" & OBJ_X_OFS(2));
-				-- 24 pixels
-				when "010" =>
-					case OBJ_X_OFS(4 downto 3) is
-					when "00"   => SP2_VRAM_ADDR <= OBJ_TILEBASE + OBJ_X_OFS(2);
-					when "01"   => SP2_VRAM_ADDR <= OBJ_TILEBASE + ("0011000" & OBJ_X_OFS(2));
-					when "11"   => SP2_VRAM_ADDR <= OBJ_TILEBASE + ("1001000" & OBJ_X_OFS(2));
-					when others => SP2_VRAM_ADDR <= OBJ_TILEBASE + ("0110000" & OBJ_X_OFS(2));
-					end case;
-				-- 32 pixels
-				when "011"|"101" => SP2_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "00000" & OBJ_X_OFS(2));
-				-- 48 pixels (doubleres)
-				when "110" =>
-					case OBJ_X_OFS(4 downto 3) is
-					when "00"   => SP2_VRAM_ADDR <= OBJ_TILEBASE + OBJ_X_OFS(2);
-					when "01"   => SP2_VRAM_ADDR <= OBJ_TILEBASE + ("00110000" & OBJ_X_OFS(2));
-					when "11"   => SP2_VRAM_ADDR <= OBJ_TILEBASE + ("10010000" & OBJ_X_OFS(2));
-					when others => SP2_VRAM_ADDR <= OBJ_TILEBASE + ("01100000" & OBJ_X_OFS(2));
-					end case;
-				-- 64 pixels (doubleres)
-				when others    => SP2_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "000000" & OBJ_X_OFS(2));
-				end case;
-
-				SP2_SEL <= '1';
-				SP2C <= SP2C_TILE_RD;
-			else
-				case OBJ_X_OFS(1 downto 0) is
-				when "00"   => OBJ_COLNO := SP2_VRAM_DO(15 downto 12);
-				when "01"   => OBJ_COLNO := SP2_VRAM_DO(11 downto 8);
-				when "10"   => OBJ_COLNO := SP2_VRAM_DO(7 downto 4);
-				when others => OBJ_COLNO := SP2_VRAM_DO(3 downto 0);
-				end case;
-				SP2C <= SP2C_WAIT;
-			end if;
-
-			-- limit total sprite pixels per line
 			if (H40 = '1' and OBJ_PIX = 320) or (H40 = '0' and OBJ_PIX = 256) then
+				-- limit total sprite pixels per line
 				OBJ_DOT_OVERFLOW := '1';
 				SP2C <= SP2C_DONE;
 				SOVR_SET <= '1';
+			else
+				OBJ_COLINFO_ADDR_A <= OBJ_POS;
+				if (OBJ_X_OFS(1 downto 0) = "00" and OBJ_HF = '0') or (OBJ_X_OFS(1 downto 0) = "11" and OBJ_HF = '1') then
+
+					case OBJ_VS is
+					-- 8 pixels
+					when "000"       => SP2_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "000" & OBJ_X_OFS(2));
+					-- 16 pixels
+					when "001"|"100" => SP2_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "0000" & OBJ_X_OFS(2));
+					-- 24 pixels
+					when "010" =>
+						case OBJ_X_OFS(4 downto 3) is
+						when "00"   => SP2_VRAM_ADDR <= OBJ_TILEBASE + OBJ_X_OFS(2);
+						when "01"   => SP2_VRAM_ADDR <= OBJ_TILEBASE + ("0011000" & OBJ_X_OFS(2));
+						when "11"   => SP2_VRAM_ADDR <= OBJ_TILEBASE + ("1001000" & OBJ_X_OFS(2));
+						when others => SP2_VRAM_ADDR <= OBJ_TILEBASE + ("0110000" & OBJ_X_OFS(2));
+						end case;
+					-- 32 pixels
+					when "011"|"101" => SP2_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "00000" & OBJ_X_OFS(2));
+					-- 48 pixels (doubleres)
+					when "110" =>
+						case OBJ_X_OFS(4 downto 3) is
+						when "00"   => SP2_VRAM_ADDR <= OBJ_TILEBASE + OBJ_X_OFS(2);
+						when "01"   => SP2_VRAM_ADDR <= OBJ_TILEBASE + ("00110000" & OBJ_X_OFS(2));
+						when "11"   => SP2_VRAM_ADDR <= OBJ_TILEBASE + ("10010000" & OBJ_X_OFS(2));
+						when others => SP2_VRAM_ADDR <= OBJ_TILEBASE + ("01100000" & OBJ_X_OFS(2));
+						end case;
+					-- 64 pixels (doubleres)
+					when others    => SP2_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "000000" & OBJ_X_OFS(2));
+					end case;
+
+					SP2_SEL <= '1';
+					SP2C <= SP2C_TILE_RD;
+				else
+					case OBJ_X_OFS(1 downto 0) is
+					when "00"   => OBJ_COLNO := SP2_VRAM_DO(15 downto 12);
+					when "01"   => OBJ_COLNO := SP2_VRAM_DO(11 downto 8);
+					when "10"   => OBJ_COLNO := SP2_VRAM_DO(7 downto 4);
+					when others => OBJ_COLNO := SP2_VRAM_DO(3 downto 0);
+					end case;
+					SP2C <= SP2C_WAIT;
+				end if;
 			end if;
 
 		when SP2C_WAIT =>
