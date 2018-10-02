@@ -1374,6 +1374,9 @@ process( RST_N, MEMCLK )
 	variable OBJ_TILEBASE	: std_logic_vector(14 downto 0);
 	variable OBJ_COLNO		: std_logic_vector(3 downto 0);
 	variable SP2_Y				: std_logic_vector(8 downto 0);
+	variable OBJ_MASKED		: std_logic;
+	variable OBJ_VALID_X		: std_logic;
+	variable OBJ_DOT_OVERFLOW: std_logic;
 begin
 	if RST_N = '0' then
 		SP2_SEL <= '0';
@@ -1381,6 +1384,7 @@ begin
 		OBJ_COLINFO_WE_A <= '0';
 		SCOL_SET <= '0';
 		SOVR_SET <= '0';
+		OBJ_DOT_OVERFLOW := '0';
 
 	elsif rising_edge(MEMCLK) then
 
@@ -1402,6 +1406,10 @@ begin
 
 				OBJ_Y_ADDR_RD <= (others => '0');
 				OBJ_SZ_LINK_ADDR_RD <= (others => '0');
+
+				OBJ_MASKED := '0';
+				OBJ_VALID_X := OBJ_DOT_OVERFLOW;
+				OBJ_DOT_OVERFLOW := '0';
 
 				SP2C <= SP2C_Y_RD;
 			end if;
@@ -1458,13 +1466,17 @@ begin
 			end if;
 
 		when SP2C_X_TST =>
-			if OBJ_X = "000000000" then
-				SP2C <= SP2C_DONE;
-			else
-				SP2_VRAM_ADDR <= (SATB & "00000000") + (OBJ_NEXT & "10");
-				SP2_SEL <= '1';
-				SP2C <= SP2C_CALC_XY;
+			-- sprite masking algorithm as implemented by gens-ii
+			if OBJ_X = "000000000" and OBJ_VALID_X = '1' then
+				OBJ_MASKED := '1';
 			end if;
+
+			if OBJ_X /= "000000000" then
+				OBJ_VALID_X := '1';
+			end if;
+			SP2_VRAM_ADDR <= (SATB & "00000000") + (OBJ_NEXT & "10");
+			SP2_SEL <= '1';
+			SP2C <= SP2C_CALC_XY;
 
 		when SP2C_CALC_XY =>
 			if early_ack_sp2='0' then
@@ -1481,28 +1493,24 @@ begin
 					else
 						OBJ_X_OFS := "00111";
 					end if;
-					OBJ_PIX := OBJ_PIX + 8;
 				when "01" =>	-- 16 pixels
 					if OBJ_HF = '0' then
 						OBJ_X_OFS := "00000";
 					else
 						OBJ_X_OFS := "01111";
 					end if;
-					OBJ_PIX := OBJ_PIX + 16;
 				when "11" =>	-- 32 pixels
 					if OBJ_HF = '0' then
 						OBJ_X_OFS := "00000";
 					else
 						OBJ_X_OFS := "11111";
 					end if;
-					OBJ_PIX := OBJ_PIX + 32;
 				when others =>	-- 24 pixels
 					if OBJ_HF = '0' then
 						OBJ_X_OFS := "00000";
 					else
 						OBJ_X_OFS := "10111";
 					end if;
-					OBJ_PIX := OBJ_PIX + 24;
 				end case;
 
 				case OBJ_VS(1 downto 0) is
@@ -1539,6 +1547,7 @@ begin
 				SP2C <= SP2C_LOOP;
 			end if;
 
+		-- loop over all sprite pixels on the current line
 		when SP2C_LOOP =>
 			OBJ_COLINFO_ADDR_A <= OBJ_POS;
 			if (OBJ_X_OFS(1 downto 0) = "00" and OBJ_HF = '0') or (OBJ_X_OFS(1 downto 0) = "11" and OBJ_HF = '1') then
@@ -1582,14 +1591,23 @@ begin
 				SP2C <= SP2C_WAIT;
 			end if;
 
+			-- limit total sprite pixels per line
+			if (H40 = '1' and OBJ_PIX = 320) or (H40 = '0' and OBJ_PIX = 256) then
+				OBJ_DOT_OVERFLOW := '1';
+				SP2C <= SP2C_DONE;
+				SOVR_SET <= '1';
+			end if;
+
 		when SP2C_WAIT =>
 			SP2C <= SP2C_PLOT;
 
 		when SP2C_PLOT =>
 			if OBJ_POS < 320 then
 				if OBJ_COLINFO_Q_A(3 downto 0) = "0000" then
-					OBJ_COLINFO_WE_A <= '1';
-					OBJ_COLINFO_D_A <= OBJ_PRI & OBJ_PAL & OBJ_COLNO;
+					if OBJ_MASKED = '0' then
+						OBJ_COLINFO_WE_A <= '1';
+						OBJ_COLINFO_D_A <= OBJ_PRI & OBJ_PAL & OBJ_COLNO;
+					end if;
 				else
 					if OBJ_COLNO /= "0000" then
 						SCOL_SET <= '1';
@@ -1597,6 +1615,7 @@ begin
 				end if;
 			end if;
 			OBJ_POS := OBJ_POS + 1;
+			OBJ_PIX := OBJ_PIX + 1;
 			if OBJ_HF = '1' then
 				if OBJ_X_OFS = "00000" then
 					SP2C <= SP2C_NEXT;
@@ -1633,14 +1652,8 @@ begin
 			OBJ_TOT := OBJ_TOT + 1;
 			OBJ_NEXT := OBJ_LINK;
 
-			-- 1) limit number of sprites per frame to 80 / 64
-			-- FIXME: This is supposed to pass test 9 of the sprite
-			--        masking and overflow test rom. But it doesn't in H32
-			-- 2) limit number of sprites per line to 20 / 16
-			-- 3) limit sprite pixels per line to 320 / 256
-			if (H40 = '1' and OBJ_TOT >=  80) or (H40 = '0' and OBJ_TOT >=  64) or
-				(H40 = '1' and OBJ_NB  >=  20) or (H40 = '0' and OBJ_NB  >=  16) or
-				(H40 = '1' and OBJ_PIX >= 320) or (H40 = '0' and OBJ_PIX >= 256) then
+			-- limit number of sprites per line to 20 / 16
+			if (H40 = '1' and OBJ_NB = 20) or (H40 = '0' and OBJ_NB = 16) then
 				SP2C <= SP2C_DONE;
 				SOVR_SET <= '1';
 			elsif OBJ_LINK = "0000000" then
