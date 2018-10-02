@@ -1747,9 +1747,8 @@ begin
 				end if;
 			end if;
 
-			if (LSM(0) = '1' and ODD = '1' and H_CNT = 0) or            -- interlace odd
-				(LSM(0) = '1' and ODD = '0' and H_CNT = VSYNC_STARTi) or -- interlace even
-				(LSM(0) = '0' and H_CNT = 0) then                        -- progressive
+			if (LSM(0) /= ODD and H_CNT = VSYNC_STARTi) or -- interlace even
+			   (LSM(0)  = ODD and H_CNT = 0) then          -- interlace odd / progressive
 
 				if V_CNT = VSYNC_START then
 					FIELD <= ODD;
@@ -1980,6 +1979,7 @@ begin
 					DTC <= DTC_DMA_VBUS_RD;
 
 				elsif DMA_FILL = '1' then
+					DT_VRAM_DI <= DT_DMAF_DATA(7 downto 0) & DT_DMAF_DATA(7 downto 0);
 					DMA_LENGTH := REG(20) & REG(19);
 					DTC <= DTC_DMA_FILL_WR;
 
@@ -2087,19 +2087,14 @@ begin
 				DT_VRAM_SEL <= '1';
 				DT_VRAM_ADDR <= ADDR(15 downto 1);
 				DT_VRAM_RNW <= '0';
-				DT_VRAM_DI <= DT_DMAF_DATA(7 downto 0) & DT_DMAF_DATA(7 downto 0);
-				if ADDR(0) = '0' then
-					DT_VRAM_UDS_N <= '1';
-					DT_VRAM_LDS_N <= '0';
-				else
-					DT_VRAM_UDS_N <= '0';
-					DT_VRAM_LDS_N <= '1';
-				end if;
+				DT_VRAM_UDS_N <= not ADDR(0);
+				DT_VRAM_LDS_N <= ADDR(0);
 				DTC <= DTC_DMA_FILL_LOOP;
 
 			when DTC_DMA_FILL_LOOP =>
 				if early_ack_dt='0' then
 					DT_VRAM_SEL <= '0';
+					DT_VRAM_DI <= DT_DMAF_DATA(7 downto 0) & DT_DMAF_DATA(7 downto 0);
 					ADDR <= ADDR + ADDR_STEP;
 					DMA_LENGTH := DMA_LENGTH - 1;
 					DTC <= DTC_DMA_FILL_LOOP;
@@ -2122,18 +2117,18 @@ begin
 				DT_VRAM_SEL <= '1';
 				DT_VRAM_ADDR <= DMA_SOURCE(15 downto 1);
 				DT_VRAM_RNW <= '1';
-				if DMA_SOURCE(0) = '0' then
-					DT_VRAM_UDS_N <= '1';
-					DT_VRAM_LDS_N <= '0';
-				else
-					DT_VRAM_UDS_N <= '0';
-					DT_VRAM_LDS_N <= '1';
-				end if;
+				DT_VRAM_UDS_N <= '0';
+				DT_VRAM_LDS_N <= '0';
 				DTC <= DTC_DMA_COPY_RD2;
 
 			when DTC_DMA_COPY_RD2 =>
 				if early_ack_dt='0' then
 					DT_VRAM_SEL <= '0';
+					if DMA_SOURCE(0) = '0' then
+						DT_VRAM_DI <= DT_VRAM_DO(7 downto 0) & DT_VRAM_DO(7 downto 0);
+					else
+						DT_VRAM_DI <= DT_VRAM_DO(15 downto 8) & DT_VRAM_DO(15 downto 8);
+					end if;
 					DTC <= DTC_DMA_COPY_WR;
 				end if;
 
@@ -2141,14 +2136,8 @@ begin
 				DT_VRAM_SEL <= '1';
 				DT_VRAM_ADDR <= ADDR(15 downto 1);
 				DT_VRAM_RNW <= '0';
-				DT_VRAM_DI <= DT_VRAM_DO;
-				if ADDR(0) = '0' then
-					DT_VRAM_UDS_N <= '1';
-					DT_VRAM_LDS_N <= '0';
-				else
-					DT_VRAM_UDS_N <= '0';
-					DT_VRAM_LDS_N <= '1';
-				end if;
+				DT_VRAM_UDS_N <= not ADDR(0);
+				DT_VRAM_LDS_N <= ADDR(0);
 				DTC <= DTC_DMA_COPY_LOOP;
 
 			when DTC_DMA_COPY_LOOP =>
