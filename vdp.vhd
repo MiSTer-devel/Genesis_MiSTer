@@ -2218,10 +2218,11 @@ begin
 					DMA_LENGTH := DMA_LENGTH - 1;
 					DMA_SOURCE := DMA_SOURCE + 1;
 					DTC <= DTC_DMA_VBUS_LOOP;
-					if DMA_LENGTH = 0 then
+					if DMA_LENGTH = 0 or
+						((CODE(2 downto 0) = "011" or CODE(2 downto 0) = "101") and ADDR(6 downto 1)="111111") then
 						DMA_VBUS <= '0';
-						REG(20) <= x"00";
-						REG(19) <= x"00";
+						REG(20) <= DMA_LENGTH(15 downto 8);
+						REG(19) <= DMA_LENGTH(7 downto 0);
 						REG(22) <= DMA_SOURCE(15 downto 8);
 						REG(21) <= DMA_SOURCE(7 downto 0);
 						DTC <= DTC_IDLE;
