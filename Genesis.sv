@@ -49,6 +49,7 @@ module emu
 	output        VGA_HS,
 	output        VGA_VS,
 	output        VGA_DE,    // = ~(VBlank | HBlank)
+	output        VGA_F1,
 
 	output        LED_USER,  // 1 - ON, 0 - OFF.
 
@@ -184,6 +185,7 @@ wire [2:0] r, g, b;
 wire vs,hs;
 wire ce_pix;
 wire hblank, vblank;
+wire interlace;
 
 assign CLK_VIDEO = clk_sys;
 
@@ -212,6 +214,8 @@ Genesis Genesis
 	.HBL(hblank),
 	.VBL(vblank),
 	.CE_PIX(ce_pix),
+	.FIELD(VGA_F1),
+	.INTERLACE(interlace),
 
 	.PSG_ENABLE(1),
 	.FM_ENABLE(1),
@@ -238,8 +242,8 @@ video_mixer #(.LINE_LENGTH(320), .HALF_DEPTH(1)) video_mixer
 	.ce_pix(ce_pix),
 	.ce_pix_out(CE_PIXEL),
 
-	.scanlines({scale == 3, scale == 2}),
-	.scandoubler(scale || forced_scandoubler),
+	.scanlines({~interlace,~interlace}&{scale == 3, scale == 2}),
+	.scandoubler(~interlace && (scale || forced_scandoubler)),
 	.hq2x(scale==1),
 
 	.mono(0),

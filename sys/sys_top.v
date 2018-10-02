@@ -357,7 +357,7 @@ vip vip
 	.in_v_sync(vs),
 	.in_h_sync(hs),
 	.in_ce(ce_pix),
-	.in_f(0),
+	.in_f(f1),
 
 	//HDMI output
 	.hdmi_clk(iHdmiClk),
@@ -832,7 +832,7 @@ wire signed [15:0] audio_ls, audio_rs;
 wire        audio_s;
 wire  [1:0] audio_mix;
 wire  [7:0] r_out, g_out, b_out;
-wire        vs, hs, de;
+wire        vs, hs, de, f1;
 wire        clk_sys, clk_vid, ce_pix;
 
 wire        ram_clk;
@@ -869,6 +869,7 @@ emu emu
 	.VGA_HS(hs_emu),
 	.VGA_VS(vs_emu),
 	.VGA_DE(de),
+	.VGA_F1(f1),
 
 	.LED_USER(led_user),
 	.LED_POWER(led_power),
