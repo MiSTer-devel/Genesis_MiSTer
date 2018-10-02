@@ -478,6 +478,8 @@ signal SP_BUF              : std_logic;
 ----------------------------------------------------------------
 signal T_COLOR			: std_logic_vector(15 downto 0);
 
+signal DBG				: std_logic_vector(15 downto 0);
+
 begin
 
 bgb_ci : entity work.dpram generic map(9,7)
@@ -612,7 +614,7 @@ begin
 			FF_DTACK_N <= '1';
 		elsif SEL = '1' and FF_DTACK_N = '1' then
 			if RNW = '0' then -- Write
-				if A(3 downto 2) = "00" then
+				if A(4 downto 2) = "000" then
 					-- Data Port
 					PENDING <= '0';
 
@@ -643,7 +645,7 @@ begin
 						end if;
 					end if;
 
-				elsif A(3 downto 2) = "01" then
+				elsif A(4 downto 2) = "001" then
 					-- Control Port
 					if PENDING = '1' then
 						CODE(5 downto 2) <= DI(7 downto 4);
@@ -684,6 +686,10 @@ begin
 						-- even in Register Set mode. Normal ?
 					end if;
 
+				elsif A(4 downto 2) = "111" then
+					DBG <= DI;
+					FF_DTACK_N <= '0';
+					
 				else
 					-- Unused (Lock-up)
 					FF_DTACK_N <= '0';
@@ -691,7 +697,11 @@ begin
 			else -- Read
 				PENDING <= '0';
 
-				if A(3 downto 2) = "00" then
+				if A(4) = '1' then
+					FF_DO <= x"FFFF";
+					FF_DTACK_N <= '0';
+				
+				elsif A(3 downto 2) = "00" then
 					-- Data Port
 					if CODE = "001000" -- CRAM Read
 					or CODE = "000100" -- VSRAM Read
@@ -1841,7 +1851,9 @@ end process;
 -- ALSO CLEARS THE SPRITE COLINFO BUFFER RIGHT AFTER RENDERING
 process( RST_N, CLK )
 	variable hcnt,vcnt : std_logic_vector(8 downto 0);
-	variable v8 : std_logic;
+	variable v8  : std_logic;
+	variable col : std_logic_vector(5 downto 0);
+	variable cold: std_logic_vector(5 downto 0);
 begin
 	if rising_edge(CLK) then
 		OBJ_COLINFO_WE_B <= '0';
@@ -1863,22 +1875,37 @@ begin
 
 		when "0011" =>
 			if DE = '0' then
-				T_COLOR <= CRAM( CONV_INTEGER(BGCOL) );
+				col := BGCOL;
 			elsif OBJ_COLINFO_Q_B(3 downto 0) /= "0000" and OBJ_COLINFO_Q_B(6) = '1' then
-				T_COLOR <= CRAM( CONV_INTEGER(OBJ_COLINFO_Q_B(5 downto 0)) );
+				col := OBJ_COLINFO_Q_B(5 downto 0);
 			elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" and BGA_COLINFO_Q_B(6) = '1' then
-				T_COLOR <= CRAM( CONV_INTEGER(BGA_COLINFO_Q_B(5 downto 0)) );
+				col := BGA_COLINFO_Q_B(5 downto 0);
 			elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" and BGB_COLINFO_Q_B(6) = '1' then
-				T_COLOR <= CRAM( CONV_INTEGER(BGB_COLINFO_Q_B(5 downto 0)) );
+				col := BGB_COLINFO_Q_B(5 downto 0);
 			elsif OBJ_COLINFO_Q_B(3 downto 0) /= "0000" then
-				T_COLOR <= CRAM( CONV_INTEGER(OBJ_COLINFO_Q_B(5 downto 0)) );
+				col := OBJ_COLINFO_Q_B(5 downto 0);
 			elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" then
-				T_COLOR <= CRAM( CONV_INTEGER(BGA_COLINFO_Q_B(5 downto 0)) );
+				col := BGA_COLINFO_Q_B(5 downto 0);
 			elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" then
-				T_COLOR <= CRAM( CONV_INTEGER(BGB_COLINFO_Q_B(5 downto 0)) );
+				col := BGB_COLINFO_Q_B(5 downto 0);
 			else
-				T_COLOR <= CRAM( CONV_INTEGER(BGCOL) );
+				col := BGCOL;
 			end if;
+			
+			case DBG(8 downto 7) is
+			when "00" => cold := BGCOL;
+			when "01" => cold := OBJ_COLINFO_Q_B(5 downto 0);
+			when "10" => cold := BGA_COLINFO_Q_B(5 downto 0);
+			when "11" => cold := BGB_COLINFO_Q_B(5 downto 0);
+			end case;
+
+			if DBG(6) = '1' then
+				col := cold;
+			elsif DBG(8 downto 7) /= "00" then
+				col := col and cold;
+			end if;
+
+			T_COLOR <= CRAM(CONV_INTEGER(col));
 
 		when "0100" =>
 			HBL <= IN_HBL;
@@ -2188,10 +2215,10 @@ begin
 
 					case CODE(2 downto 0) is
 					when "011"  =>
-						CRAM( CONV_INTEGER(ADDR(6 downto 1)) ) <= VBUS_DATA;
+						CRAM(CONV_INTEGER(ADDR(6 downto 1))) <= VBUS_DATA;
 
 					when "101"  =>
-						VSRAM( CONV_INTEGER(ADDR(6 downto 1)) ) <= VBUS_DATA;
+						VSRAM(CONV_INTEGER(ADDR(6 downto 1))) <= VBUS_DATA;
 
 					when others =>
 						DT_VRAM_SEL <= '1';

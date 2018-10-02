@@ -1056,28 +1056,18 @@ begin
 		case VDPC is
 		when VDPC_IDLE =>
 			if TG68_VDP_SEL = '1' and TG68_VDP_DTACK_N = '1' then
-				if TG68_A(4) = '1' then 
-					TG68_VDP_D <= x"FFFF";
-					TG68_VDP_DTACK_N <= '0';
-				else
-					-- VDP
-					VDP_SEL <= '1';
-					VDP_A <= TG68_A(4 downto 0);
-					VDP_RNW <= TG68_RNW;
-					VDP_DI <= TG68_DO;
-					VDPC <= VDPC_TG68_ACC;
-				end if;				
+				-- VDP
+				VDP_SEL <= '1';
+				VDP_A <= TG68_A(4 downto 0);
+				VDP_RNW <= TG68_RNW;
+				VDP_DI <= TG68_DO;
+				VDPC <= VDPC_TG68_ACC;
 			elsif T80_VDP_SEL = '1' and T80_VDP_DTACK_N = '1' then
-				if T80_A(4) = '1' then
-					T80_VDP_D <= x"FF";
-					T80_VDP_DTACK_N <= '0';
-				else
-					VDP_SEL <= '1';
-					VDP_A <= T80_A(4 downto 0);
-					VDP_RNW <= T80_WR_N;
-					VDP_DI <= T80_DO & T80_DO;
-					VDPC <= VDPC_T80_ACC;			
-				end if;
+				VDP_SEL <= '1';
+				VDP_A <= T80_A(4 downto 0);
+				VDP_RNW <= T80_WR_N;
+				VDP_DI <= T80_DO & T80_DO;
+				VDPC <= VDPC_T80_ACC;			
 			end if;
 
 		when VDPC_TG68_ACC =>
