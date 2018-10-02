@@ -62,6 +62,9 @@ entity Genesis is
 		VBL			: out std_logic;
 		CE_PIX		: out std_logic;
 
+		INTERLACE	: out std_logic;
+		FIELD   		: out std_logic;
+
 		PSG_ENABLE	: in std_logic;
 		FM_ENABLE   : in std_logic;
 		FM_LIMITER  : in std_logic;
@@ -565,6 +568,9 @@ port map(
 	VBUS_DATA		=> VBUS_DATA,
 	VBUS_SEL			=> VBUS_SEL,
 	VBUS_DTACK_N	=> VBUS_DTACK_N,
+
+	FIELD      		=> FIELD,
+	INTERLACE		=> INTERLACE,
 
 	PAL				=> PAL,
 	R					=> RED,
