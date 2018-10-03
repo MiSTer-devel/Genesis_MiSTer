@@ -105,12 +105,11 @@ end component;
 -- VRAM
 signal vram_req : std_logic;
 signal vram_ack : std_logic;
-signal vram_we  : std_logic;
+signal vram_we_u: std_logic;
+signal vram_we_l: std_logic;
 signal vram_a   : std_logic_vector(15 downto 1);
 signal vram_d   : std_logic_vector(15 downto 0);
 signal vram_q   : std_logic_vector(15 downto 0);
-signal vram_l_n : std_logic;
-signal vram_u_n : std_logic;
 
 -- 68000 RAM
 signal ram68k_req : std_logic;
@@ -383,7 +382,7 @@ port map
 	clock		=> RAMCLK,
 	address_a=> vram_a(15 downto 1),
 	data_a	=> vram_d(7 downto 0),
-	wren_a	=> not vram_l_n and vram_we and (vram_ack xor vram_req),
+	wren_a	=> vram_we_l and (vram_ack xor vram_req),
 	q_a		=> vram_q(7 downto 0)
 );
 
@@ -393,7 +392,7 @@ port map
 	clock		=> RAMCLK,
 	address_a=> vram_a(15 downto 1),
 	data_a	=> vram_d(15 downto 8),
-	wren_a	=> not vram_u_n and vram_we and (vram_ack xor vram_req),
+	wren_a	=> vram_we_u and (vram_ack xor vram_req),
 	q_a		=> vram_q(15 downto 8)
 );
 
@@ -543,14 +542,13 @@ port map(
 	DO			=> VDP_DO,
 	DTACK_N	=> VDP_DTACK_N,
 
-	vram_req => vram_req,
-	vram_ack => vram_ack,
-	vram_we	=> vram_we,
-	vram_a	=> vram_a,
-	vram_d	=> vram_d,
-	vram_q	=> vram_q,
-	vram_u_n	=> vram_u_n,
-	vram_l_n	=> vram_l_n,
+	VRAM_REQ => vram_req,
+	VRAM_ACK => vram_ack,
+	VRAM_WE_U=> vram_we_u,
+	VRAM_WE_L=> vram_we_l,
+	VRAM_A	=> vram_a,
+	VRAM_DO	=> vram_d,
+	VRAM_DI	=> vram_q,
 	
 	HINT		=> HINT,
 	HINT_ACK	=> HINT_ACK,

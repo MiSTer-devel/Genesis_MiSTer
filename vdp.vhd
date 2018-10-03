@@ -40,41 +40,40 @@ use IEEE.STD_LOGIC_UNSIGNED.ALL;
 
 entity vdp is
 	port(
-		RST_N				: in std_logic;
-		CLK				: in std_logic;
-		MEMCLK			: in std_logic;
+		RST_N				: in  std_logic;
+		CLK				: in  std_logic;
+		MEMCLK			: in  std_logic;
 
-		SEL				: in std_logic;
-		A					: in std_logic_vector(4 downto 0);
-		RNW				: in std_logic;
-		DI					: in std_logic_vector(15 downto 0);
+		SEL				: in  std_logic;
+		A					: in  std_logic_vector(4 downto 0);
+		RNW				: in  std_logic;
+		DI					: in  std_logic_vector(15 downto 0);
 		DO					: out std_logic_vector(15 downto 0);
 		DTACK_N			: out std_logic;
 
-		vram_req 		: out std_logic;
-		vram_ack 		: in std_logic;
-		vram_we 			: out std_logic;
-		vram_a 			: out std_logic_vector(14 downto 0);
-		vram_d 			: out std_logic_vector(15 downto 0);
-		vram_q 			: in std_logic_vector(15 downto 0);
-		vram_u_n 		: out std_logic;
-		vram_l_n 		: out std_logic;
+		VRAM_REQ 		: out std_logic;
+		VRAM_ACK 		: in  std_logic;
+		VRAM_WE_U		: out std_logic;
+		VRAM_WE_L		: out std_logic;
+		VRAM_A 			: out std_logic_vector(14 downto 0);
+		VRAM_DO 			: out std_logic_vector(15 downto 0);
+		VRAM_DI 			: in  std_logic_vector(15 downto 0);
 
 		HINT				: out std_logic;
-		HINT_ACK			: in std_logic;
+		HINT_ACK			: in  std_logic;
 
 		VINT_TG68		: out std_logic;
 		VINT_T80			: out std_logic;
-		VINT_TG68_ACK	: in std_logic;
-		VINT_T80_ACK	: in std_logic;
+		VINT_TG68_ACK	: in  std_logic;
+		VINT_T80_ACK	: in  std_logic;
 
 		VBUS_ADDR		: out std_logic_vector(23 downto 0);
-		VBUS_DATA		: in std_logic_vector(15 downto 0);
+		VBUS_DATA		: in  std_logic_vector(15 downto 0);
 		VBUS_SEL			: out std_logic;
-		VBUS_DTACK_N	: in std_logic;
+		VBUS_DTACK_N	: in  std_logic;
 		VBUS_BUSY      : out std_logic;
 
-		PAL				: in std_logic := '0';
+		PAL				: in  std_logic := '0';
 		FIELD      		: out std_logic;
 		INTERLACE 		: out std_logic;
 		R					: out std_logic_vector(2 downto 0);
@@ -138,7 +137,9 @@ signal VSYNC_SZ    : std_logic_vector(8 downto 0);
 
 
 signal vram_req_reg : std_logic;
-signal vram_we_reg  : std_logic;
+signal vram_we      : std_logic;
+signal vram_uds_n   : std_logic;
+signal vram_lds_n   : std_logic;
 signal vram_d_reg   : std_logic_vector(15 downto 0);
 signal vram_u_n_reg : std_logic;
 signal vram_l_n_reg : std_logic;
@@ -740,18 +741,24 @@ end process;
 ----------------------------------------------------------------
 -- VRAM CONTROLLER
 ----------------------------------------------------------------
-vram_req <= vram_req_reg;
+vram_we  <= not DT_VRAM_RNW when VMC=VMC_DT else '0';
 
-vram_d <= DT_VRAM_DI when M128 = '0' else DT_VRAM_DI(7 downto 0) & DT_VRAM_DI(7 downto 0);
-vram_we <= not DT_VRAM_RNW when VMC=VMC_DT else '0';
-vram_u_n <= DT_VRAM_UDS_N when VMC=VMC_DT and M128 = '0' else not vram_a_pre(1) when VMC=VMC_DT else '0';
-vram_l_n <= DT_VRAM_LDS_N when VMC=VMC_DT and M128 = '0' else     vram_a_pre(1) when VMC=VMC_DT else '0';
+VRAM_REQ   <= vram_req_reg;
+VRAM_WE_U  <= vram_we and not vram_uds_n;
+VRAM_WE_L  <= vram_we and not vram_lds_n;
 
-early_ack_bga <= '0' when VMC=VMC_BGA and vram_req_reg=vram_ack else '1';
-early_ack_bgb <= '0' when VMC=VMC_BGB and vram_req_reg=vram_ack else '1';
-early_ack_sp1 <= '0' when VMC=VMC_SP1 and vram_req_reg=vram_ack else '1';
-early_ack_sp2 <= '0' when VMC=VMC_SP2 and vram_req_reg=vram_ack else '1';
-early_ack_dt  <= '0' when VMC=VMC_DT  and vram_req_reg=vram_ack else '1';
+VRAM_DO    <= DT_VRAM_DI              when M128 = '0' else DT_VRAM_DI(7 downto 0) & DT_VRAM_DI(7 downto 0);
+VRAM_A     <= vram_a_pre(15 downto 1) when M128 = '0' else vram_a_pre(16 downto 11) & vram_a_pre(9 downto 2) & vram_a_pre(10);
+vram_uds_n <= DT_VRAM_UDS_N           when M128 = '0' else not vram_a_pre(1);
+vram_lds_n <= DT_VRAM_LDS_N           when M128 = '0' else     vram_a_pre(1);
+vram_r     <= VRAM_DI                 when M128 = '0' else VRAM_DI(7 downto 0)  & VRAM_DI(7 downto 0) when vram_a_pre(1) = '0'
+                                                      else VRAM_DI(15 downto 8) & VRAM_DI(15 downto 8);
+
+early_ack_bga <= '0' when VMC=VMC_BGA and vram_req_reg=VRAM_ACK else '1';
+early_ack_bgb <= '0' when VMC=VMC_BGB and vram_req_reg=VRAM_ACK else '1';
+early_ack_sp1 <= '0' when VMC=VMC_SP1 and vram_req_reg=VRAM_ACK else '1';
+early_ack_sp2 <= '0' when VMC=VMC_SP2 and vram_req_reg=VRAM_ACK else '1';
+early_ack_dt  <= '0' when VMC=VMC_DT  and vram_req_reg=VRAM_ACK else '1';
 
 BGA_VRAM_DO <= vram_r when early_ack_bga='0' and BGA_DTACK_N = '1' else BGA_VRAM_DO_REG;
 BGB_VRAM_DO <= vram_r when early_ack_bgb='0' and BGB_DTACK_N = '1' else BGB_VRAM_DO_REG;
@@ -766,13 +773,6 @@ VMC_NEXT <= VMC_BGB when BGB_SEL = '1'     and BGB_DTACK_N = '1'     and early_a
        else VMC_SP2 when SP2_SEL = '1'     and SP2_DTACK_N = '1'     and early_ack_sp2='1'
        else VMC_DT  when DT_VRAM_SEL = '1' and DT_VRAM_DTACK_N = '1' and early_ack_dt='1'
        else VMC_IDLE;
-
-vram_a <= vram_a_pre(15 downto 10) & vram_a_pre(1) & vram_a_pre(9 downto 2) when M128 = '0' else
-          vram_a_pre(16 downto 10) & vram_a_pre(9 downto 2);
-
-vram_r <= vram_q when M128='0' else
-          vram_q(7 downto 0)  & vram_q(7 downto 0)  when vram_a_pre(1) = '0' else 
-          vram_q(15 downto 8) & vram_q(15 downto 8);
 
 process( CLK, RST_N )
 begin
@@ -799,7 +799,7 @@ begin
 				DT_VRAM_DTACK_N <= '1';
 			end if;
 
-			if vram_req_reg = vram_ack then
+			if vram_req_reg = VRAM_ACK then
 				VMC <= VMC_NEXT;
 				case VMC_NEXT is
 					when VMC_BGA => vram_a_pre <= '0'&BGA_VRAM_ADDR;
@@ -816,31 +816,31 @@ begin
 
 			case VMC is
 			when VMC_BGB =>		-- BACKGROUND B
-				if vram_req_reg = vram_ack then
+				if vram_req_reg = VRAM_ACK then
 					BGB_VRAM_DO_REG <= vram_r;
 					BGB_DTACK_N <= '0';
 				end if;
 
 			when VMC_BGA =>		-- BACKGROUND A
-				if vram_req_reg = vram_ack then
+				if vram_req_reg = VRAM_ACK then
 					BGA_VRAM_DO_REG <= vram_r;
 					BGA_DTACK_N <= '0';
 				end if;
 
 			when VMC_SP1 =>		-- SPRITE ENGINE PART 1
-				if vram_req_reg = vram_ack then
+				if vram_req_reg = VRAM_ACK then
 					SP1_VRAM_DO_REG <= vram_r;
 					SP1_DTACK_N <= '0';
 				end if;
 
 			when VMC_SP2 =>		-- SPRITE ENGINE PART 2
-				if vram_req_reg = vram_ack then
+				if vram_req_reg = VRAM_ACK then
 					SP2_VRAM_DO_REG <= vram_r;
 					SP2_DTACK_N <= '0';
 				end if;
 
 			when VMC_DT =>		-- DATA TRANSFER
-				if vram_req_reg = vram_ack then
+				if vram_req_reg = VRAM_ACK then
 					DT_VRAM_DO_REG <= vram_r;
 					DT_VRAM_DTACK_N <= '0';
 				end if;
