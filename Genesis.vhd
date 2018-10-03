@@ -659,14 +659,24 @@ T80_INT_N <= not VINT_T80;
 TG68_IPL_N <= "001" when VINT_TG68 = '1' else "011" when HINT = '1' else "111";
 
 process(RESET_N, MCLK)
+	variable old_ack : std_logic;
 begin
 	if RESET_N = '0' then
 		HINT_ACK <= '0';
 		VINT_TG68_ACK <= '0';
+		old_ack := '0';
 	elsif rising_edge( MCLK ) then
 		if VCLKCNT = "110" then
-			VINT_TG68_ACK <= VINT_TG68 and TG68_INTACK;
-			HINT_ACK <= HINT and not VINT_TG68 and TG68_INTACK;
+			VINT_TG68_ACK <= '0';
+			HINT_ACK <= '0';
+			if old_ack = '0' and TG68_INTACK = '1' then
+				if VINT_TG68 = '1' then
+					VINT_TG68_ACK <= '1';
+				elsif HINT = '1' then
+					HINT_ACK <= '1';
+				end if;
+			end if;
+			old_ack := TG68_INTACK;
 		end if;
 	end if;
 end process;
