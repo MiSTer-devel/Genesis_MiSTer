@@ -54,7 +54,7 @@ entity vdp is
 		vram_req 		: out std_logic;
 		vram_ack 		: in std_logic;
 		vram_we 			: out std_logic;
-		vram_a 			: buffer std_logic_vector(14 downto 0);
+		vram_a 			: out std_logic_vector(14 downto 0);
 		vram_d 			: out std_logic_vector(15 downto 0);
 		vram_q 			: in std_logic_vector(15 downto 0);
 		vram_u_n 		: out std_logic;
@@ -142,6 +142,8 @@ signal vram_we_reg  : std_logic;
 signal vram_d_reg   : std_logic_vector(15 downto 0);
 signal vram_u_n_reg : std_logic;
 signal vram_l_n_reg : std_logic;
+signal vram_a_pre   : std_logic_vector(16 downto 1);
+signal vram_r       : std_logic_vector(15 downto 0);
 
 ----------------------------------------------------------------
 -- ON-CHIP RAMS
@@ -160,13 +162,13 @@ signal FF_DO		: std_logic_vector(15 downto 0);
 type reg_t is array(0 to 31) of std_logic_vector(7 downto 0);
 signal REG			: reg_t;
 signal PENDING		: std_logic;
-signal ADDR_LATCH	: std_logic_vector(15 downto 0);
+signal ADDR_LATCH	: std_logic_vector(16 downto 0);
 signal REG_LATCH	: std_logic_vector(15 downto 0);
 signal CODE			: std_logic_vector(5 downto 0);
 
 type fifo_size_t is array(0 to 3) of std_logic;
 signal FIFO_SIZE	: fifo_size_t;
-type fifo_addr_t is array(0 to 3) of std_logic_vector(15 downto 0);
+type fifo_addr_t is array(0 to 3) of std_logic_vector(16 downto 0);
 signal FIFO_ADDR	: fifo_addr_t;
 type fifo_data_t is array(0 to 3) of std_logic_vector(15 downto 0);
 signal FIFO_DATA	: fifo_data_t;
@@ -230,6 +232,7 @@ signal IE1			: std_logic;
 signal IE0			: std_logic;
 signal DE			: std_logic;
 signal M3			: std_logic;
+signal M128			: std_logic;
 
 signal DMA			: std_logic;
 
@@ -270,7 +273,7 @@ type dtc_t is (
 signal DTC	: dtc_t;
 
 signal DT_VRAM_SEL	: std_logic;
-signal DT_VRAM_ADDR	: std_logic_vector(14 downto 0);
+signal DT_VRAM_ADDR	: std_logic_vector(15 downto 0);
 signal DT_VRAM_DI		: std_logic_vector(15 downto 0);
 signal DT_VRAM_DO		: std_logic_vector(15 downto 0);
 signal DT_VRAM_DO_REG: std_logic_vector(15 downto 0);
@@ -289,7 +292,7 @@ signal DT_RD_CODE		: std_logic_vector(3 downto 0);
 signal DT_RD_SEL		: std_logic;
 signal DT_RD_DTACK_N	: std_logic;
 
-signal ADDR				: std_logic_vector(15 downto 0);
+signal ADDR				: std_logic_vector(16 downto 0);
 signal ADDR_SET_REQ	: std_logic;
 signal ADDR_SET_ACK	: std_logic;
 signal REG_SET_REQ	: std_logic;
@@ -546,6 +549,7 @@ V30   <= REG(1)(3) and PAL;
 DMA   <= REG(1)(4);
 IE0   <= REG(1)(5);
 DE    <= REG(1)(6);
+M128  <= REG(1)(7);
 
 NTAB  <= REG(2)(5 downto 3);
 NTWB  <= REG(3)(5 downto 1);
@@ -649,7 +653,7 @@ begin
 					-- Control Port
 					if PENDING = '1' then
 						CODE(5 downto 2) <= DI(7 downto 4);
-						ADDR_LATCH <= DI(1 downto 0) & ADDR(13 downto 0);
+						ADDR_LATCH <= DI(2 downto 0) & ADDR(13 downto 0);
 
 						-- In case of DMA VBUS request, hold the TG68 with DTACK_N
 						-- it should avoid the use of a CLKEN signal
@@ -738,10 +742,10 @@ end process;
 ----------------------------------------------------------------
 vram_req <= vram_req_reg;
 
-vram_d <= DT_VRAM_DI; --  when VMC=VMC_DT else (others=>'X');
+vram_d <= DT_VRAM_DI when M128 = '0' else DT_VRAM_DI(7 downto 0) & DT_VRAM_DI(7 downto 0);
 vram_we <= not DT_VRAM_RNW when VMC=VMC_DT else '0';
-vram_u_n <= DT_VRAM_UDS_N when VMC=VMC_DT else '0';
-vram_l_n <= DT_VRAM_LDS_N when VMC=VMC_DT else '0';
+vram_u_n <= DT_VRAM_UDS_N when VMC=VMC_DT and M128 = '0' else not vram_a_pre(1) when VMC=VMC_DT else '0';
+vram_l_n <= DT_VRAM_LDS_N when VMC=VMC_DT and M128 = '0' else     vram_a_pre(1) when VMC=VMC_DT else '0';
 
 early_ack_bga <= '0' when VMC=VMC_BGA and vram_req_reg=vram_ack else '1';
 early_ack_bgb <= '0' when VMC=VMC_BGB and vram_req_reg=vram_ack else '1';
@@ -749,11 +753,11 @@ early_ack_sp1 <= '0' when VMC=VMC_SP1 and vram_req_reg=vram_ack else '1';
 early_ack_sp2 <= '0' when VMC=VMC_SP2 and vram_req_reg=vram_ack else '1';
 early_ack_dt  <= '0' when VMC=VMC_DT  and vram_req_reg=vram_ack else '1';
 
-BGA_VRAM_DO <= vram_q when early_ack_bga='0' and BGA_DTACK_N = '1' else BGA_VRAM_DO_REG;
-BGB_VRAM_DO <= vram_q when early_ack_bgb='0' and BGB_DTACK_N = '1' else BGB_VRAM_DO_REG;
-SP1_VRAM_DO <= vram_q when early_ack_sp1='0' and SP1_DTACK_N = '1' else SP1_VRAM_DO_REG;
-SP2_VRAM_DO <= vram_q when early_ack_sp2='0' and SP2_DTACK_N = '1' else SP2_VRAM_DO_REG;
-DT_VRAM_DO  <= vram_q when early_ack_dt='0'  and SP2_DTACK_N = '1' else DT_VRAM_DO_REG;
+BGA_VRAM_DO <= vram_r when early_ack_bga='0' and BGA_DTACK_N = '1' else BGA_VRAM_DO_REG;
+BGB_VRAM_DO <= vram_r when early_ack_bgb='0' and BGB_DTACK_N = '1' else BGB_VRAM_DO_REG;
+SP1_VRAM_DO <= vram_r when early_ack_sp1='0' and SP1_DTACK_N = '1' else SP1_VRAM_DO_REG;
+SP2_VRAM_DO <= vram_r when early_ack_sp2='0' and SP2_DTACK_N = '1' else SP2_VRAM_DO_REG;
+DT_VRAM_DO  <= vram_r when early_ack_dt='0'  and SP2_DTACK_N = '1' else DT_VRAM_DO_REG;
 
 -- Priority encoder for next port...
 VMC_NEXT <= VMC_BGB when BGB_SEL = '1'     and BGB_DTACK_N = '1'     and early_ack_bgb='1'
@@ -762,6 +766,13 @@ VMC_NEXT <= VMC_BGB when BGB_SEL = '1'     and BGB_DTACK_N = '1'     and early_a
        else VMC_SP2 when SP2_SEL = '1'     and SP2_DTACK_N = '1'     and early_ack_sp2='1'
        else VMC_DT  when DT_VRAM_SEL = '1' and DT_VRAM_DTACK_N = '1' and early_ack_dt='1'
        else VMC_IDLE;
+
+vram_a <= vram_a_pre(15 downto 10) & vram_a_pre(1) & vram_a_pre(9 downto 2) when M128 = '0' else
+          vram_a_pre(16 downto 10) & vram_a_pre(9 downto 2);
+
+vram_r <= vram_q when M128='0' else
+          vram_q(7 downto 0)  & vram_q(7 downto 0)  when vram_a_pre(1) = '0' else 
+          vram_q(15 downto 8) & vram_q(15 downto 8);
 
 process( CLK, RST_N )
 begin
@@ -791,11 +802,11 @@ begin
 			if vram_req_reg = vram_ack then
 				VMC <= VMC_NEXT;
 				case VMC_NEXT is
-					when VMC_BGA => vram_a <= BGA_VRAM_ADDR;
-					when VMC_BGB => vram_a <= BGB_VRAM_ADDR;
-					when VMC_SP1 => vram_a <= SP1_VRAM_ADDR;
-					when VMC_SP2 => vram_a <= SP2_VRAM_ADDR;
-					when VMC_DT  => vram_a <= DT_VRAM_ADDR;
+					when VMC_BGA => vram_a_pre <= '0'&BGA_VRAM_ADDR;
+					when VMC_BGB => vram_a_pre <= '0'&BGB_VRAM_ADDR;
+					when VMC_SP1 => vram_a_pre <= '0'&SP1_VRAM_ADDR;
+					when VMC_SP2 => vram_a_pre <= '0'&SP2_VRAM_ADDR;
+					when VMC_DT  => vram_a_pre <= DT_VRAM_ADDR;
 					when others  => null;
 				end case;
 				if VMC_NEXT /= VMC_IDLE then
@@ -806,31 +817,31 @@ begin
 			case VMC is
 			when VMC_BGB =>		-- BACKGROUND B
 				if vram_req_reg = vram_ack then
-					BGB_VRAM_DO_REG <= vram_q;
+					BGB_VRAM_DO_REG <= vram_r;
 					BGB_DTACK_N <= '0';
 				end if;
 
 			when VMC_BGA =>		-- BACKGROUND A
 				if vram_req_reg = vram_ack then
-					BGA_VRAM_DO_REG <= vram_q;
+					BGA_VRAM_DO_REG <= vram_r;
 					BGA_DTACK_N <= '0';
 				end if;
 
 			when VMC_SP1 =>		-- SPRITE ENGINE PART 1
 				if vram_req_reg = vram_ack then
-					SP1_VRAM_DO_REG <= vram_q;
+					SP1_VRAM_DO_REG <= vram_r;
 					SP1_DTACK_N <= '0';
 				end if;
 
 			when VMC_SP2 =>		-- SPRITE ENGINE PART 2
 				if vram_req_reg = vram_ack then
-					SP2_VRAM_DO_REG <= vram_q;
+					SP2_VRAM_DO_REG <= vram_r;
 					SP2_DTACK_N <= '0';
 				end if;
 
 			when VMC_DT =>		-- DATA TRANSFER
 				if vram_req_reg = vram_ack then
-					DT_VRAM_DO_REG <= vram_q;
+					DT_VRAM_DO_REG <= vram_r;
 					DT_VRAM_DTACK_N <= '0';
 				end if;
 
@@ -1935,7 +1946,7 @@ VBUS_ADDR <= FF_VBUS_ADDR;
 VBUS_SEL <= FF_VBUS_SEL;
 
 process( RST_N, CLK )
-	variable DT_WR_ADDR : std_logic_vector(15 downto 0);
+	variable DT_WR_ADDR : std_logic_vector(16 downto 0);
 	variable DT_WR_DATA : std_logic_vector(15 downto 0);
 	variable DMA_LENGTH : std_logic_vector(15 downto 0);
 	variable DMA_SOURCE : std_logic_vector(15 downto 0);
@@ -2041,7 +2052,7 @@ begin
 
 					when others =>
 						DT_VRAM_SEL <= '1';
-						DT_VRAM_ADDR <= DT_WR_ADDR(15 downto 1);
+						DT_VRAM_ADDR <= DT_WR_ADDR(16 downto 1);
 						DT_VRAM_RNW <= '0';
 						if DT_WR_ADDR(0) = '0' then
 							DT_VRAM_DI <= DT_WR_DATA;
@@ -2068,7 +2079,7 @@ begin
 
 					when others =>
 						DT_VRAM_SEL <= '1';
-						DT_VRAM_ADDR <= ADDR(15 downto 1);
+						DT_VRAM_ADDR <= ADDR(16 downto 1);
 						DT_VRAM_RNW <= '1';
 						DT_VRAM_UDS_N <= '0';
 						DT_VRAM_LDS_N <= '0';
@@ -2125,7 +2136,7 @@ begin
 
 			when DTC_DMA_FILL_WR =>
 				DT_VRAM_SEL <= '1';
-				DT_VRAM_ADDR <= ADDR(15 downto 1);
+				DT_VRAM_ADDR <= ADDR(16 downto 1);
 				DT_VRAM_RNW <= '0';
 				DT_VRAM_UDS_N <= not ADDR(0);
 				DT_VRAM_LDS_N <= ADDR(0);
@@ -2155,7 +2166,7 @@ begin
 
 			when DTC_DMA_COPY_RD =>
 				DT_VRAM_SEL <= '1';
-				DT_VRAM_ADDR <= DMA_SOURCE(15 downto 1);
+				DT_VRAM_ADDR <= REG(23)(0) & DMA_SOURCE(15 downto 1);
 				DT_VRAM_RNW <= '1';
 				DT_VRAM_UDS_N <= '0';
 				DT_VRAM_LDS_N <= '0';
@@ -2174,7 +2185,7 @@ begin
 
 			when DTC_DMA_COPY_WR =>
 				DT_VRAM_SEL <= '1';
-				DT_VRAM_ADDR <= ADDR(15 downto 1);
+				DT_VRAM_ADDR <= ADDR(16 downto 1);
 				DT_VRAM_RNW <= '0';
 				DT_VRAM_UDS_N <= not ADDR(0);
 				DT_VRAM_LDS_N <= ADDR(0);
@@ -2222,7 +2233,7 @@ begin
 
 					when others =>
 						DT_VRAM_SEL <= '1';
-						DT_VRAM_ADDR <= ADDR(15 downto 1);
+						DT_VRAM_ADDR <= ADDR(16 downto 1);
 						DT_VRAM_RNW <= '0';
 						if ADDR(0) = '0' then
 							DT_VRAM_DI <= VBUS_DATA;
