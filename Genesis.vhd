@@ -191,15 +191,7 @@ signal T80_DI        : std_logic_vector(7 downto 0);
 signal T80_DO        : std_logic_vector(7 downto 0);
 
 signal SCLK_EN			: std_logic;
-signal PCLK_EN			: std_logic;
 signal FCLK_EN			: std_logic;
-signal SCLKCNT			: std_logic_vector(5 downto 0) := (others => '0');
-signal PCLKCNT			: std_logic_vector(5 downto 0) := (others => '0');
-
--- CLOCK GENERATION
-signal VCLKCNT			: std_logic_vector(2 downto 0);
-signal ZCLK				: std_logic := '0';
-signal ZCLKCNT			: std_logic_vector(3 downto 0);
 
 -- FLASH CONTROL
 signal TG68_FLASH_SEL		: std_logic;
@@ -583,7 +575,7 @@ port map(
 u_psg : work.psg
 port map(
 	clk		=> MCLK,
-	clken		=> PCLK_EN,
+	clken		=> T80_CLKEN,
 	reset    => not RESET_N,
 	WR_n		=> PSG_WR_n,
 	D_in		=> PSG_DI,
@@ -609,47 +601,6 @@ port map(
 DAC_LDATA <= (snd_left(11)  &  snd_left) + (PSG_SND&"00");
 DAC_RDATA <= (snd_right(11) & snd_right) + (PSG_SND&"00");
 
-process( RESET_N, MCLK )
-begin
-	if falling_edge(MCLK) then
-		SCLKCNT <= SCLKCNT + 1;
-		SCLK_EN <= '0';
-		if SCLKCNT = 41 then
-			SCLKCNT <= (others => '0');
-			SCLK_EN <= '1';
-		end if;
-		PCLKCNT <= PCLKCNT + 1;
-		PCLK_EN <= '0';
-		if PCLKCNT = 14 then
-			PCLKCNT <= (others => '0');
-			PCLK_EN <= '1';
-		end if;
-	end if;
-end process;
-
-process( RESET_N, MCLK )
-begin
-	if RESET_N = '0' then
-		ZCLKCNT <= (others => '0');
-	elsif falling_edge(MCLK) then
-
-		FCLK_EN <= '0';
-		if VCLKCNT = "001" then
-			FCLK_EN <= '1';
-		end if;
-
-		T80_CLKEN <= '0';
-		if VCLKCNT = "000" and ZCLK = '0' then
-			ZCLKCNT <= ZCLKCNT + 1;
-			if ZCLKCNT = "1110" then
-				ZCLKCNT <= (others => '0');
-			else
-				T80_CLKEN <= '1';
-			end if;
-		end if;
-	end if;
-end process;
-
 ----------------------------------------------------------------
 -- INTERRUPTS CONTROL
 ----------------------------------------------------------------
@@ -666,51 +617,63 @@ begin
 		VINT_TG68_ACK <= '0';
 		old_ack := '0';
 	elsif rising_edge( MCLK ) then
-		if VCLKCNT = "110" then
-			VINT_TG68_ACK <= '0';
-			HINT_ACK <= '0';
-			if old_ack = '0' and TG68_INTACK = '1' then
-				if VINT_TG68 = '1' then
-					VINT_TG68_ACK <= '1';
-				elsif HINT = '1' then
-					HINT_ACK <= '1';
-				end if;
+		VINT_TG68_ACK <= '0';
+		HINT_ACK <= '0';
+		if old_ack = '0' and TG68_INTACK = '1' then
+			if VINT_TG68 = '1' then
+				VINT_TG68_ACK <= '1';
+			elsif HINT = '1' then
+				HINT_ACK <= '1';
 			end if;
-			old_ack := TG68_INTACK;
 		end if;
+		old_ack := TG68_INTACK;
 	end if;
 end process;
 
 
+----------------------------------------------------------------
 -- CLOCK GENERATION
+----------------------------------------------------------------
+
 process( RESET_N, MCLK )
+	variable SCLKCNT  : std_logic_vector(5 downto 0) := (others => '0');
+	variable VCLKCNT  : std_logic_vector(2 downto 0) := (others => '0');
+	variable ZCLKCNT  : std_logic_vector(3 downto 0) := (others => '0');
 begin
-	if RESET_N = '0' then
-		ZCLK <= '0';
-		VCLKCNT <= "001";
-		TG68_ENARDREG <= '0';
+	if falling_edge(MCLK) then
+
+		SCLK_EN <= '0';
+		SCLKCNT := SCLKCNT + 1;
+		if SCLKCNT = 42 then
+			SCLKCNT := (others => '0');
+			SCLK_EN <= '1';
+		end if;
+
+		T80_CLKEN <= '0';
+		ZCLKCNT := ZCLKCNT + 1;
+		if ZCLKCNT = 15 then
+			ZCLKCNT := (others => '0');
+			T80_CLKEN <= '1';
+		end if;
+
+		VCLKCNT := VCLKCNT + 1;
+		if VCLKCNT = 7 then
+			VCLKCNT := (others => '0');
+		end if;
+
+		FCLK_EN <= '0';
+		if VCLKCNT = 1 then
+			FCLK_EN <= '1';
+		end if;
+
 		TG68_ENAWRREG <= '0';
-	elsif rising_edge(MCLK) then
-
-		VCLKCNT <= VCLKCNT + 1;
-		if VCLKCNT = "000" then
-			ZCLK <= not ZCLK;
-		end if;
-
-		if VCLKCNT = "110" then
-			VCLKCNT <= "000";
-		end if;
-
-		if VCLKCNT = "110" then
+		if VCLKCNT = 0 then
 			TG68_ENAWRREG <= '1';
-		else
-			TG68_ENAWRREG <= '0';
 		end if;
 
-		if VCLKCNT = "011" then
+		TG68_ENARDREG <= '0';
+		if VCLKCNT = 4 then
 			TG68_ENARDREG <= '1';
-		else
-			TG68_ENARDREG <= '0';
 		end if;
 	end if;
 end process;
@@ -1387,33 +1350,31 @@ begin
 
 		case RAMC is
 		when RAMC_IDLE =>
-			if VCLKCNT = "001" then
-				if VBUS_BUSY = '1' then
-					if DMA_RAM_SEL = '1' and DMA_RAM_DTACK_N = '1' then
-						ram68k_req <= not ram68k_req;
-						ram68k_a <= VBUS_ADDR(15 downto 1);
-						ram68k_we <= '0';
-						ram68k_u_n <= '0';
-						ram68k_l_n <= '0';					
-						RAMC <= RAMC_DMA;
-					end if;
-				elsif TG68_RAM_SEL = '1' and TG68_RAM_DTACK_N = '1' then
+			if VBUS_BUSY = '1' then
+				if DMA_RAM_SEL = '1' and DMA_RAM_DTACK_N = '1' then
 					ram68k_req <= not ram68k_req;
-					ram68k_a <= TG68_A(15 downto 1);
-					ram68k_d <= TG68_DO;
-					ram68k_we <= not TG68_RNW;
-					ram68k_u_n <= TG68_UDS_N;
-					ram68k_l_n <= TG68_LDS_N;
-					RAMC <= RAMC_TG68;
-				elsif T80_RAM_SEL = '1' and T80_RAM_DTACK_N = '1' then
-					ram68k_req <= not ram68k_req;
-					ram68k_a <= BAR(15) & T80_A(14 downto 1);
-					ram68k_d <= T80_DO & T80_DO;
-					ram68k_we <= not T80_WR_N;
-					ram68k_u_n <= T80_A(0);
-					ram68k_l_n <= not T80_A(0);
-					RAMC <= RAMC_T80;
+					ram68k_a <= VBUS_ADDR(15 downto 1);
+					ram68k_we <= '0';
+					ram68k_u_n <= '0';
+					ram68k_l_n <= '0';					
+					RAMC <= RAMC_DMA;
 				end if;
+			elsif TG68_RAM_SEL = '1' and TG68_RAM_DTACK_N = '1' then
+				ram68k_req <= not ram68k_req;
+				ram68k_a <= TG68_A(15 downto 1);
+				ram68k_d <= TG68_DO;
+				ram68k_we <= not TG68_RNW;
+				ram68k_u_n <= TG68_UDS_N;
+				ram68k_l_n <= TG68_LDS_N;
+				RAMC <= RAMC_TG68;
+			elsif T80_RAM_SEL = '1' and T80_RAM_DTACK_N = '1' then
+				ram68k_req <= not ram68k_req;
+				ram68k_a <= BAR(15) & T80_A(14 downto 1);
+				ram68k_d <= T80_DO & T80_DO;
+				ram68k_we <= not T80_WR_N;
+				ram68k_u_n <= T80_A(0);
+				ram68k_l_n <= not T80_A(0);
+				RAMC <= RAMC_T80;
 			end if;
 
 		when RAMC_TG68 =>
@@ -1489,25 +1450,23 @@ begin
 
 		case ZRC is
 		when ZRC_IDLE =>
-			if VCLKCNT = "001" then
-				if TG68_ZRAM_SEL = '1' and TG68_ZRAM_DTACK_N = '1' then
-					if TG68_UDS_N = '0' then
-						zram_a <= TG68_A(12 downto 1) & "0";
-						zram_d <= TG68_DO(15 downto 8);
-					else
-						zram_a <= TG68_A(12 downto 1) & "1";
-						zram_d <= TG68_DO(7 downto 0);
-					end if;
-					zram_we <= not TG68_RNW;
-					ZRCP <= ZRCP_TG68;
-					ZRC <= ZRC_ACC1;
-				elsif T80_ZRAM_SEL = '1' and T80_ZRAM_DTACK_N = '1' then
-					zram_a <= T80_A(12 downto 0);
-					zram_d <= T80_DO;
-					zram_we <= not T80_WR_N;
-					ZRCP <= ZRCP_T80;
-					ZRC <= ZRC_ACC1;
+			if TG68_ZRAM_SEL = '1' and TG68_ZRAM_DTACK_N = '1' then
+				if TG68_UDS_N = '0' then
+					zram_a <= TG68_A(12 downto 1) & "0";
+					zram_d <= TG68_DO(15 downto 8);
+				else
+					zram_a <= TG68_A(12 downto 1) & "1";
+					zram_d <= TG68_DO(7 downto 0);
 				end if;
+				zram_we <= not TG68_RNW;
+				ZRCP <= ZRCP_TG68;
+				ZRC <= ZRC_ACC1;
+			elsif T80_ZRAM_SEL = '1' and T80_ZRAM_DTACK_N = '1' then
+				zram_a <= T80_A(12 downto 0);
+				zram_d <= T80_DO;
+				zram_we <= not T80_WR_N;
+				ZRCP <= ZRCP_T80;
+				ZRC <= ZRC_ACC1;
 			end if;
 		when ZRC_ACC1 =>
 			zram_we <= '0';
