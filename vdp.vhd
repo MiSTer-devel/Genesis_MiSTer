@@ -78,9 +78,9 @@ entity vdp is
 		PAL				: in  std_logic := '0';
 		FIELD      		: out std_logic;
 		INTERLACE 		: out std_logic;
-		R					: out std_logic_vector(2 downto 0);
-		G					: out std_logic_vector(2 downto 0);
-		B					: out std_logic_vector(2 downto 0);
+		R					: out std_logic_vector(3 downto 0);
+		G					: out std_logic_vector(3 downto 0);
+		B					: out std_logic_vector(3 downto 0);
 		HS					: out std_logic;
 		VS					: out std_logic;
 		HBL   			: out std_logic;
@@ -236,6 +236,7 @@ signal IE0			: std_logic;
 signal DE			: std_logic;
 signal M3			: std_logic;
 signal M128			: std_logic;
+signal SHI			: std_logic;
 
 signal DMA			: std_logic;
 
@@ -560,6 +561,7 @@ HSCR  <= REG(11)(1 downto 0);
 VSCR  <= REG(11)(2);
 H40   <= REG(12)(0);
 LSM   <= REG(12)(2 downto 1);
+SHI   <= REG(12)(3);
 
 HSCB  <= REG(13)(5 downto 0);
 
@@ -1756,6 +1758,7 @@ process( RST_N, CLK )
 	variable v8  : std_logic;
 	variable col : std_logic_vector(5 downto 0);
 	variable cold: std_logic_vector(5 downto 0);
+	variable sh  : std_logic_vector(2 downto 0);
 begin
 	if rising_edge(CLK) then
 		OBJ_COLINFO_WE_B <= '0';
@@ -1776,15 +1779,31 @@ begin
 			end if;
 
 		when "0011" =>
+			sh := "10" & (BGA_COLINFO_Q_B(6) or BGB_COLINFO_Q_B(6) or not SHI);
+			if SHI = '1' and OBJ_COLINFO_Q_B(3 downto 0) /= "0000" and 
+			   OBJ_COLINFO_Q_B(6) >= (BGA_COLINFO_Q_B(6) or BGB_COLINFO_Q_B(6))
+			then
+				if OBJ_COLINFO_Q_B(5 downto 0) = 62 then
+					sh := sh + 1;
+					sh(2) := '0';
+				elsif OBJ_COLINFO_Q_B(5 downto 0) = 63 then
+					sh := "000";
+				elsif OBJ_COLINFO_Q_B(3 downto 0) = 14 then
+					sh(0) := '1';
+				else
+					sh(0) := sh(0) or OBJ_COLINFO_Q_B(6);
+				end if;
+			end if;
+
 			if DE = '0' then
 				col := BGCOL;
-			elsif OBJ_COLINFO_Q_B(3 downto 0) /= "0000" and OBJ_COLINFO_Q_B(6) = '1' then
+			elsif OBJ_COLINFO_Q_B(3 downto 0) /= "0000" and OBJ_COLINFO_Q_B(6) = '1' and sh(2) = '1' then
 				col := OBJ_COLINFO_Q_B(5 downto 0);
 			elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" and BGA_COLINFO_Q_B(6) = '1' then
 				col := BGA_COLINFO_Q_B(5 downto 0);
 			elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" and BGB_COLINFO_Q_B(6) = '1' then
 				col := BGB_COLINFO_Q_B(5 downto 0);
-			elsif OBJ_COLINFO_Q_B(3 downto 0) /= "0000" then
+			elsif OBJ_COLINFO_Q_B(3 downto 0) /= "0000" and sh(2) = '1' then
 				col := OBJ_COLINFO_Q_B(5 downto 0);
 			elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" then
 				col := BGA_COLINFO_Q_B(5 downto 0);
@@ -1795,10 +1814,10 @@ begin
 			end if;
 			
 			case DBG(8 downto 7) is
-			when "00" => cold := BGCOL;
-			when "01" => cold := OBJ_COLINFO_Q_B(5 downto 0);
-			when "10" => cold := BGA_COLINFO_Q_B(5 downto 0);
-			when "11" => cold := BGB_COLINFO_Q_B(5 downto 0);
+				when "00" => cold := BGCOL;
+				when "01" => cold := OBJ_COLINFO_Q_B(5 downto 0);
+				when "10" => cold := BGA_COLINFO_Q_B(5 downto 0);
+				when "11" => cold := BGB_COLINFO_Q_B(5 downto 0);
 			end case;
 
 			if DBG(6) = '1' then
@@ -1820,11 +1839,20 @@ begin
 				G <= (others => '0');
 				B <= (others => '0');
 			else
-				B <= T_COLOR(11 downto 9);
-				G <= T_COLOR(7 downto 5);
-				R <= T_COLOR(3 downto 1);
+				if sh(1 downto 0) = 0 then
+					B <= '0' & T_COLOR(11 downto 9);
+					G <= '0' & T_COLOR(7  downto 5);
+					R <= '0' & T_COLOR(3  downto 1);
+				elsif sh(1 downto 0) = 1 then
+					B <= T_COLOR(11 downto 9) & '0';
+					G <= T_COLOR(7  downto 5) & '0';
+					R <= T_COLOR(3  downto 1) & '0';
+				else
+					B <= '0' & T_COLOR(11 downto 9) + 7;
+					G <= '0' & T_COLOR(7  downto 5) + 7;
+					R <= '0' & T_COLOR(3  downto 1) + 7;
+				end if;
 			end if;
-
 		when others => null;
 		end case;
 	end if;

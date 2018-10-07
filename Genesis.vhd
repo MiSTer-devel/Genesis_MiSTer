@@ -53,9 +53,9 @@ entity Genesis is
 
 		PAL         : in  std_logic;
 		EXPORT      : in  std_logic;
-		RED			: out std_logic_vector(2 downto 0);
-		GREEN			: out std_logic_vector(2 downto 0);
-		BLUE			: out std_logic_vector(2 downto 0);		
+		RED			: out std_logic_vector(3 downto 0);
+		GREEN			: out std_logic_vector(3 downto 0);
+		BLUE			: out std_logic_vector(3 downto 0);		
 		VS				: out std_logic;
 		HS				: out std_logic;
 		HBL			: out std_logic;

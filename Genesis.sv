@@ -181,7 +181,7 @@ pll pll
 
 ///////////////////////////////////////////////////
 wire [1:0] scale = status[3:2];
-wire [2:0] r, g, b;
+wire [3:0] r, g, b;
 wire vs,hs;
 wire ce_pix;
 wire hblank, vblank;
@@ -248,9 +248,9 @@ video_mixer #(.LINE_LENGTH(320), .HALF_DEPTH(1)) video_mixer
 
 	.mono(0),
 
-	.R({r,r[2]}),
-	.G({g,g[2]}),
-	.B({b,b[2]}),
+	.R(r),
+	.G(g),
+	.B(b),
 
 	// Positive pulses.
 	.HSync(hs),
