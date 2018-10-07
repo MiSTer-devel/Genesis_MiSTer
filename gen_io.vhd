@@ -72,7 +72,7 @@ entity gen_io is
 		P2_Z	   : in std_logic;
 
 		SEL		: in std_logic;
-		A			: in std_logic_vector(4 downto 0);
+		A			: in std_logic_vector(4 downto 1);
 		RNW		: in std_logic;
 		UDS_N		: in std_logic;
 		LDS_N		: in std_logic;
@@ -87,38 +87,36 @@ end gen_io;
 architecture rtl of gen_io is
 signal FF_DTACK_N	: std_logic;
 
-signal DATA			: std_logic_vector(7 downto 0);
-signal DATB			: std_logic_vector(7 downto 0);
-signal DATC			: std_logic_vector(7 downto 0);
-signal CTLA			: std_logic_vector(7 downto 0);
-signal CTLB			: std_logic_vector(7 downto 0);
-signal CTLC			: std_logic_vector(7 downto 0);
-signal TXDA			: std_logic_vector(7 downto 0);
-signal TXDB			: std_logic_vector(7 downto 0);
-signal TXDC			: std_logic_vector(7 downto 0);
-signal RXDA			: std_logic_vector(7 downto 0);
-signal RXDB			: std_logic_vector(7 downto 0);
-signal RXDC			: std_logic_vector(7 downto 0);
-signal SCTA			: std_logic_vector(7 downto 0);
-signal SCTB			: std_logic_vector(7 downto 0);
-signal SCTC			: std_logic_vector(7 downto 0);
+signal DATA		: std_logic_vector(7 downto 0);
+signal DATB		: std_logic_vector(7 downto 0);
+signal DATC		: std_logic_vector(7 downto 0);
+signal CTLA		: std_logic_vector(7 downto 0);
+signal CTLB		: std_logic_vector(7 downto 0);
+signal CTLC		: std_logic_vector(7 downto 0);
+signal TXDA		: std_logic_vector(7 downto 0);
+signal TXDB		: std_logic_vector(7 downto 0);
+signal TXDC		: std_logic_vector(7 downto 0);
+signal RXDA		: std_logic_vector(7 downto 0);
+signal RXDB		: std_logic_vector(7 downto 0);
+signal RXDC		: std_logic_vector(7 downto 0);
+signal SCTA		: std_logic_vector(7 downto 0);
+signal SCTB		: std_logic_vector(7 downto 0);
+signal SCTC		: std_logic_vector(7 downto 0);
 
-signal REG			: std_logic_vector(3 downto 0);
-signal WD		   : std_logic_vector(7 downto 0);
-signal RD		   : std_logic_vector(7 downto 0);
+signal WD	   : std_logic_vector(7 downto 0);
+signal RD	   : std_logic_vector(7 downto 0);
 
-signal JCNT1      : integer range 0 to 3;
-signal JCNT2      : integer range 0 to 3;
+signal JCNT1   : integer range 0 to 3;
+signal JCNT2   : integer range 0 to 3;
 
-signal JTMR1      : integer range 0 to 129000;
-signal JTMR2      : integer range 0 to 129000;
+signal JTMR1   : integer range 0 to 129000;
+signal JTMR2   : integer range 0 to 129000;
 
 begin
 
 DO <= RD & RD;
 DTACK_N <= FF_DTACK_N;
 
-REG <= A(4 downto 1);
 WD <= DI(7 downto 0) when LDS_N = '0' else DI(15 downto 8);
 
 process( RST_N, CLK )
@@ -169,7 +167,7 @@ begin
 
 			if RNW = '0' then
 				-- Write
-				case REG is
+				case A is
 				when x"1" =>
 					DATA(7) <= WD(7);
 					if CTLA(6) = '1' then 
@@ -230,7 +228,7 @@ begin
 				when others => null;
 				end case;
 			else
-				case REG is
+				case A is
 				when x"0" =>
 					RD <= EXPORT & PAL & "100000";
 				when x"1" =>

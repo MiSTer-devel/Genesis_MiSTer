@@ -268,7 +268,7 @@ compressor compressor
 
 ///////////////////////////////////////////////////
 
-wire [22:0] rom_addr;
+wire [22:1] rom_addr;
 wire [15:0] rom_data;
 wire rom_rd, rom_rdack;
 
@@ -281,7 +281,7 @@ ddram ddram
    .we_req(rom_wr),
    .we_ack(rom_wrack),
 
-   .rdaddr(use_map ? {map[rom_addr[21:19]], rom_addr[18:0]} : rom_addr),
+   .rdaddr(use_map ? {map[rom_addr[21:19]], rom_addr[18:1]} : rom_addr),
    .dout(rom_data),
    .rd_req(rom_rd),
    .rd_ack(rom_rdack)

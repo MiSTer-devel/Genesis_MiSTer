@@ -72,7 +72,7 @@ entity TG68KdotC_Kernel is
 		IPL_autovector : in std_logic:='1';
 		berr           : in std_logic:='0';			  -- only 68000 Stackpointer dummy
 		CPU            : in std_logic_vector(1 downto 0):="00";  -- 00->68000  01->68010  11->68020(only some parts - yet)
-		addr           : buffer std_logic_vector(31 downto 0);
+		addr           : out std_logic_vector(31 downto 1);
 		data_write     : out std_logic_vector(15 downto 0);
 		nWr            : out std_logic;
 		nUDS           : out std_logic;
@@ -109,6 +109,7 @@ architecture logic of TG68KdotC_Kernel is
 	signal set_datatype         : std_logic_vector(1 downto 0);
 	signal exe_datatype         : std_logic_vector(1 downto 0);
 	signal setstate             : std_logic_vector(1 downto 0);
+	signal addr_int             : std_logic_vector(31 downto 0);
 
 	signal opcode               : std_logic_vector(15 downto 0);
 	signal exe_opcode           : std_logic_vector(15 downto 0);
@@ -344,10 +345,11 @@ ALU: TG68K_ALU
 
 	-- does shift for byte access. Note active low me
 	-- should produce address error on 68000
-	memmaskmux <= memmask WHEN addr(0)='1' ELSE memmask(4 downto 0)&'1';
+	memmaskmux <= memmask WHEN addr_int(0)='1' ELSE memmask(4 downto 0)&'1';
 
 	nUDS <= memmaskmux(5);
 	nLDS <= memmaskmux(4);
+	addr <= addr_int(31 downto 1);
 	
 	-- drive output data, output bytes on both half-words during byte write
 	data_write( 7 downto 0) <= data_write_i( 7 downto 0) WHEN memmaskmux(4)='0' ELSE data_write_i(15 downto 8);
@@ -369,7 +371,7 @@ ALU: TG68K_ALU
 		END IF;
 	END PROCESS;
 
-PROCESS (clk, long_done, last_data_in, data_in, byte, addr, long_start, memmaskmux, memread, memmask, data_read)
+PROCESS (clk, long_done, last_data_in, data_in, byte, addr_int, long_start, memmaskmux, memread, memmask, data_read)
 	BEGIN
 		IF memmaskmux(4)='0' THEN
 			data_read <= last_data_in(15 downto 0)&data_in;
@@ -408,7 +410,7 @@ PROCESS (clk, long_done, last_data_in, data_in, byte, addr, long_start, memmaskm
 	END PROCESS;
 
 PROCESS (byte, long_start, reg_QB, data_write_tmp, exec, data_read, data_write_mux, memmaskmux, bf_ext_out,
-		 data_write_muxin, memmask, oddout, addr)
+		 data_write_muxin, memmask, oddout, addr_int)
 	BEGIN
 		IF exec(write_reg)='1' THEN
 			data_write_muxin <= reg_QB;
@@ -417,13 +419,13 @@ PROCESS (byte, long_start, reg_QB, data_write_tmp, exec, data_read, data_write_m
 		END IF;
 
 		IF BitField=0 THEN
-			IF oddout=addr(0) THEN
+			IF oddout=addr_int(0) THEN
 				data_write_mux <= "XXXXXXXX"&"XXXXXXXX"&data_write_muxin;
 			ELSE
 				data_write_mux <= "XXXXXXXX"&data_write_muxin&"XXXXXXXX";
 			END IF;
 		ELSE
-			IF oddout=addr(0) THEN
+			IF oddout=addr_int(0) THEN
 				data_write_mux <= "XXXXXXXX"&bf_ext_out&data_write_muxin;
 			ELSE
 				data_write_mux <= bf_ext_out&data_write_muxin&"XXXXXXXX";
@@ -567,7 +569,7 @@ PROCESS (opcode, movem_presub, movem_regaddr, source_lowbits, source_areg, sndOP
 -----------------------------------------------------------------------------
 -- set OP1out
 -----------------------------------------------------------------------------
-PROCESS (reg_QA, store_in_tmp, ea_data, long_start, addr, exec, memmaskmux, data_write_tmp)
+PROCESS (reg_QA, store_in_tmp, ea_data, long_start, addr_int, exec, memmaskmux, data_write_tmp)
 	BEGIN
 		OP1out <= reg_QA;
 		IF exec(OP1out_zero)='1' THEN
@@ -577,7 +579,7 @@ PROCESS (reg_QA, store_in_tmp, ea_data, long_start, addr, exec, memmaskmux, data
    ELSIF exec(opcPACK)='1' THEN
      OP1out <= data_write_tmp; 
 		ELSIF exec(movem_action)='1' OR memmaskmux(3)='0' OR exec(OP1addr)='1' THEN
-			OP1out <= addr;
+			OP1out <= addr_int;
 		END IF;
 	END PROCESS;
 
@@ -670,7 +672,7 @@ PROCESS (clk)
 				IF state="10" THEN
 					ea_data <= data_read;
 				ELSIF exec(get_2ndOPC)='1' OR set_PCbase='1' THEN --TH cmpi (d16,PC) fix
-					ea_data <= addr;
+					ea_data <= addr_int;
 				ELSIF exec(store_ea_data)='1' OR (direct_data='1' AND state="00") THEN
 					ea_data <= last_data_read;
 				END IF;
@@ -686,7 +688,7 @@ PROCESS (clk)
 				ELSIF exec(exg)='1' THEN
 					data_write_tmp <= OP1out;
 				ELSIF exec(get_ea_now)='1' AND ea_only='1' THEN         -- ist for pea
-					data_write_tmp <= addr;
+					data_write_tmp <= addr_int;
 				ELSIF execOPC='1' or micro_state=pack2 THEN
 					data_write_tmp <= ALUout;
 				ELSIF (exec_DIRECT='1' AND state="10") THEN
@@ -811,7 +813,7 @@ PROCESS (clk, setdisp, memaddr_a, briefdata, memaddr_delta, setdispbyte, datatyp
 		IF rising_edge(clk) THEN
 			IF clkena_in='1' THEN
 				IF exec(get_2ndOPC)='1' OR (state="10" AND memread(0)='1') THEN
-					tmp_TG68_PC <= addr;
+					tmp_TG68_PC <= addr_int;
 				END IF;
 				use_base <= '0';
 
@@ -820,7 +822,7 @@ PROCESS (clk, setdisp, memaddr_a, briefdata, memaddr_delta, setdispbyte, datatyp
 				ELSIF exec(mem_addsub)='1' THEN
 					-- note, this should give an exception for 68000
 					if exec(movem_action) = '1' and memmaskmux(3) = '1' and (memmaskmux(5 downto 4) = "10" or memmaskmux(5 downto 4) = "01") and (movem_presub = '0') then
-					  memaddr_delta <= addr; -- hold for non-aligned case, only when incrementing
+					  memaddr_delta <= addr_int; -- hold for non-aligned case, only when incrementing
 					else
 					  memaddr_delta <= addsub_q;
 					end if;
@@ -829,7 +831,7 @@ PROCESS (clk, setdisp, memaddr_a, briefdata, memaddr_delta, setdispbyte, datatyp
 				ELSIF exec(direct_delta)='1' THEN
 					memaddr_delta <= data_read;
 				ELSIF exec(ea_to_pc)='1' AND setstate="00" THEN
-					memaddr_delta <= addr;
+					memaddr_delta <= addr_int;
 				ELSIF set(addrlong)='1' THEN
 					memaddr_delta <= last_data_read;
 				ELSIF setstate="00" THEN
@@ -847,12 +849,12 @@ PROCESS (clk, setdisp, memaddr_a, briefdata, memaddr_delta, setdispbyte, datatyp
 				END IF;
 
 				IF (long_done='0' AND state(1)='1') OR movem_presub='0' THEN
-				  memaddr <= addr;
+				  memaddr <= addr_int;
 				END IF;
 			END IF;
 		END IF;
 		-- if access done, and not aligned, don't increment
-		addr <= memaddr_reg+memaddr_delta;
+		addr_int <= memaddr_reg+memaddr_delta;
 		IF use_base='0' THEN
 			memaddr_reg <= (others=>'0');
 		ELSE
@@ -954,7 +956,7 @@ PROCESS (clk, IPL, setstate, state, exec_write_back, set_direct_data, next_micro
 					IF exec(directPC)='1' THEN
 						TG68_PC <= data_read;
 					ELSIF exec(ea_to_pc)='1' THEN
-						TG68_PC <= addr;
+						TG68_PC <= addr_int;
 					ELSIF (state ="00" OR TG68_PC_brw = '1') AND stop='0'  THEN
 						TG68_PC <= TG68_PC_add;
 					END IF;
@@ -1256,7 +1258,7 @@ PROCESS (clk, Reset, FlagsSR, last_data_read, OP2out, exec)
 PROCESS (clk, cpu, OP1out, OP2out, opcode, exe_condition, nextpass, micro_state, decodeOPC, state, setexecOPC, Flags, FlagsSR, direct_data, build_logical,
 		 build_bcd, set_Z_error, trapd, movem_run, last_data_read, set, set_V_Flag, z_error, trap_trace, trap_interrupt,
 		 SVmode, preSVmode, stop, long_done, ea_only, setstate, execOPC, exec_write_back, exe_datatype,
-		 datatype, interrupt, c_out, trapmake, rot_cnt, brief, addr,
+		 datatype, interrupt, c_out, trapmake, rot_cnt, brief, addr_int,
 		 long_start, set_datatype, sndOPC, set_exec, exec, ea_build_now, reg_QA, reg_QB, make_berr, trap_berr)
 	BEGIN
 		TG68_PC_brw <= '0';

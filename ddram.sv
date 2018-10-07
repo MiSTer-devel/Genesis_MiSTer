@@ -40,7 +40,7 @@ module ddram
 	input         we_req,
 	output reg    we_ack,
 
-	input  [27:0] rdaddr,
+	input  [27:1] rdaddr,
 	output [15:0] dout,
 	input         rd_req,
 	output reg    rd_ack

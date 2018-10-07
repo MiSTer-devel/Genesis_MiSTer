@@ -45,7 +45,9 @@ entity vdp is
 		MEMCLK			: in  std_logic;
 
 		SEL				: in  std_logic;
-		A					: in  std_logic_vector(4 downto 0);
+		A					: in  std_logic_vector(4 downto 1);
+		UDS_N				: in  std_logic;
+		LDS_N				: in  std_logic;
 		RNW				: in  std_logic;
 		DI					: in  std_logic_vector(15 downto 0);
 		DO					: out std_logic_vector(15 downto 0);
@@ -586,6 +588,7 @@ STATUS <= "111111" & FIFO_EMPTY & FIFO_FULL & VINT_TG68_PENDING & SOVR & SCOL & 
 DTACK_N <= FF_DTACK_N;
 DO <= FF_DO;
 process( RST_N, CLK )
+	variable DIN : std_logic_vector(15 downto 0);
 begin
 	if RST_N = '0' then
 		FF_DTACK_N <= '1';
@@ -612,6 +615,14 @@ begin
 			FF_DTACK_N <= '1';
 		elsif SEL = '1' and FF_DTACK_N = '1' then
 			if RNW = '0' then -- Write
+				if UDS_N = '0' and LDS_N = '0' then
+					DIN := DI;
+				elsif UDS_N = '0' then
+					DIN := DI(15 downto 8) & DI(15 downto 8);
+				else
+					DIN := DI(7 downto 0) & DI(7 downto 0);
+				end if;
+				
 				if A(4 downto 2) = "000" then
 					-- Data Port
 					PENDING <= '0';
@@ -620,7 +631,7 @@ begin
 					or CODE = "000101" -- VSRAM Write
 					or CODE = "000001" -- VRAM Write
 					then
-						DT_FF_DATA <= DI;
+						DT_FF_DATA <= DIN;
 						DT_FF_CODE <= CODE(2 downto 0);
 
 						if DT_FF_DTACK_N = '1' then
@@ -630,7 +641,7 @@ begin
 							FF_DTACK_N <= '0';
 						end if;
 					else
-						DT_DMAF_DATA <= DI;
+						DT_DMAF_DATA <= DIN;
 						if DMA_FILL_PRE = '1' then
 							if DMAF_SET_ACK = '0' then
 								DMAF_SET_REQ <= '1';
@@ -646,8 +657,8 @@ begin
 				elsif A(4 downto 2) = "001" then
 					-- Control Port
 					if PENDING = '1' then
-						CODE(5 downto 2) <= DI(7 downto 4);
-						ADDR_LATCH <= DI(2 downto 0) & ADDR(13 downto 0);
+						CODE(5 downto 2) <= DIN(7 downto 4);
+						ADDR_LATCH <= DIN(2 downto 0) & ADDR(13 downto 0);
 
 						-- In case of DMA VBUS request, hold the TG68 with DTACK_N
 						-- it should avoid the use of a CLKEN signal
@@ -659,9 +670,9 @@ begin
 							PENDING <= '0';
 						end if;
 					else
-						if DI(15 downto 13) = "100" then
+						if DIN(15 downto 13) = "100" then
 							-- Register Set
-							REG_LATCH <= DI;
+							REG_LATCH <= DIN;
 							if REG_SET_ACK = '0' then
 								REG_SET_REQ <= '1';
 							else
@@ -670,8 +681,8 @@ begin
 							end if;
 						else
 							-- Address Set
-							CODE(1 downto 0) <= DI(15 downto 14);
-							ADDR_LATCH(13 downto 0) <= DI(13 downto 0);
+							CODE(1 downto 0) <= DIN(15 downto 14);
+							ADDR_LATCH(13 downto 0) <= DIN(13 downto 0);
 							if ADDR_SET_ACK = '0' then
 								ADDR_SET_REQ <= '1';
 							else
@@ -685,7 +696,7 @@ begin
 					end if;
 
 				elsif A(4 downto 2) = "111" then
-					DBG <= DI;
+					DBG <= DIN;
 					FF_DTACK_N <= '0';
 					
 				else

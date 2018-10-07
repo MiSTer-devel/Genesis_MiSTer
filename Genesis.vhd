@@ -77,7 +77,7 @@ entity Genesis is
 		MAPPER_WE	: out std_logic;
 		MAPPER_D		: out std_logic_vector(7 downto 0);
 
-		ROM_ADDR 	: out std_logic_vector(22 downto 0);
+		ROM_ADDR 	: out std_logic_vector(22 downto 1);
 		ROM_DATA 	: in  std_logic_vector(15 downto 0);
 		ROM_REQ		: out std_logic;
 		ROM_ACK 		: in  std_logic
@@ -163,7 +163,7 @@ constant NO_DATA	: std_logic_vector(15 downto 0) := x"4E71";	-- SYNTHESIS gp/m68
 signal TG68_DI			: std_logic_vector(15 downto 0);
 signal TG68_IPL_N		: std_logic_vector(2 downto 0);
 signal TG68_DTACK_N	: std_logic;
-signal TG68_A			: std_logic_vector(31 downto 0);
+signal TG68_A			: std_logic_vector(31 downto 1);
 signal TG68_DO			: std_logic_vector(15 downto 0);
 signal TG68_AS_N		: std_logic;
 signal TG68_UDS_N		: std_logic;
@@ -255,7 +255,7 @@ signal T80_CTRL_DTACK_N	: std_logic;
 
 -- I/O AREA
 signal IO_SEL				: std_logic;
-signal IO_A 				: std_logic_vector(4 downto 0);
+signal IO_A 				: std_logic_vector(4 downto 1);
 signal IO_RNW				: std_logic;
 signal IO_UDS_N			: std_logic;
 signal IO_LDS_N			: std_logic;
@@ -281,7 +281,9 @@ signal IOC : ioc_t;
 
 -- VDP AREA
 signal VDP_SEL				: std_logic;
-signal VDP_A 				: std_logic_vector(4 downto 0);
+signal VDP_A 				: std_logic_vector(4 downto 1);
+signal VDP_UDS_N			: std_logic;
+signal VDP_LDS_N			: std_logic;
 signal VDP_RNW				: std_logic;
 signal VDP_DI				: std_logic_vector(15 downto 0);
 signal VDP_DO				: std_logic_vector(15 downto 0);
@@ -554,6 +556,8 @@ port map(
 
 	SEL		=> VDP_SEL,
 	A			=> VDP_A,
+	UDS_N		=> VDP_UDS_N,
+	LDS_N		=> VDP_LDS_N,
 	RNW		=> VDP_RNW,
 	DI			=> VDP_DI,
 	DO			=> VDP_DO,
@@ -944,7 +948,7 @@ begin
 		when IOC_IDLE =>
 			if TG68_IO_SEL = '1' and TG68_IO_DTACK_N = '1' then
 				IO_SEL <= '1';
-				IO_A <= TG68_A(4 downto 0);
+				IO_A <= TG68_A(4 downto 1);
 				IO_RNW <= TG68_RNW;
 				IO_UDS_N <= TG68_UDS_N;
 				IO_LDS_N <= TG68_LDS_N;
@@ -952,7 +956,7 @@ begin
 				IOC <= IOC_TG68_ACC;
 			elsif T80_IO_SEL = '1' and T80_IO_DTACK_N = '1' then
 				IO_SEL <= '1';
-				IO_A <= T80_A(4 downto 0);
+				IO_A <= T80_A(4 downto 1);
 				IO_RNW <= T80_WR_N;
 				if T80_A(0) = '0' then
 					IO_UDS_N <= '0';
@@ -1043,8 +1047,6 @@ begin
 		
 		VDP_SEL <= '0';
 		VDP_RNW <= '1';
-		VDP_A <= (others => '0');
-
 		VDPC <= VDPC_IDLE;
 
 	elsif rising_edge(MCLK) then
@@ -1060,13 +1062,23 @@ begin
 			if TG68_VDP_SEL = '1' and TG68_VDP_DTACK_N = '1' then
 				-- VDP
 				VDP_SEL <= '1';
-				VDP_A <= TG68_A(4 downto 0);
+				VDP_A <= TG68_A(4 downto 1);
+				VDP_UDS_N <= TG68_UDS_N;
+				VDP_LDS_N <= TG68_LDS_N;
+
 				VDP_RNW <= TG68_RNW;
 				VDP_DI <= TG68_DO;
 				VDPC <= VDPC_TG68_ACC;
 			elsif T80_VDP_SEL = '1' and T80_VDP_DTACK_N = '1' then
 				VDP_SEL <= '1';
-				VDP_A <= T80_A(4 downto 0);
+				VDP_A <= T80_A(4 downto 1);
+				if T80_A(0) = '0' then
+					VDP_UDS_N <= '0';
+					VDP_LDS_N <= '1';
+				else
+					VDP_UDS_N <= '1';
+					VDP_LDS_N <= '0';				
+				end if;
 				VDP_RNW <= T80_WR_N;
 				VDP_DI <= T80_DO & T80_DO;
 				VDPC <= VDPC_T80_ACC;			
@@ -1095,8 +1107,6 @@ begin
 		when VDPC_DESEL =>
 			if VDP_DTACK_N = '1' then
 				VDP_RNW <= '1';
-				VDP_A <= (others => '0');
-
 				VDPC <= VDPC_IDLE;
 			end if;
 			
@@ -1140,12 +1150,14 @@ process( RESET_N, MCLK ) begin
 		case FMC is
 		when FMC_IDLE =>
 			if TG68_FM_SEL = '1' and TG68_FM_DTACK_N = '1' then
-				FM_A <= TG68_A(1 downto 0);
+				FM_A(1) <= TG68_A(1);
 				FM_RNW <= TG68_RNW;
-				if TG68_UDS_N = '0' then
-					FM_DI <= TG68_DO(15 downto 8);
-				else
+				if TG68_RNW = '0' and TG68_LDS_N = '0' then
 					FM_DI <= TG68_DO(7 downto 0);
+					FM_A(0) <= '1';
+				else
+					FM_DI <= TG68_DO(15 downto 8);
+					FM_A(0) <= '0';
 				end if;
 
 				FMC <= FMC_TG68_ACC;
@@ -1168,7 +1180,6 @@ process( RESET_N, MCLK ) begin
 
 		when FMC_DESEL =>
 			FM_RNW <= '1';
-			FM_A <= (others => '0');
 			FMC <= FMC_IDLE;
 
 		when others => null;
@@ -1189,10 +1200,10 @@ process( RESET_N, MCLK ) begin
 	elsif rising_edge(MCLK) then
 		if TG68_PSG_SEL = '1' then
 			PSG_WR_n <= '0';
-			if TG68_A(0)='0' then
-				PSG_DI <= TG68_DO(15 downto 8);
-			else
+			if TG68_LDS_N = '0' then
 				PSG_DI <= TG68_DO(7 downto 0);
+			else
+				PSG_DI <= TG68_DO(15 downto 8);
 			end if;
 		elsif T80_PSG_SEL = '1' then
 			PSG_WR_n <= '0';
@@ -1305,16 +1316,16 @@ process (RESET_N, MCLK) begin
 			if VBUS_BUSY = '1' then
 				if DMA_FLASH_SEL = '1' and DMA_FLASH_DTACK_N = '1' then
 					romrd_req <= not romrd_ack;
-					ROM_ADDR <= VBUS_ADDR(22 downto 0);
+					ROM_ADDR <= VBUS_ADDR(22 downto 1);
 					FC <= FC_DMA_RD;
 				end if;
 			elsif TG68_FLASH_SEL = '1' and TG68_FLASH_DTACK_N = '1' then
 				romrd_req <= not romrd_ack;
-				ROM_ADDR <= TG68_A(22 downto 0);
+				ROM_ADDR <= TG68_A(22 downto 1);
 				FC <= FC_TG68_RD;
 			elsif T80_FLASH_SEL = '1' and T80_FLASH_DTACK_N = '1' then
 				romrd_req <= not romrd_ack;
-				ROM_ADDR <= BAR(22 downto 15) & T80_A(14 downto 0);
+				ROM_ADDR <= BAR(22 downto 15) & T80_A(14 downto 1);
 				FC <= FC_T80_RD;
 			end if;
 
