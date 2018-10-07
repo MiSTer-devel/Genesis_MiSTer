@@ -183,7 +183,7 @@ end
 
 //////////////////////////////////////////////////
 // V APPLY_MUL
-reg [16:0] phinc_VI;
+reg [19:0] phinc_VI;
 always @(posedge clk) begin : phase_calculation_V
 	if( mul_V==4'd0 )
 		phinc_VI	<= { 1'b0, phinc_V[16:1] };
