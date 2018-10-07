@@ -34,6 +34,7 @@ module jt12_acc
 (
 	input				rst,
     input				clk,
+    input				clk_en,
 	input signed [8:0]	op_result,
 	input		 [ 1:0]	rl,
 	input				limiter_en, // enables the limiter on
@@ -67,10 +68,10 @@ reg sum_en;
 
 always @(*) begin
 	case ( alg )
-        default: sum_en <= s4_enters;
-    	3'd4: sum_en <= s2_enters | s4_enters;
-        3'd5,3'd6: sum_en <= ~s1_enters;        
-        3'd7: sum_en <= 1'b1;
+        default: sum_en = s4_enters;
+    	3'd4: sum_en = s2_enters | s4_enters;
+        3'd5,3'd6: sum_en = ~s1_enters;        
+        3'd7: sum_en = 1'b1;
     endcase
 end
    
@@ -86,7 +87,8 @@ reg  [1:0] mux_cnt;
 
 wire signed [11:0] total_signext = { {3{total[8]}}, total };
 
-always @(posedge clk) begin : mux_dac_input
+always @(posedge clk) // mux_dac_input
+if( clk_en ) begin
 	buffer2 <= buffer;
 	rl2     <= rl;
 	last_s1 <= s1_enters;
@@ -110,11 +112,11 @@ always @(posedge clk) begin : mux_dac_input
 		mux_sample <= 1'b0;	
 end
 
-always @(posedge clk) begin
+always @(posedge clk) 
 	if( rst ) begin
 		sum_all <= 1'b0;
 	end
-    else begin
+    else if( clk_en ) begin
 		if( s3_enters )  begin
     		sum_all <= 1'b1;
 	        if( !sum_all ) begin
@@ -135,42 +137,44 @@ always @(posedge clk) begin
             `endif
         end
     end
-end
+
 			
 reg  signed [8:0] next, opsum, prev;
 wire signed [9:0] opsum10 = next+total;
 
 always @(*) begin
-	next <= sum_en ? op_result : 9'd0;
+	next = sum_en ? op_result : 9'd0;
 	if( s3_enters )
-		opsum <= (ch6op && pcm_en) ? { ~pcm[8], pcm[7:0] } : next;
+		opsum = (ch6op && pcm_en) ? { ~pcm[8], pcm[7:0] } : next;
 	else begin
 		if( sum_en && !(ch6op && pcm_en) )
 			if( limiter_en ) begin
 				if( opsum10[9]==opsum10[8] )
-					opsum <= opsum10[8:0];
+					opsum = opsum10[8:0];
 				else begin
-					opsum <= opsum10[9] ? 9'h100 : 9'h0ff;
+					opsum = opsum10[9] ? 9'h100 : 9'h0ff;
 				end
 			end
 			else begin
 				// MSB is discarded according to
 				// YM3438 application notes
-				opsum <= opsum10[8:0]; 
+				opsum = opsum10[8:0]; 
 			end
 		else
-			opsum <= total;
+			opsum = total;
 	end
 end
 
 jt12_sh #(.width(9),.stages(6)) u_acc(
 	.clk	( clk	),
+	.clk_en ( clk_en),
 	.din	( opsum	),
 	.drop	( total	)
 );
 
 jt12_sh #(.width(9),.stages(6)) u_buffer(
 	.clk	( clk		),
+	.clk_en ( clk_en	),
 	.din	( s3_enters ? total : buffer	),
 	.drop	( buffer	)
 );

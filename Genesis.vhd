@@ -37,6 +37,7 @@ use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.STD_LOGIC_UNSIGNED.ALL;
 use IEEE.STD_LOGIC_TEXTIO.all;
 use IEEE.NUMERIC_STD.ALL;
+use work.jt12.all; 
 
 entity Genesis is
 	generic (
@@ -85,22 +86,6 @@ entity Genesis is
 end entity;
 
 architecture rtl of Genesis is
-component jt12 port(
-	rst	         : in  std_logic;
-	cpu_clk        : in  std_logic;
-	cpu_din        : in  std_logic_vector(7 downto 0);
-	cpu_dout       : out std_logic_vector(7 downto 0);
-	cpu_addr       : in  std_logic_vector(1 downto 0);
-	cpu_cs_n       : in  std_logic;
-	cpu_wr_n       : in  std_logic;	
-	cpu_irq_n      : out std_logic;
-	cpu_limiter_en : in  std_logic;
-	
-	syn_clk        : in  std_logic;
-	syn_snd_right  : out std_logic_vector(11 downto 0);
-	syn_snd_left   : out std_logic_vector(11 downto 0)
-);
-end component;
 
 -- VRAM
 signal vram_req : std_logic;
@@ -193,7 +178,6 @@ signal T80_A         : std_logic_vector(15 downto 0);
 signal T80_DI        : std_logic_vector(7 downto 0);
 signal T80_DO        : std_logic_vector(7 downto 0);
 
-signal SCLK_EN			: std_logic;
 signal FCLK_EN			: std_logic;
 
 -- FLASH CONTROL
@@ -613,18 +597,19 @@ port map(
 
 fm : jt12
 port map(
-	rst		      => not RESET_N,
-	cpu_clk	      => MCLK,
-	cpu_limiter_en => FM_LIMITER,
-	cpu_cs_n	      => '0',
-	cpu_addr	      => FM_A,
-	cpu_wr_n	      => FM_RNW,
-	cpu_din	      => FM_DI,
-	cpu_dout	      => FM_DO,
+	rst		   => not RESET_N,
+	clk	      => MCLK,
+	cen	     	=> FCLK_EN,
 
-	syn_clk	      => MCLK and SCLK_EN,
-	syn_snd_left   => snd_left,
-	syn_snd_right  => snd_right
+	limiter_en 	=> FM_LIMITER,
+	cs_n	      => '0',
+	addr	      => FM_A,
+	wr_n	      => FM_RNW,
+	din	      => FM_DI,
+	dout	      => FM_DO,
+
+	snd_left   => snd_left,
+	snd_right  => snd_right
 );
 
 DAC_LDATA <= (snd_left(11)  &  snd_left) + (PSG_SND&"00");
@@ -665,19 +650,11 @@ end process;
 ----------------------------------------------------------------
 
 process( RESET_N, MCLK )
-	variable SCLKCNT  : std_logic_vector(5 downto 0) := (others => '0');
 	variable FCLKCNT  : std_logic_vector(2 downto 0) := (others => '0');
 	variable VCLKCNT  : std_logic_vector(3 downto 0) := (others => '0');
 	variable ZCLKCNT  : std_logic_vector(3 downto 0) := (others => '0');
 begin
 	if falling_edge(MCLK) then
-
-		SCLK_EN <= '0';
-		SCLKCNT := SCLKCNT + 1;
-		if SCLKCNT = 42 then
-			SCLKCNT := (others => '0');
-			SCLK_EN <= '1';
-		end if;
 
 		T80_CLKEN <= '0';
 		ZCLKCNT := ZCLKCNT + 1;

@@ -22,35 +22,36 @@
 
 module jt12_sh24 #(parameter width=5 )
 (
-	input 					clk,
-	input		[width-1:0]	din,
-   	output reg [width-1:0]	st1,
-   	output reg [width-1:0]	st2,
-   	output reg [width-1:0]	st3,
-   	output reg [width-1:0]	st4,
-   	output reg [width-1:0]	st5,
-   	output reg [width-1:0]	st6,
-   	output reg [width-1:0]	st7,
-   	output reg [width-1:0]	st8,
-   	output reg [width-1:0]	st9,
-   	output reg [width-1:0]	st10,
-   	output reg [width-1:0]	st11,
-   	output reg [width-1:0]	st12,
-   	output reg [width-1:0]	st13,
-   	output reg [width-1:0]	st14,
-   	output reg [width-1:0]	st15,
-   	output reg [width-1:0]	st16,
-   	output reg [width-1:0]	st17,
-   	output reg [width-1:0]	st18,
-   	output reg [width-1:0]	st19,
-   	output reg [width-1:0]	st20,
-   	output reg [width-1:0]	st21,
-   	output reg [width-1:0]	st22,
-   	output reg [width-1:0]	st23,
-   	output reg [width-1:0]	st24
+  input 	clk,
+  input   clk_en,  
+  input		[width-1:0]	din,
+ 	output reg [width-1:0]	st1,
+ 	output reg [width-1:0]	st2,
+ 	output reg [width-1:0]	st3,
+ 	output reg [width-1:0]	st4,
+ 	output reg [width-1:0]	st5,
+ 	output reg [width-1:0]	st6,
+ 	output reg [width-1:0]	st7,
+ 	output reg [width-1:0]	st8,
+ 	output reg [width-1:0]	st9,
+ 	output reg [width-1:0]	st10,
+ 	output reg [width-1:0]	st11,
+ 	output reg [width-1:0]	st12,
+ 	output reg [width-1:0]	st13,
+ 	output reg [width-1:0]	st14,
+ 	output reg [width-1:0]	st15,
+ 	output reg [width-1:0]	st16,
+ 	output reg [width-1:0]	st17,
+ 	output reg [width-1:0]	st18,
+ 	output reg [width-1:0]	st19,
+ 	output reg [width-1:0]	st20,
+ 	output reg [width-1:0]	st21,
+ 	output reg [width-1:0]	st22,
+ 	output reg [width-1:0]	st23,
+ 	output reg [width-1:0]	st24
 );
 
-always @(posedge clk) begin
+always @(posedge clk) if(clk_en) begin
 	st24<= st23;
 	st23<= st22;
 	st22<= st21;

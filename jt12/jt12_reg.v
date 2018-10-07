@@ -27,6 +27,7 @@
 module jt12_reg(
 	input			rst,
 	input			clk,
+	input			clk_en,
 	input	[7:0]	din,
 	
 	input	[2:0]	ch,
@@ -120,7 +121,7 @@ wire [4:0] cur  = {  cur_op,  cur_ch };
 
 wire [2:0] fb_I;
 
-always @(posedge clk) begin
+always @(posedge clk) if( clk_en ) begin
 	fb_II <= fb_I;
 	ch6op <= next_ch==3'd6;
 end	
@@ -225,9 +226,9 @@ wire up = 	up_alg 	| up_block 	| up_fnumlo | up_pms |
 			up_d2r	| up_d1l 	| up_ssgeg  | up_keyon;			
 
 always @(*) begin
-	// next <= cur==5'd23 ? 5'd0 : cur +1'b1;
-	next_op <= cur_ch==3'd6 ? cur_op+1'b1 : cur_op;
-	next_ch <= cur_ch[1:0]==2'b10 ? cur_ch+2'd2 : cur_ch+1'd1;
+	// next = cur==5'd23 ? 5'd0 : cur +1'b1;
+	next_op = cur_ch==3'd6 ? cur_op+1'b1 : cur_op;
+	next_ch = cur_ch[1:0]==2'b10 ? cur_ch+2'd2 : cur_ch+1'd1;
 end
 
 reg		busy_op; 
@@ -246,7 +247,7 @@ always @(posedge clk) begin : up_counter
 		cur_op  <= 2'd0;
 		cur_ch  <= 3'd0;
 	end
-	else begin
+	else if( clk_en ) begin
 		{ cur_op, cur_ch }	<= { next_op, next_ch };
 		zero 	<= next == 5'd0;
 		last	<= up;
@@ -265,6 +266,7 @@ end
 jt12_kon u_kon(
 	.rst		( rst		),
 	.clk		( clk		),
+	.clk_en		( clk_en	),
 	.keyon_op	( keyon_op	),
 	.keyon_ch	( keyon_ch	),
 	.cur_op		( cur_op	),
@@ -297,15 +299,16 @@ parameter regop_width=44;
 wire [regop_width-1:0] regop_in, regop_out;
 
 jt12_opram u_opram(
-	.clk	( clk ),
-	.wr_addr	( cur ),
-	.rd_addr	( next ),
-	.data	( regop_in ),
+	.clk	( clk 		),
+	.clk_en	( clk_en	),
+	.wr_addr( cur 		),
+	.rd_addr( next 		),
+	.data	( regop_in 	),
 	.q		( regop_out )
 );
 
 assign regop_in = {
-	up_tl_op		? tl_in : tl_VII, // 7
+	up_tl_op	? tl_in  : tl_VII, // 7
 	up_dt1_op	? dt1_in : dt1_II,	// 3
 	up_mul_op	? mul_in : mul_V,	// 4 - 7
 	up_ks_op	? ks_in	 : ks_III,	// 2 - 16
@@ -344,17 +347,19 @@ assign { block_latch, fnum_latch,
 			block_I_raw, fnum_I_raw, 
 			fb_I, alg, ams_VII, pms } = regch_out;
 
-jt12_sh #(.width(regch_width),.stages(6)) u_regch(
+jt12_sh_rst #(.width(regch_width),.stages(6)) u_regch(
 	.clk	( clk		),
-	//.rst	( rst		),
+	.clk_en	( clk_en	),
+	.rst	( rst		),
 	.din	( regch_in	),
 	.drop	( regch_out	)
 );
 
 // RL is on a different register to 
 // have the reset to 1
-jt12_sh_rst #(.width(2),.stages(6),.rstval(1'b1)) u_regch_rl(
+jt12_sh #(.width(2),.stages(6)) u_regch_rl(
 	.clk	( clk		),
+	.clk_en	( clk_en	),
 //	.rst	( rst		),
 	.din	( up_pms_ch	? rl_in :  rl	),
 	.drop	( rl	)

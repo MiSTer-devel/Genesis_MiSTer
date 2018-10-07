@@ -29,9 +29,9 @@ module jt12_sumch
 reg [2:0] aux;
 
 always @(*) begin
-	aux <= chin[2:0] + 3'd1;
-	chout[2:0] <= aux[1:0]==2'b11 ? aux+3'd1 : aux;
-	chout[4:3] <= chin[2:0]==3'd6 ? chin[4:3]+2'd1 : chin[4:3];
+	aux = chin[2:0] + 3'd1;
+	chout[2:0] = aux[1:0]==2'b11 ? aux+3'd1 : aux;
+	chout[4:3] = chin[2:0]==3'd6 ? chin[4:3]+2'd1 : chin[4:3];
 end
 
 endmodule

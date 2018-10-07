@@ -3,7 +3,7 @@
 reg [4:0] sep24_cnt;
 reg mmr_dump;
 
-always @(posedge clk )
+always @(posedge clk ) if(clk_en)
 	sep24_cnt <= !zero ? sep24_cnt+1'b1 : 5'd0;
 
 wire [10:0] fnum_ch0s1, fnum_ch1s1, fnum_ch2s1, fnum_ch3s1,
@@ -16,8 +16,9 @@ wire [10:0] fnum_ch0s1, fnum_ch1s1, fnum_ch2s1, fnum_ch3s1,
 sep24 #( .width(11), .pos0(1) ) fnum_sep
 (
 	.clk	( clk		),
+	.clk_en	( clk_en	),
 	.mixed	( fnum_I	),
-	.mask	( 11'd0		),
+	.mask	( 24'd0		),
 	.cnt	( sep24_cnt	),
 
 	.ch0s1 (fnum_ch0s1),
@@ -59,8 +60,9 @@ wire [2:0] block_ch0s1, block_ch1s1, block_ch2s1, block_ch3s1,
 sep24 #( .width(3), .pos0(1) ) block_sep
 (
 	.clk	( clk		),
+	.clk_en	( clk_en	),
 	.mixed	( block_I	),
-	.mask	( 3'd0		),
+	.mask	( 24'd0		),
 	.cnt	( sep24_cnt	),
 
 	.ch0s1 (block_ch0s1),
@@ -102,8 +104,9 @@ wire [1:0] rl_ch0s1, rl_ch1s1, rl_ch2s1, rl_ch3s1,
 sep24 #( .width(2), .pos0(1) ) rl_sep
 (
 	.clk	( clk		),
+	.clk_en	( clk_en	),
 	.mixed	( rl		),
-	.mask	( 2'd0		),
+	.mask	( 24'd0		),
 	.cnt	( sep24_cnt	),
 
 	.ch0s1 (rl_ch0s1),
@@ -145,8 +148,9 @@ wire [2:0] fb_ch0s1, fb_ch1s1, fb_ch2s1, fb_ch3s1,
 sep24 #( .width(3), .pos0(0) ) fb_sep
 (
 	.clk	( clk		),
+	.clk_en	( clk_en	),
 	.mixed	( fb_II		),
-	.mask	( 3'd0		),
+	.mask	( 24'd0		),
 	.cnt	( sep24_cnt	),
 
 	.ch0s1 (fb_ch0s1),
@@ -188,8 +192,9 @@ wire [2:0] alg_ch0s1, alg_ch1s1, alg_ch2s1, alg_ch3s1,
 sep24 #( .width(3), .pos0(1) ) alg_sep
 (
 	.clk	( clk		),
+	.clk_en	( clk_en	),
 	.mixed	( alg		),
-	.mask	( 3'd0		),
+	.mask	( 24'd0		),
 	.cnt	( sep24_cnt	),
 
 	.ch0s1 (alg_ch0s1),
@@ -231,8 +236,9 @@ wire [2:0] dt1_ch0s1, dt1_ch1s1, dt1_ch2s1, dt1_ch3s1,
 sep24 #( .width(3), .pos0(0) ) dt1_sep
 (
 	.clk	( clk		),
+	.clk_en	( clk_en	),
 	.mixed	( dt1_II	),
-	.mask	( 3'd0		),
+	.mask	( 24'd0		),
 	.cnt	( sep24_cnt	),
 
 	.ch0s1 (dt1_ch0s1),
@@ -274,8 +280,9 @@ wire [3:0] mul_ch0s1, mul_ch1s1, mul_ch2s1, mul_ch3s1,
 sep24 #( .width(4), .pos0(21) ) mul_sep
 (
 	.clk	( clk		),
+	.clk_en	( clk_en	),
 	.mixed	( mul_V		),
-	.mask	( 4'd0		),
+	.mask	( 24'd0		),
 	.cnt	( sep24_cnt	),
 
 	.ch0s1 (mul_ch0s1),
@@ -317,8 +324,9 @@ wire [6:0] tl_ch0s1, tl_ch1s1, tl_ch2s1, tl_ch3s1,
 sep24 #( .width(7), .pos0(19) ) tl_step
 (
 	.clk	( clk		),
+	.clk_en	( clk_en	),
 	.mixed	( tl_VII	),
-	.mask	( 7'd0		),
+	.mask	( 24'd0		),
 	.cnt	( sep24_cnt	),
 
 	.ch0s1 (tl_ch0s1),
@@ -360,8 +368,9 @@ wire [4:0] ar_ch0s1, ar_ch1s1, ar_ch2s1, ar_ch3s1,
 sep24 #( .width(5), .pos0(0) ) ar_step
 (
 	.clk	( clk		),
+	.clk_en	( clk_en	),
 	.mixed	( ar_II		),
-	.mask	( 5'd0		),
+	.mask	( 24'd0		),
 	.cnt	( sep24_cnt	),
 
 	.ch0s1 (ar_ch0s1),
@@ -403,8 +412,9 @@ wire [4:0] d1r_ch0s1, d1r_ch1s1, d1r_ch2s1, d1r_ch3s1,
 sep24 #( .width(5), .pos0(0) ) d1r_step
 (
 	.clk	( clk		),
+	.clk_en	( clk_en	),
 	.mixed	( d1r_II	),
-	.mask	( 0			),
+	.mask	( 24'd0		),
 	.cnt	( sep24_cnt	),
 
 	.ch0s1 (d1r_ch0s1),
@@ -446,8 +456,9 @@ wire [4:0] d2r_ch0s1, d2r_ch1s1, d2r_ch2s1, d2r_ch3s1,
 sep24 #( .width(5), .pos0(0) ) d2r_step
 (
 	.clk	( clk		),
+	.clk_en	( clk_en	),
 	.mixed	( d2r_II	),
-	.mask	( 5'd0		),
+	.mask	( 24'd0		),
 	.cnt	( sep24_cnt	),
 
 	.ch0s1 (d2r_ch0s1),
@@ -489,8 +500,9 @@ wire [3:0] rr_ch0s1, rr_ch1s1, rr_ch2s1, rr_ch3s1,
 sep24 #( .width(4), .pos0(0) ) rr_step
 (
 	.clk	( clk		),
-	.mixed	( rr_II	),
-	.mask	( 0			),
+	.clk_en	( clk_en	),
+	.mixed	( rr_II		),
+	.mask	( 24'd0		),
 	.cnt	( sep24_cnt	),
 
 	.ch0s1 (rr_ch0s1),
@@ -532,8 +544,9 @@ wire [3:0] d1l_ch0s1, d1l_ch1s1, d1l_ch2s1, d1l_ch3s1,
 sep24 #( .width(4), .pos0(1) ) d1l_step
 (
 	.clk	( clk		),
+	.clk_en	( clk_en	),
 	.mixed	( d1l		),
-	.mask	( 4'd0		),
+	.mask	( 24'd0		),
 	.cnt	( sep24_cnt	),
 
 	.ch0s1 (d1l_ch0s1),
@@ -575,8 +588,9 @@ wire [1:0] ks_ch0s1, ks_ch1s1, ks_ch2s1, ks_ch3s1,
 sep24 #( .width(2), .pos0(23) ) ks_step
 (
 	.clk	( clk		),
+	.clk_en	( clk_en	),
 	.mixed	( ks_III	),
-	.mask	( 0			),
+	.mask	( 24'd0		),
 	.cnt	( sep24_cnt	),
 
 	.ch0s1 (ks_ch0s1),
@@ -620,8 +634,9 @@ wire [3:0] ssg_ch0s1, ssg_ch1s1, ssg_ch2s1, ssg_ch3s1,
 sep24 #( .width(4), .pos0(0) ) ssg_step
 (
 	.clk	( clk		),
+	.clk_en	( clk_en	),
 	.mixed	( ssg_II	),
-	.mask	( 4'd0		),
+	.mask	( 24'd0		),
 	.cnt	( sep24_cnt	),
 
 	.ch0s1 (ssg_ch0s1),
@@ -663,8 +678,9 @@ wire	 kon_ch0s1, kon_ch1s1, kon_ch2s1, kon_ch3s1,
 sep24 #( .width(1), .pos0(0) ) konstep
 (
 	.clk	( clk		),
+	.clk_en	( clk_en	),
 	.mixed	( keyon_II	),
-	.mask	( 1'd0		),
+	.mask	( 24'd0		),
 	.cnt	( sep24_cnt	),
 
 	.ch0s1 (kon_ch0s1),

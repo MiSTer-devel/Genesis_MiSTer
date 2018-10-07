@@ -30,6 +30,7 @@ module jt12_opram
 	input [4:0] wr_addr,
 	input [4:0] rd_addr,
 	input clk, 
+	input clk_en,
 	input [43:0] data,
 	output reg [43:0] q
 );
@@ -71,7 +72,7 @@ module jt12_opram
 		ram[31] = { ~7'd0, 37'd0 };
 	end
 
-	always @ (posedge clk) begin
+	always @ (posedge clk) if(clk_en) begin
 		q <= ram[rd_addr];
 		ram[wr_addr] <= data;
 	end

@@ -34,6 +34,7 @@ http://gendev.spritesmind.net/forum/viewtopic.php?t=386&postdays=0&postorder=asc
 
 module jt12_pg(
 	input			 	clk,
+	input				clk_en,
 	input				rst,
 	// Channel frequency
 	input		[10:0]	fnum_I,
@@ -59,14 +60,14 @@ reg signed [8:0] mod;
 
 always @(*) begin
 	case( pms ) // comprobar en silicio
-		3'd0: mod <= 9'd0;
-		3'd1: mod <= { 7'd0, pm[6:5] };
-		3'd2: mod <= { 6'd0, pm[6:4] };
-		3'd3: mod <= { 5'd0, pm[6:3] };
-		3'd4: mod <= { 4'd0, pm[6:2] };
-		3'd5: mod <= { 3'd0, pm[6:1] };
-		3'd6: mod <= { 1'd0, pm[6:0], 1'b0 };
-		3'd7: mod <= {		 pm[6:0], 2'b0 };
+		3'd0: mod = 9'd0;
+		3'd1: mod = { 7'd0, pm[6:5] };
+		3'd2: mod = { 6'd0, pm[6:4] };
+		3'd3: mod = { 5'd0, pm[6:3] };
+		3'd4: mod = { 4'd0, pm[6:2] };
+		3'd5: mod = { 3'd0, pm[6:1] };
+		3'd6: mod = { 1'd0, pm[6:0], 1'b0 };
+		3'd7: mod = {		 pm[6:0], 2'b0 };
 	endcase 	
 end
 
@@ -87,7 +88,7 @@ wire pg_rst_VI;
 reg [4:0] keycode_II;
 reg [16:0] phinc_II;
 
-always @(posedge clk) begin : phase_calculation_I
+always @(posedge clk) if ( clk_en ) begin // phase_calculation_I
 	case ( block_I )
 		3'd0: phinc_II <= { 7'd0, fnum_I[10:1] };
 		3'd1: phinc_II <= { 6'd0, fnum_I       };
@@ -107,7 +108,7 @@ reg [ 5:0] dt1_kf_III;
 reg [16:0] phinc_III;
 reg [ 2:0] dt1_III;
 
-always @(posedge clk) begin : phase_calculation_II
+always @(posedge clk) if ( clk_en ) begin // phase_calculation_II
 	case( dt1_II[1:0] )
 		2'd1:	dt1_kf_III	<=	{ 1'b0, keycode_II } - 6'd4;
 		2'd2:	dt1_kf_III	<=	{ 1'b0, keycode_II } + 6'd4;
@@ -127,14 +128,14 @@ reg [ 2:0] dt1_IV;
 
 always @(*) begin : calcpow2
 	case( dt1_kf_III[2:0] )
-		3'd0: pow2 <= 5'd16;
-		3'd1: pow2 <= 5'd17;
-		3'd2: pow2 <= 5'd19;
-		3'd3: pow2 <= 5'd20;
-		3'd4: pow2 <= 5'd22;
-		3'd5: pow2 <= 5'd24;
-		3'd6: pow2 <= 5'd26;
-		3'd7: pow2 <= 5'd29;
+		3'd0: pow2 = 5'd16;
+		3'd1: pow2 = 5'd17;
+		3'd2: pow2 = 5'd19;
+		3'd3: pow2 = 5'd20;
+		3'd4: pow2 = 5'd22;
+		3'd5: pow2 = 5'd24;
+		3'd6: pow2 = 5'd26;
+		3'd7: pow2 = 5'd29;
 	endcase
 end
 
@@ -143,23 +144,23 @@ reg [4:0] dt1_limit, dt1_offset_IV;
 
 always @(*) begin : dt1_limit_mux
 	case( dt1_III[1:0] )
-		default: dt1_limit <= 5'd8;
-		2'd1: dt1_limit <= 5'd8;
-		2'd2: dt1_limit <= 5'd16;
-		2'd3: dt1_limit <= 5'd22;
+		default: dt1_limit = 5'd8;
+		2'd1: dt1_limit = 5'd8;
+		2'd2: dt1_limit = 5'd16;
+		2'd3: dt1_limit = 5'd22;
 	endcase
 	case( dt1_kf_III[5:3] )
-		3'd0:	dt1_unlimited <= { 5'd0, pow2[4]   }; // <2
-		3'd1:	dt1_unlimited <= { 4'd0, pow2[4:3] }; // <4
-		3'd2:	dt1_unlimited <= { 3'd0, pow2[4:2] }; // <8
-		3'd3:	dt1_unlimited <= { 2'd0, pow2[4:1] };
-		3'd4:	dt1_unlimited <= { 1'd0, pow2[4:0] };
-		3'd5:	dt1_unlimited <= { pow2[4:0], 1'd0 };
-		default:dt1_unlimited <= 6'd0;
+		3'd0:	dt1_unlimited = { 5'd0, pow2[4]   }; // <2
+		3'd1:	dt1_unlimited = { 4'd0, pow2[4:3] }; // <4
+		3'd2:	dt1_unlimited = { 3'd0, pow2[4:2] }; // <8
+		3'd3:	dt1_unlimited = { 2'd0, pow2[4:1] };
+		3'd4:	dt1_unlimited = { 1'd0, pow2[4:0] };
+		3'd5:	dt1_unlimited = { pow2[4:0], 1'd0 };
+		default:dt1_unlimited = 6'd0;
 	endcase
 end
 
-always @(posedge clk) begin : phase_calculation_III
+always @(posedge clk) if ( clk_en ) begin // phase_calculation_III
 	dt1_offset_IV <= dt1_unlimited > dt1_limit ? 
 							dt1_limit : dt1_unlimited[4:0];
 	dt1_IV   <= dt1_III;	
@@ -170,7 +171,7 @@ end
 // IV	
 reg [16:0] phinc_V;
 
-always @(posedge clk) begin : phase_calculation_IV
+always @(posedge clk) if ( clk_en ) begin // phase_calculation_IV
 	if( dt1_IV[1:0]==2'd0 )
 		phinc_V	<=	phinc_IV;
 	else begin
@@ -183,10 +184,10 @@ end
 
 //////////////////////////////////////////////////
 // V APPLY_MUL
-reg [19:0] phinc_VI;
-always @(posedge clk) begin : phase_calculation_V
+reg [19:0] phinc_VI; // expanded to 20-bit widht, as per @ElectronAsh's advice
+always @(posedge clk) if ( clk_en ) begin // phase_calculation_V
 	if( mul_V==4'd0 )
-		phinc_VI	<= { 1'b0, phinc_V[16:1] };
+		phinc_VI	<= { 4'b0, phinc_V[16:1] };
 	else
 		phinc_VI	<= phinc_V * mul_V;
 end
@@ -199,21 +200,22 @@ reg  [19:0] phase_in;
 reg  [ 9:0] phase_VII;
 
 always @(*)
-	phase_in <=  pg_rst_VI ? 20'd0 : 
+	phase_in =  pg_rst_VI ? 20'd0 : 
 		( pg_stop ? phase_drop : phase_drop + phinc_VI);
 
-always @(posedge clk) begin : phase_calculation_VI
+always @(posedge clk) if ( clk_en ) begin // phase_calculation_VI
 	phase_VII <= phase_in[19:10];
 end
 
 //////////////////////////////////////////////////
 // VIII padding
  
-always @(posedge clk) 
+always @(posedge clk) if(clk_en)
 	phase_VIII <= phase_VII;
 
 jt12_sh #( .width(20), .stages(24) ) u_phsh(
 	.clk	( clk		),
+	.clk_en	( clk_en	),
 //	.rst	( rst		),
 	.din	( phase_in	),
 	.drop	( phase_drop)
@@ -221,6 +223,7 @@ jt12_sh #( .width(20), .stages(24) ) u_phsh(
 
 jt12_sh #( .width(1), .stages(3) ) u_rstsh(
 	.clk	( clk		),
+	.clk_en	( clk_en	),
 	.din	( pg_rst_III),
 	.drop	( pg_rst_VI	)
 );
@@ -243,8 +246,9 @@ always @(posedge clk)
 sep24 #( .width(10), .pos0(18)) stsep
 (
 	.clk	( clk		),
+	.clk_en	( clk_en	),
 	.mixed	( phase_VIII),
-	.mask	( 0			),
+	.mask	( 24'd0		),
 	.cnt	( sep24_cnt	),	
 	
 	.ch0s1 (pg_ch0s1), 
@@ -276,18 +280,19 @@ sep24 #( .width(10), .pos0(18)) stsep
 	.ch5s4 (pg_ch5s4)
 );
 
-wire [16:0] phinc_ch0s1, phinc_ch1s1, phinc_ch2s1, phinc_ch3s1,
+wire [19:0] phinc_ch0s1, phinc_ch1s1, phinc_ch2s1, phinc_ch3s1,
 		 phinc_ch4s1, phinc_ch5s1, phinc_ch0s2, phinc_ch1s2,
 		 phinc_ch2s2, phinc_ch3s2, phinc_ch4s2, phinc_ch5s2,
 		 phinc_ch0s3, phinc_ch1s3, phinc_ch2s3, phinc_ch3s3,
 		 phinc_ch4s3, phinc_ch5s3, phinc_ch0s4, phinc_ch1s4,
 		 phinc_ch2s4, phinc_ch3s4, phinc_ch4s4, phinc_ch5s4;
 
-sep24 #( .width(17), .pos0(3+6)) pisep
+sep24 #( .width(20), .pos0(3+6)) pisep
 (
 	.clk	( clk		),
-	.mixed	( phinc_VI),
-	.mask	( 0			),
+	.clk_en	( clk_en	),
+	.mixed	( phinc_VI	),
+	.mask	( 24'd0		),
 	.cnt	( sep24_cnt	),	
 	
 	.ch0s1 (phinc_ch0s1), 
@@ -329,8 +334,9 @@ wire [10:0] fnum_ch0s1, fnum_ch1s1, fnum_ch2s1, fnum_ch3s1,
 sep24 #( .width(11), .pos0(3+1)) fnsep
 (
 	.clk	( clk		),
-	.mixed	( fnum_I),
-	.mask	( 0			),
+	.clk_en	( clk_en	),
+	.mixed	( fnum_I	),
+	.mask	( 24'd0		),
 	.cnt	( sep24_cnt	),	
 	
 	.ch0s1 (fnum_ch0s1), 
@@ -372,8 +378,9 @@ wire pgrst_III_ch0s1, pgrst_III_ch1s1, pgrst_III_ch2s1, pgrst_III_ch3s1,
 sep24 #( .width(1), .pos0(23)) pgrstsep
 (
 	.clk	( clk		),
+	.clk_en	( clk_en	),
 	.mixed	( pg_rst_III),
-	.mask	( 0			),
+	.mask	( 24'd0		),
 	.cnt	( sep24_cnt	),	
 	
 	.ch0s1 (pgrst_III_ch0s1), 

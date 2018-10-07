@@ -95,10 +95,10 @@ reg [mult_width+counter_width-1:0] next, init;
 
 always @(*) begin
 	if( mult<mult_max )
-		{overflow, next } <= { {1'b0, cnt}, mult+1'b1 } ;
+		{overflow, next } = { {1'b0, cnt}, mult+1'b1 } ;
 	else
-		{overflow, next } <= { {1'b0, cnt}+1'b1, {mult_width{1'b0}} };
-	init <= { start_value, {mult_width{1'b0}} };
+		{overflow, next } = { {1'b0, cnt}+1'b1, {mult_width{1'b0}} };
+	init = { start_value, {mult_width{1'b0}} };
 end
 
 always @(posedge clk) 

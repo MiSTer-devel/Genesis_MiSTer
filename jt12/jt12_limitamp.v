@@ -30,11 +30,11 @@ module jt12_limitamp #( parameter width=20, shift=5 ) (
 );
 
 always @(*) begin
-	left_out <= ^left_in[width-1:width-1-shift] ?
+	left_out = ^left_in[width-1:width-1-shift] ?
 		{ left_in[width-1], {(width-1){~left_in[width-1]}}} :
 		left_in <<< shift;
 
-	right_out <= ^right_in[width-1:width-1-shift] ?
+	right_out = ^right_in[width-1:width-1-shift] ?
 		{ right_in[width-1], {(width-1){~right_in[width-1]}}} :
 		right_in <<< shift;
 end
