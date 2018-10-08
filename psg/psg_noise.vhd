@@ -26,7 +26,7 @@ architecture rtl of psg_noise is
 
 begin
 
-	process (clk, tone)
+	process (clk)
 		variable feedback: std_logic;
 	begin
 		if rising_edge(clk) then

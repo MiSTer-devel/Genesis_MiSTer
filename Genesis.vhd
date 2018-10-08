@@ -299,8 +299,6 @@ signal FM_DO			: std_logic_vector(7 downto 0);
 
 -- PSG
 signal PSG_WR_n		: std_logic;
-signal T80_PSG_SEL	: std_logic;
-signal TG68_PSG_SEL	: std_logic;
 signal PSG_DI			: std_logic_vector(7 downto 0);
 signal PSG_SND			: std_logic_vector(5 downto 0);
 
@@ -1168,21 +1166,14 @@ end process;
 -- PSG AREA
 -- Z80: 7F11/3/5/7
 -- 68k: C00011/3/5/7
-T80_PSG_SEL  <= '1' when T80_A(15 downto 3) = x"7F1"&'0' and T80_MREQ_N = '0' and T80_WR_N = '0' else '0';
-TG68_PSG_SEL <= '1' when TG68_A(31 downto 3) = x"C0001"&'0' and TG68_AS_N = '0' and TG68_RNW='0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') else '0';
-
 process( RESET_N, MCLK ) begin
 	if RESET_N = '0' then
 		PSG_WR_n <= '1';
 	elsif rising_edge(MCLK) then
-		if TG68_PSG_SEL = '1' then
+		if TG68_A(31 downto 3) = x"C0001"&'0' and TG68_AS_N = '0' and TG68_RNW='0' and TG68_LDS_N = '0' then
 			PSG_WR_n <= '0';
-			if TG68_LDS_N = '0' then
-				PSG_DI <= TG68_DO(7 downto 0);
-			else
-				PSG_DI <= TG68_DO(15 downto 8);
-			end if;
-		elsif T80_PSG_SEL = '1' then
+			PSG_DI <= TG68_DO(7 downto 0);
+		elsif T80_A(15 downto 3) = x"7F1"&'0' and T80_A(0) = '1' and T80_MREQ_N = '0' and T80_WR_N = '0' then
 			PSG_WR_n <= '0';
 			PSG_DI <= T80_DO;
 		else

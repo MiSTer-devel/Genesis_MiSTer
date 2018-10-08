@@ -35,7 +35,7 @@ architecture rtl of psg is
 	signal output1		: std_logic_vector(3 downto 0);
 	signal output2		: std_logic_vector(3 downto 0);
 	signal output3		: std_logic_vector(3 downto 0);
-	
+	signal old_WR_n   : std_logic;
 begin
 
 	t0: work.psg_tone
@@ -84,9 +84,12 @@ begin
 		end if;
 	end process;
 
-	process (clk, WR_n)
+	process (clk)
 	begin
-		if rising_edge(clk) and WR_n='0' then
+		if rising_edge(clk) then
+
+			old_WR_n <= WR_n;
+
 			if reset = '1' then
 				volume0 <= (others => '1');
 				volume1 <= (others => '1');
@@ -96,7 +99,8 @@ begin
 				tone1 <= (others => '0');
 				tone2 <= (others => '0');
 				ctrl3 <= (others => '0');
-			else
+
+			elsif old_WR_n = '1' and WR_n='0' then
 				if D_in(7)='1' then
 					case D_in(6 downto 4) is
 						when "000" => tone0(3 downto 0) <= D_in(3 downto 0);

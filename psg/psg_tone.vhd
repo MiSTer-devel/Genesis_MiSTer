@@ -18,7 +18,7 @@ architecture rtl of psg_tone is
 
 begin
 
-	process (clk, tone)
+	process (clk)
 	begin
 		if rising_edge(clk) then
 			if clk_en = '1' then 
