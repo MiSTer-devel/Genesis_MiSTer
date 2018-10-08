@@ -224,9 +224,6 @@ signal TG68_OS_D			: std_logic_vector(15 downto 0);
 signal TG68_OS_DTACK_N	: std_logic;
 
 -- CONTROL AREA
-signal ZBUSREQ				: std_logic;
-signal ZRESET_N			: std_logic;
-signal ZBUSACK_N			: std_logic;
 signal CART_EN				: std_logic;
 
 signal TG68_CTRL_SEL		: std_logic;
@@ -728,28 +725,6 @@ TG68_DI(7 downto 0) <= TG68_FLASH_D(7 downto 0) when TG68_FLASH_SEL = '1' and TG
 	else TG68_FM_D(7 downto 0) when TG68_FM_SEL = '1' and TG68_LDS_N = '0'
 	else NO_DATA(7 downto 0);
 
--- Z80 INPUTS
-process(RESET_N, MCLK)
-begin
-	if RESET_N = '0' then
-		T80_RESET_N <= '0';
-	elsif rising_edge(MCLK) then
-		if T80_RESET_N = '0' then
-			if ZBUSREQ = '0' and ZRESET_N = '1' then
-				T80_RESET_N <= '1';
-			end if;
-			ZBUSACK_N <= not ZBUSREQ;
-		else
-			if ZRESET_N = '0' then
-				T80_RESET_N <= '0';
-			end if;
-			ZBUSACK_N <= T80_BUSAK_N;
-		end if;
-	end if;
-end process;
-
-T80_BUSRQ_N <= not ZBUSREQ;
-
 T80_WAIT_N <= not T80_RAM_DTACK_N when T80_RAM_SEL = '1'
 	else not T80_ZRAM_DTACK_N when T80_ZRAM_SEL = '1'
 	else not T80_FLASH_DTACK_N when T80_FLASH_SEL = '1'
@@ -803,8 +778,8 @@ begin
 		TG68_CTRL_DTACK_N <= '1';	
 		T80_CTRL_DTACK_N <= '1';	
 		
-		ZBUSREQ <= '0';
-		ZRESET_N <= '0';
+		T80_BUSRQ_N <= '1';
+		T80_RESET_N <= '0';
 		CART_EN <= '0';
 		
 	elsif rising_edge(MCLK) then
@@ -820,14 +795,12 @@ begin
 			if TG68_RNW = '0' then
 				-- Write
 				if TG68_A(15 downto 8) = x"11" then
-					-- ZBUSREQ
 					if TG68_UDS_N = '0' then
-						ZBUSREQ <= TG68_DO(8);
+						T80_BUSRQ_N <= not TG68_DO(8);
 					end if;
 				elsif TG68_A(15 downto 8) = x"12" then
-					-- ZRESET_N
 					if TG68_UDS_N = '0' then
-						ZRESET_N <= TG68_DO(8);
+						T80_RESET_N <= TG68_DO(8);
 					end if;			
 				elsif TG68_A(15 downto 8) = x"41" then
 					-- Cartridge Control Register
@@ -839,9 +812,11 @@ begin
 				-- Read
 				TG68_CTRL_D <= NO_DATA;
 				if TG68_A(15 downto 8) = x"11" then
-					-- ZBUSACK_N
-					TG68_CTRL_D(8) <= ZBUSACK_N;
-					TG68_CTRL_D(0) <= ZBUSACK_N;
+					TG68_CTRL_D(8) <= T80_BUSAK_N and T80_RESET_N;
+					TG68_CTRL_D(0) <= T80_BUSAK_N and T80_RESET_N;
+				elsif TG68_A(15 downto 8) = x"12" then
+					TG68_CTRL_D(8) <= T80_RESET_N;
+					TG68_CTRL_D(0) <= T80_RESET_N;
 				end if;
 			end if;		
 		elsif T80_CTRL_SEL = '1' and T80_CTRL_DTACK_N = '1' then
@@ -849,14 +824,12 @@ begin
 			if T80_WR_N = '0' then
 				-- Write
 				if BAR(15) & T80_A(14 downto 8) = x"11" then
-					-- ZBUSREQ
 					if T80_A(0) = '0' then
-						ZBUSREQ <= T80_DO(0);
+						T80_BUSRQ_N <= not T80_DO(0);
 					end if;
 				elsif BAR(15) & T80_A(14 downto 8) = x"12" then
-					-- ZRESET_N
 					if T80_A(0) = '0' then
-						ZRESET_N <= T80_DO(0);
+						T80_RESET_N <= T80_DO(0);
 					end if;			
 				elsif BAR(15) & T80_A(14 downto 8) = x"41" then
 					-- Cartridge Control Register
@@ -868,8 +841,7 @@ begin
 				-- Read
 				T80_CTRL_D <= x"FF";
 				if BAR(15) & T80_A(14 downto 8) = x"11" and T80_A(0) = '0' then
-					-- ZBUSACK_N
-					T80_CTRL_D(0) <= ZBUSACK_N;
+					T80_CTRL_D(0) <= T80_BUSAK_N;
 				end if;
 			end if;			
 		end if;
@@ -1422,11 +1394,12 @@ end process;
 process( RESET_N, MCLK, TG68_AS_N, TG68_RNW,
 	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
 	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N,
-	VBUS_SEL, VBUS_ADDR)
+	VBUS_SEL, VBUS_ADDR, T80_BUSAK_N)
 begin
 	if TG68_A(23 downto 16) = x"A0" -- Z80 Address Space
 		and TG68_A(14) = '0' -- Z80 RAM (gen-hw.txt lines 89 and 272-273)
 		and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') 
+		and T80_BUSAK_N = '0'
 	then	
 		TG68_ZRAM_SEL <= '1';
 	else
