@@ -287,34 +287,21 @@ type vdpc_t is (
 signal VDPC : vdpc_t;
 
 -- FM AREA
-signal FM_A 			: std_logic_vector(1 downto 0);
-signal FM_RNW			: std_logic;
-signal FM_UDS_N		: std_logic;
-signal FM_LDS_N		: std_logic;
-signal FM_DI			: std_logic_vector(7 downto 0);
-signal FM_DO			: std_logic_vector(7 downto 0);
+signal FM_A 				: std_logic_vector(1 downto 0);
+signal FM_RNW				: std_logic;
+signal FM_DI				: std_logic_vector(7 downto 0);
+signal FM_DO				: std_logic_vector(7 downto 0);
+signal TG68_FM_SEL		: std_logic;
+signal TG68_FM_D			: std_logic_vector(15 downto 0);
+signal TG68_FM_DTACK_N	: std_logic;
+signal T80_FM_SEL			: std_logic;
+signal T80_FM_D			: std_logic_vector(7 downto 0);
+signal T80_FM_DTACK_N	: std_logic;
 
 -- PSG
 signal PSG_WR_n		: std_logic;
 signal PSG_DI			: std_logic_vector(7 downto 0);
 signal PSG_SND			: std_logic_vector(5 downto 0);
-
-signal TG68_FM_SEL		: std_logic;
-signal TG68_FM_D			: std_logic_vector(15 downto 0);
-signal TG68_FM_DTACK_N	: std_logic;
-
-signal T80_FM_SEL			: std_logic;
-signal T80_FM_D			: std_logic_vector(7 downto 0);
-signal T80_FM_DTACK_N	: std_logic;
-
-type fmc_t is (
-	FMC_IDLE,
-	FMC_TG68_ACC,
-	FMC_T80_ACC,
-	FMC_DESEL
-);
-signal FMC : fmc_t;
-
 
 -- BANK ADDRESS REGISTER
 signal BAR 					: std_logic_vector(23 downto 15);
@@ -964,8 +951,8 @@ process( RESET_N, MCLK, TG68_AS_N, TG68_RNW,
 	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
 	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N )
 begin
-	if TG68_A(23 downto 21) = "110" and TG68_A(18 downto 16) = "000"
-		and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') 
+	if TG68_A(23 downto 21) = "110" and TG68_A(18 downto 16) = "000" and TG68_A(7 downto 5) = "000"
+		and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0')
 	then	
 		TG68_VDP_SEL <= '1';		
 	elsif TG68_A(23 downto 16) = x"A0" and TG68_A(14 downto 5) = "1111111" & "000" -- Z80 Address space
@@ -980,7 +967,7 @@ begin
 		and T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0')
 	then
 		T80_VDP_SEL <= '1';			
-	elsif T80_A(15) = '1' and BAR(23 downto 21) = "110" and BAR(18 downto 16) = "000" -- 68000 Address space
+	elsif T80_A(15) = '1' and BAR(23 downto 21) = "110" and BAR(18 downto 16) = "000" and TG68_A(7 downto 5) = "000" -- 68000 Address space
 		and T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0')
 	then
 		T80_VDP_SEL <= '1';		
@@ -1012,20 +999,14 @@ begin
 				VDP_A <= TG68_A(4 downto 1);
 				VDP_UDS_N <= TG68_UDS_N;
 				VDP_LDS_N <= TG68_LDS_N;
-
 				VDP_RNW <= TG68_RNW;
 				VDP_DI <= TG68_DO;
 				VDPC <= VDPC_TG68_ACC;
 			elsif T80_VDP_SEL = '1' and T80_VDP_DTACK_N = '1' then
 				VDP_SEL <= '1';
 				VDP_A <= T80_A(4 downto 1);
-				if T80_A(0) = '0' then
-					VDP_UDS_N <= '0';
-					VDP_LDS_N <= '1';
-				else
-					VDP_UDS_N <= '1';
-					VDP_LDS_N <= '0';				
-				end if;
+				VDP_UDS_N <= T80_A(0);
+				VDP_LDS_N <= not T80_A(0);
 				VDP_RNW <= T80_WR_N;
 				VDP_DI <= T80_DO & T80_DO;
 				VDPC <= VDPC_T80_ACC;			
@@ -1063,17 +1044,11 @@ begin
 	
 end process;
 
--- Z80:
--- 40 = 01000000
--- 5F = 01011111
--- 68000:
--- 40 = 01000000
--- 5F = 01011111
--- C0 = 11000000
--- DF = 11011111
+-- Z80:   4000-4003 (4000-5FFF)
+-- 68000: A04000-A04003 (A04000-A05FFF)
 -- FM AREA
 
-TG68_FM_SEL <= '1' when TG68_A(23 downto 16) = x"A0" and TG68_A(14 downto 13) = "10" and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') else '0';
+TG68_FM_SEL <= '1' when TG68_A(23 downto 13) = x"A0"&"010" and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') else '0';
 T80_FM_SEL  <= '1' when T80_A(15 downto 13) = "010" and T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0') else '0';
 
 process( RESET_N, MCLK ) begin
@@ -1084,8 +1059,6 @@ process( RESET_N, MCLK ) begin
 		FM_RNW <= '1';
 		FM_A <= (others => '0');
 		
-		FMC <= FMC_IDLE;
-		
 	elsif rising_edge(MCLK) then
 		if TG68_FM_SEL = '0' then 
 			TG68_FM_DTACK_N <= '1';
@@ -1093,44 +1066,32 @@ process( RESET_N, MCLK ) begin
 		if T80_FM_SEL = '0' then 
 			T80_FM_DTACK_N <= '1';
 		end if;
-
-		case FMC is
-		when FMC_IDLE =>
-			if TG68_FM_SEL = '1' and TG68_FM_DTACK_N = '1' then
-				FM_A(1) <= TG68_A(1);
-				FM_RNW <= TG68_RNW;
-				if TG68_RNW = '0' and TG68_LDS_N = '0' then
-					FM_DI <= TG68_DO(7 downto 0);
-					FM_A(0) <= '1';
-				else
-					FM_DI <= TG68_DO(15 downto 8);
-					FM_A(0) <= '0';
-				end if;
-
-				FMC <= FMC_TG68_ACC;
-			elsif T80_FM_SEL = '1' and T80_FM_DTACK_N = '1' then
-				FM_A <= T80_A(1 downto 0);
-				FM_RNW <= T80_WR_N;
-				FM_DI <= T80_DO;
-				FMC <= FMC_T80_ACC;			
-			end if;
-
-		when FMC_TG68_ACC =>
-			TG68_FM_D <= FM_DO & FM_DO;
-			TG68_FM_DTACK_N <= '0';
-			FMC <= FMC_DESEL;
-
-		when FMC_T80_ACC =>
-			T80_FM_D <= FM_DO;
-			T80_FM_DTACK_N <= '0';
-			FMC <= FMC_DESEL;
-
-		when FMC_DESEL =>
+		
+		if TG68_FM_DTACK_N <= '1' and T80_FM_DTACK_N <= '1' then
 			FM_RNW <= '1';
-			FMC <= FMC_IDLE;
+		end if;
 
-		when others => null;
-		end case;
+		if TG68_FM_SEL = '1' and TG68_FM_DTACK_N = '1' then
+			TG68_FM_D <= FM_DO & FM_DO;
+			FM_A(1) <= TG68_A(1);
+			FM_RNW <= TG68_RNW;
+			if TG68_LDS_N = '0' then
+				FM_DI <= TG68_DO(7 downto 0);
+				FM_A(0) <= '1';
+			else
+				FM_DI <= TG68_DO(15 downto 8);
+				FM_A(0) <= '0';
+			end if;
+			TG68_FM_DTACK_N <= '0';
+
+		elsif T80_FM_SEL = '1' and T80_FM_DTACK_N = '1' then
+			T80_FM_D <= FM_DO;
+			FM_A <= T80_A(1 downto 0);
+			FM_RNW <= T80_WR_N;
+			FM_DI <= T80_DO;
+			T80_FM_DTACK_N <= '0';
+
+		end if;
 	end if;
 	
 end process;
@@ -1154,40 +1115,19 @@ process( RESET_N, MCLK ) begin
 	end if;
 end process;
 
--- Z80:
--- 60 = 01100000
--- 7E = 01111110
--- 68000:
--- 60 = 01100000
--- 7E = 01111110
--- E0 = 11100000
--- FE = 11111110
--- BANK ADDRESS REGISTER AND UNUSED AREA IN Z80 ADDRESS SPACE
-process( RESET_N, MCLK, TG68_AS_N, TG68_RNW,
-	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
-	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N )
+-- Z80: 6000-60FF
+-- 68000: A06000-A060FF
+-- BANK ADDRESS REGISTER
+
+TG68_BAR_SEL <= '1' when TG68_A(23 downto 8) = x"A060" and TG68_AS_N = '0' else '0';
+T80_BAR_SEL  <= '1' when T80_A(15 downto 8) = x"60" and T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0') else '0';
+
+process( RESET_N, MCLK )
 begin
 
-	if (TG68_A(23 downto 16) = x"A0" and TG68_A(14 downto 13) = "11" and TG68_A(12 downto 8) /= "11111")
-		and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') 
-	then	
-		TG68_BAR_SEL <= '1';		
-	else
-		TG68_BAR_SEL <= '0';
-	end if;
-
-	if (T80_A(15 downto 13) = "011" and T80_A(12 downto 8) /= "11111")
-		and T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0')
-	then
-		T80_BAR_SEL <= '1';
-	else
-		T80_BAR_SEL <= '0';
-	end if;
-	
 	if RESET_N = '0' then
-		TG68_BAR_DTACK_N <= '1';	
+		TG68_BAR_DTACK_N <= '1';
 		T80_BAR_DTACK_N <= '1';
-		
 		BAR <= (others => '0');
 		
 	elsif rising_edge(MCLK) then
@@ -1200,7 +1140,7 @@ begin
 
 		if TG68_BAR_SEL = '1' and TG68_BAR_DTACK_N = '1' then
 			if TG68_RNW = '0' then
-				if TG68_A(23 downto 16) = x"A0" and TG68_A(14 downto 8) = "1100000" and TG68_UDS_N = '0' then
+				if TG68_UDS_N = '0' then
 					BAR <= TG68_DO(8) & BAR(23 downto 16);
 				end if;
 			else
@@ -1209,9 +1149,7 @@ begin
 			TG68_BAR_DTACK_N <= '0';
 		elsif T80_BAR_SEL = '1' and T80_BAR_DTACK_N = '1' then
 			if T80_WR_N = '0' then
-				if T80_A(15 downto 8) = x"60" then
-					BAR <= T80_DO(0) & BAR(23 downto 16);
-				end if;
+				BAR <= T80_DO(0) & BAR(23 downto 16);
 			else
 				T80_BAR_D <= x"FF";
 			end if;
@@ -1219,7 +1157,6 @@ begin
 		end if;
 	end if;
 end process;
-
 
 -------------------------------------------------------------------------
 -- ROM Handling
@@ -1396,8 +1333,7 @@ process( RESET_N, MCLK, TG68_AS_N, TG68_RNW,
 	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N,
 	VBUS_SEL, VBUS_ADDR, T80_BUSAK_N)
 begin
-	if TG68_A(23 downto 16) = x"A0" -- Z80 Address Space
-		and TG68_A(14) = '0' -- Z80 RAM (gen-hw.txt lines 89 and 272-273)
+	if TG68_A(23 downto 14) = x"A0"&"00" -- Z80 Address Space
 		and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') 
 		and T80_BUSAK_N = '0'
 	then	
