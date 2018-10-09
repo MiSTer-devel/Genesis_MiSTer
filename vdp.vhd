@@ -352,7 +352,7 @@ signal early_ack 		: std_logic;
 -- BACKGROUND RENDERING
 ----------------------------------------------------------------
 signal BGEN_ACTIVE	: std_logic;
-signal BG_Y				: std_logic_vector(7 downto 0);
+signal BG_Y				: std_logic_vector(8 downto 0);
 
 -- BACKGROUND B
 type bgbc_t is (
@@ -435,13 +435,13 @@ type spc_t is (
 );
 signal SPC						: spc_t;
 
+signal SP_Y						: std_logic_vector(8 downto 0);
+
 signal SP_VRAM_ADDR			: std_logic_vector(14 downto 0);
 signal SP_VRAM_DO			: std_logic_vector(15 downto 0);
 signal SP_VRAM_DO_REG		: std_logic_vector(15 downto 0);
 signal SP_SEL					: std_logic;
 signal SP_DTACK_N			: std_logic;
-
-signal SP_BUF              : std_logic;
 
 signal OBJ_COLINFO_ADDR_A	: std_logic_vector(8 downto 0);
 signal OBJ_COLINFO_ADDR_B	: std_logic_vector(8 downto 0);
@@ -479,14 +479,14 @@ port map(
 	q_b			=> BGA_COLINFO_Q_B
 );
 
-obj_ci : entity work.dpram generic map(10,7)
+obj_ci : entity work.dpram generic map(9,7)
 port map(
 	clock			=> MEMCLK,
-	address_a	=> SP_BUF & OBJ_COLINFO_ADDR_A,
+	address_a	=> OBJ_COLINFO_ADDR_A,
 	data_a		=> OBJ_COLINFO_D_A,
 	wren_a		=> OBJ_COLINFO_WE_A,
 	q_a			=> OBJ_COLINFO_Q_A,
-	address_b	=> not SP_BUF & OBJ_COLINFO_ADDR_B,
+	address_b	=> OBJ_COLINFO_ADDR_B,
 	wren_b		=> OBJ_COLINFO_WE_B,
 	q_b			=> OBJ_COLINFO_Q_B
 );
@@ -706,14 +706,28 @@ begin
 					FF_DTACK_N <= '0';
 				end if;
 			else -- Read
-				PENDING <= '0';
 
+				-- 10-1E
 				if A(4) = '1' then
 					FF_DO <= x"FFFF";
 					FF_DTACK_N <= '0';
 				
-				elsif A(3 downto 2) = "00" then
-					-- Data Port
+				-- 8-E HV counter
+				elsif A(3) = '1' then
+					FF_DO <= HV;
+					FF_DTACK_N <= '0';
+
+				-- 4-6 Control Port (Read Status Register)
+				elsif A(2) = '1' then
+					PENDING <= '0';
+					FF_DO <= STATUS;
+					SOVR_CLR <= '1';
+					SCOL_CLR <= '1';
+					FF_DTACK_N <= '0';
+
+				-- 0-2 Data Port
+				else
+					PENDING <= '0';
 					if CODE = "001000" -- CRAM Read
 					or CODE = "000100" -- VSRAM Read
 					or CODE = "000000" -- VRAM Read
@@ -729,15 +743,6 @@ begin
 					else
 						FF_DTACK_N <= '0';
 					end if;
-				elsif A(3 downto 2) = "01" then
-					-- Control Port (Read Status Register)
-					FF_DO <= STATUS;
-					SOVR_CLR <= '1';
-					SCOL_CLR <= '1';
-					FF_DTACK_N <= '0';
-				elsif A(3) = '1' then
-					FF_DO <= HV;
-					FF_DTACK_N <= '0';
 				end if;
 			end if;
 		end if;
@@ -767,13 +772,13 @@ early_ack_dma <= '0' when VMC=VMC_DMA and vram_req_reg=VRAM_ACK else '1';
 
 BGA_VRAM_DO <= VRAM_DI when early_ack_bga='0' and BGA_DTACK_N = '1' else BGA_VRAM_DO_REG;
 BGB_VRAM_DO <= VRAM_DI when early_ack_bgb='0' and BGB_DTACK_N = '1' else BGB_VRAM_DO_REG;
-SP_VRAM_DO  <= VRAM_DI when early_ack_sp='0'  and SP_DTACK_N = '1'  else SP_VRAM_DO_REG;
+SP_VRAM_DO  <= VRAM_DI when early_ack_sp ='0' and SP_DTACK_N  = '1'  else SP_VRAM_DO_REG;
 DMA_VRAM_DO <= vram_r  when early_ack_dma='0' and DMA_DTACK_N = '1' else DMA_VRAM_DO_REG;
 
 -- Priority encoder for next port...
-VMC_NEXT <= VMC_BGB when BGB_SEL = '1' and BGB_DTACK_N = '1' and early_ack_bgb='1'
+VMC_NEXT <= VMC_SP  when SP_SEL  = '1' and SP_DTACK_N  = '1' and early_ack_sp ='1'
+       else VMC_BGB when BGB_SEL = '1' and BGB_DTACK_N = '1' and early_ack_bgb='1'
        else VMC_BGA when BGA_SEL = '1' and BGA_DTACK_N = '1' and early_ack_bga='1'
-       else VMC_SP  when SP_SEL = '1'  and SP_DTACK_N = '1'  and early_ack_sp='1'
        else VMC_DMA when DMA_SEL = '1' and DMA_DTACK_N = '1' and early_ack_dma='1'
        else VMC_IDLE;
 
@@ -805,7 +810,7 @@ begin
 				case VMC_NEXT is
 					when VMC_BGA => VRAM_A <= BGA_VRAM_ADDR;
 					when VMC_BGB => VRAM_A <= BGB_VRAM_ADDR;
-					when VMC_SP => VRAM_A <= SP_VRAM_ADDR;
+					when VMC_SP  => VRAM_A <= SP_VRAM_ADDR;
 					when VMC_DMA => VRAM_A <= DMA_VRAM_A;
 					when others  => null;
 				end case;
@@ -817,7 +822,7 @@ begin
 				case VMC is
 					when VMC_BGA => BGA_VRAM_DO_REG <= VRAM_DI; BGA_DTACK_N <= '0';
 					when VMC_BGB => BGB_VRAM_DO_REG <= VRAM_DI; BGB_DTACK_N <= '0';
-					when VMC_SP => SP_VRAM_DO_REG <= VRAM_DI; SP_DTACK_N <= '0';
+					when VMC_SP  => SP_VRAM_DO_REG  <= VRAM_DI; SP_DTACK_N  <= '0';
 					when VMC_DMA => DMA_VRAM_DO_REG <= vram_r;  DMA_DTACK_N <= '0';
 					when others => null;
 				end case;
@@ -857,7 +862,7 @@ begin
 				when "00" => BGB_VRAM_ADDR <= HSCB & "000000001";
 				when "01" => BGB_VRAM_ADDR <= HSCB & "00000" & BG_Y(2 downto 0) & '1';
 				when "10" => BGB_VRAM_ADDR <= HSCB & BG_Y(7 downto 3) & "0001";
-				when "11" => BGB_VRAM_ADDR <= HSCB & BG_Y & '1';
+				when "11" => BGB_VRAM_ADDR <= HSCB & BG_Y(7 downto 0) & '1';
 				when others => null;
 				end case;
 				BGB_SEL <= '1';
@@ -1045,7 +1050,7 @@ begin
 				when "00" => BGA_VRAM_ADDR <= HSCB & "000000000";
 				when "01" => BGA_VRAM_ADDR <= HSCB & "00000" & BG_Y(2 downto 0) & '0';
 				when "10" => BGA_VRAM_ADDR <= HSCB & BG_Y(7 downto 3) & "0000";
-				when "11" => BGA_VRAM_ADDR <= HSCB & BG_Y & '0';
+				when "11" => BGA_VRAM_ADDR <= HSCB & BG_Y(7 downto 0) & '0';
 				when others => null;
 				end case;
 				BGA_SEL <= '1';
@@ -1063,7 +1068,7 @@ begin
 
 		when BGAC_CALC_Y =>
 			if WIN_H = '1' or WIN_V = '1' then
-				BGA_Y := "00" & BG_Y;
+				BGA_Y := '0' & BG_Y;
 			else
 				if BGA_POS(9) = '1' or VSCR = '0' then
 					TEMP1 := VSRAM(0);
@@ -1300,7 +1305,6 @@ process( RST_N, MEMCLK )
 	variable OBJ_POS			: std_logic_vector(8 downto 0);
 	variable OBJ_TILEBASE	: std_logic_vector(14 downto 0);
 	variable OBJ_COLNO		: std_logic_vector(3 downto 0);
-	variable SP_Y				: std_logic_vector(8 downto 0);
 	variable OBJ_MASKED		: std_logic;
 	variable OBJ_VALID_X		: std_logic;
 	variable OBJ_DOT_OVERFLOW: std_logic;
@@ -1322,7 +1326,6 @@ begin
 		case SPC is
 		when SPC_INIT =>
 			if SPE_ACTIVE = '1' then
-				SP_Y := PRE_Y;	-- Latch the current PRE_Y value as it will change during the rendering process
 				SP_SEL <= '0';
 
 				CACHE_OBJ <= (others => '0');
@@ -1662,13 +1665,7 @@ begin
 					V_CNT <= (others => '0');
 				end if;
 
-				-- activate BG in advance to prefetch the data
-				if V_CNT >= VDISP_START-1 and V_CNT < VDISP_END-1 then
-					BGEN_ACTIVE <= '1';
-					BG_Y <= PRE_Y(7 downto 0);
-				end if;
-
-				-- Y for sprites which should be started 1 line in advance to prefetch the data
+				BG_Y  <= PRE_Y;
 				PRE_Y <= PRE_Y + 1;
 				if V_CNT = VDISP_START-2 then
 					PRE_Y <= (others => '0');
@@ -1691,13 +1688,16 @@ begin
 				end if;
 			end if;
 
+			if H_CNT = 0 then
+				if V_CNT >= VDISP_START and V_CNT < VDISP_END then
+					BGEN_ACTIVE <= '1';
+				end if;
+			end if;
+
 			if H_CNT = HDISP_START-1 then
 				IN_HBL <= '0';
 
-				SP_BUF <= not SP_BUF;
-				if V_CNT >= VDISP_START-1 and V_CNT < VDISP_END-1 then
-					SPE_ACTIVE <= '1';
-				end if;
+				SPE_ACTIVE <= '0';
 
 				if V_CNT = VDISP_START then
 					IN_VBL <= '0';
@@ -1713,7 +1713,9 @@ begin
 				if V_CNT = VDISP_END+1 then
 					VINT_T80_CLR <= '1';
 				end if;
+			--end if;
 
+			--if H_CNT = HDISP_END-60 then
 				if V_CNT = VDISP_START then
 					if HIT = 0 then
 						HINT_PENDING_SET <= '1';
@@ -1734,7 +1736,10 @@ begin
 			if H_CNT = HDISP_END-1 then
 				IN_HBL <= '1';
 				BGEN_ACTIVE <= '0';
-				SPE_ACTIVE <= '0';
+				if V_CNT >= VDISP_START-1 and V_CNT < VDISP_END-1 then
+					SPE_ACTIVE <= '1';
+					SP_Y <= PRE_Y;
+				end if;
 			end if;
 
 			if hscnt > 0 then
