@@ -632,7 +632,6 @@ end process;
 ----------------------------------------------------------------
 
 process( RESET_N, MCLK )
-	variable FCLKCNT  : std_logic_vector(2 downto 0) := (others => '0');
 	variable VCLKCNT  : std_logic_vector(3 downto 0) := (others => '0');
 	variable ZCLKCNT  : std_logic_vector(3 downto 0) := (others => '0');
 begin
@@ -645,19 +644,14 @@ begin
 			T80_CLKEN <= '1';
 		end if;
 
-		FCLKCNT := FCLKCNT + 1;
-		if FCLKCNT = 7 then
-			FCLKCNT := (others => '0');
-		end if;
-
-		FCLK_EN <= '0';
-		if FCLKCNT = 1 then
-			FCLK_EN <= '1';
-		end if;
-
 		VCLKCNT := VCLKCNT + 1;
 		if VCLKCNT = 7 then
 			VCLKCNT := (others => '0');
+		end if;
+
+		FCLK_EN <= '0';
+		if VCLKCNT = 1 then
+			FCLK_EN <= '1';
 		end if;
 
 		TG68_ENAWRREG <= '0';
