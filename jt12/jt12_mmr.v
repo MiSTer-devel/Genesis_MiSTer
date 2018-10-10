@@ -107,10 +107,7 @@ always @(negedge clk)
 	cen_int <= cen_cnt == cen_cnt_lim;
 
 always @(posedge clk)
-	if( rst ) begin
-		cen_cnt <= 3'd0;
-	end
-	else if( cen ) begin
+	if( cen ) begin
 		if( cen_cnt == cen_cnt_lim ) begin
 			cen_cnt <= 3'd0;			
 		end

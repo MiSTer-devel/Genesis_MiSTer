@@ -238,16 +238,7 @@ assign	busy = busy_op;
 
 
 always @(posedge clk) begin : up_counter
-	if( rst ) begin
-		cnt		<= 5'h0;
-		last	<= 1'b0;
-		zero	<= 1'b1;
-		busy_op	<= 1'b0;
-		up_keyon_long <= 1'b0;
-		cur_op  <= 2'd0;
-		cur_ch  <= 3'd0;
-	end
-	else if( clk_en ) begin
+	if( clk_en ) begin
 		{ cur_op, cur_ch }	<= { next_op, next_ch };
 		zero 	<= next == 5'd0;
 		last	<= up;
@@ -303,7 +294,7 @@ jt12_opram u_opram(
 	.clk_en	( clk_en	),
 	.wr_addr( cur 		),
 	.rd_addr( next 		),
-	.data	( regop_in 	),
+	.data	( rst ? {regop_width{1'b0}} : regop_in ),
 	.q		( regop_out )
 );
 
