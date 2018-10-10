@@ -168,9 +168,8 @@ jt12_mmr u_mmr(
 
 jt12_timers u_timers( 
 	.clk		( clk			),
+	.clk_en		( clk_en | fast_timers	),
 	.rst   		( rst			),
-	.clk_en		( zero & clk_en	),
-	.fast_timers( fast_timers	), // fix this to work well with clock enable signals
 	.value_A	( value_A		),
 	.value_B	( value_B		),
 	.load_A		( load_A		),
