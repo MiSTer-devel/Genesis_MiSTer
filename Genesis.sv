@@ -117,6 +117,7 @@ localparam CONF_STR = {
 	"Genesis;;",
 	"-;",
 	"F,BINGENMD ;",
+	"O8,Auto Region,No,Yes;",
 	"-;",
 	"O1,Aspect ratio,4:3,16:9;",
 	"O23,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%;",
@@ -138,6 +139,7 @@ wire        ioctl_download;
 wire        ioctl_wr;
 wire [24:0] ioctl_addr;
 wire [15:0] ioctl_data;
+wire  [7:0] ioctl_index;
 reg         ioctl_wait;
 wire        forced_scandoubler;
 wire [10:0] ps2_key;
@@ -158,6 +160,7 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .PS2DIV(1000), .WIDE(1)) hps_io
 	.status_set(region_set),
 
 	.ioctl_download(ioctl_download),
+	.ioctl_index(ioctl_index),
 	.ioctl_wr(ioctl_wr),
 	.ioctl_addr(ioctl_addr),
 	.ioctl_dout(ioctl_data),
@@ -331,15 +334,21 @@ reg        region_set = 0;
 wire       pressed = ps2_key[9];
 wire [8:0] code    = ps2_key[8:0];
 always @(posedge clk_sys) begin
-	reg old_state;
+	reg old_state, old_download = 0;
 	old_state <= ps2_key[10];
-	
+
 	if(old_state != ps2_key[10]) begin
 		casex(code)
 			'h005: begin region_req <= 0; region_set <= pressed; end // F1
 			'h006: begin region_req <= 1; region_set <= pressed; end // F2
 			'h004: begin region_req <= 2; region_set <= pressed; end // F3
 		endcase
+	end
+
+	old_download <= ioctl_download;
+	if(status[8] & (old_download ^ ioctl_download)) begin
+		region_set <= ioctl_download;
+		region_req <= ioctl_index[7:6];
 	end
 end
 
