@@ -579,7 +579,7 @@ port map(
 
 fm : jt12
 port map(
-	rst		   => not RESET_N,
+	rst		   => not T80_RESET_N,
 	clk	      => MCLK,
 	cen	     	=> FCLK_EN,
 
@@ -1255,7 +1255,7 @@ begin
 		DMA_RAM_DTACK_N <= '1';
 		ram68k_req <= '0';
 		RAMC <= RAMC_IDLE;
-		
+
 	elsif rising_edge(MCLK) then
 		if TG68_RAM_SEL = '0' then 
 			TG68_RAM_DTACK_N <= '1';
@@ -1265,7 +1265,7 @@ begin
 		end if;	
 		if DMA_RAM_SEL = '0' then 
 			DMA_RAM_DTACK_N <= '1';
-		end if;	
+		end if;
 
 		case RAMC is
 		when RAMC_IDLE =>
@@ -1275,7 +1275,7 @@ begin
 					ram68k_a <= VBUS_ADDR(15 downto 1);
 					ram68k_we <= '0';
 					ram68k_u_n <= '0';
-					ram68k_l_n <= '0';					
+					ram68k_l_n <= '0';
 					RAMC <= RAMC_DMA;
 				end if;
 			elsif TG68_RAM_SEL = '1' and TG68_RAM_DTACK_N = '1' then
@@ -1302,7 +1302,7 @@ begin
 				TG68_RAM_DTACK_N <= '0';
 				RAMC <= RAMC_IDLE;
 			end if;
-		
+
 		when RAMC_T80 =>
 			if ram68k_req = ram68k_ack then
 				if T80_A(0) = '0' then
@@ -1320,7 +1320,7 @@ begin
 				DMA_RAM_DTACK_N <= '0';
 				RAMC <= RAMC_IDLE;
 			end if;
-		
+
 		when others => null;
 		end case;
 		
@@ -1399,7 +1399,7 @@ begin
 				TG68_ZRAM_DTACK_N <= '0';
 			when ZRCP_T80 =>
 				T80_ZRAM_D <= zram_q;
-				T80_ZRAM_DTACK_N <= '0';				
+				T80_ZRAM_DTACK_N <= '0';
 			end case;
 			ZRC <= ZRC_IDLE;
 		when others => null;
