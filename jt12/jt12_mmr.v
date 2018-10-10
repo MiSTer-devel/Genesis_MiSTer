@@ -174,6 +174,48 @@ reg [7:0] din_copy;
 always @(posedge clk)
 	old_write <= write;
 
+fm_fifo fifo
+(
+	.aclr(rst),
+
+	.rdclk(clk),
+	.rdreq(fifo_rd),
+	.rdempty(fifo_empty),
+	.q(fifo_out),
+
+	.wrclk(clk),
+	.wrreq(~old_write & write),
+	.data({addr,din}),
+	.wrusedw()
+);
+
+wire [9:0] fifo_out;
+wire fifo_empty;
+reg  fifo_rd,fifo_ready;
+
+always @(posedge clk) begin
+	reg [1:0] state = 0;
+	
+	if(rst) begin
+		fifo_rd <= 0;
+		fifo_ready <= 0;
+		state <= 0;
+	end
+	else begin
+		if(state) state <= state + 1'd1;
+		case(state)
+		0: if(!busy && !fifo_empty) begin
+				fifo_rd <= 1;
+				state <= 1;
+			end
+		1: fifo_rd <= 0;
+		2: fifo_ready <= 1;
+		3: fifo_ready <= 0;
+		endcase
+	end
+end
+
+
 // this runs at clk speed, no clock gating here
 always @(posedge clk) begin : memory_mapped_registers
 	if( rst ) begin
@@ -211,42 +253,42 @@ always @(posedge clk) begin : memory_mapped_registers
 		pg_stop		<=	1'b0;
 	end else begin
 		// WRITE IN REGISTERS
-		if( (!old_write && write) /*&& !busy*/ ) begin
+		if( fifo_ready /*&& !busy*/ ) begin
 			busy <= 1'b1;
-			if( !addr[0] ) begin
-				selected_register <= din;
-				up_ch	<= {addr[1], din[1:0]};
-				up_op	<= din[3:2]; // 0=S1,1=S3,2=S2,3=S4
+			if( !fifo_out[8] ) begin
+				selected_register <= fifo_out[7:0];
+				up_ch	<= {fifo_out[9], fifo_out[1:0]};
+				up_op	<= fifo_out[3:2]; // 0=S1,1=S3,2=S2,3=S4
 			end else begin
 				// Global registers
-				din_copy <= din;
+				din_copy <= fifo_out[7:0];
 				if( selected_register < 8'h30 ) begin
 					case( selected_register)
 					// registros especiales
 					//REG_TEST:	lfo_rst <= 1'b1; // regardless of din
 					`ifdef TEST_SUPPORT
-					REG_TEST2:	{test_op0, test_eg} <= din[1:0];
+					REG_TEST2:	{test_op0, test_eg} <= fifo_out[1:0];
 					`endif
 					REG_TESTYM: begin
-						eg_stop <= din[5];
-						pg_stop <= din[3];
-						fast_timers <= din[2];
+						eg_stop <= fifo_out[5];
+						pg_stop <= fifo_out[3];
+						fast_timers <= fifo_out[2];
 						end
 					REG_KON: 	up_keyon 	<= 1'b1;
-					REG_CLKA1:	value_A[9:2]<= din;
-					REG_CLKA2:	value_A[1:0]<= din[1:0];
-					REG_CLKB:	value_B		<= din;
+					REG_CLKA1:	value_A[9:2]<= fifo_out[7:0];
+					REG_CLKA2:	value_A[1:0]<= fifo_out[1:0];
+					REG_CLKB:	value_B		<= fifo_out[7:0];
 					REG_TIMER: begin
-						effect	<= |din[7:6];
-						csm		<= din[7:6] == 2'b10;
+						effect	<= |fifo_out[7:6];
+						csm		<= fifo_out[7:6] == 2'b10;
 						{ clr_flag_B, clr_flag_A,
 						  enable_irq_B, enable_irq_A,
-						  load_B, load_A } <= din[5:0];
+						  load_B, load_A } <= fifo_out[5:0];
 						end
-					REG_LFO:	{ lfo_en, lfo_freq } <= din[3:0];
-					REG_DACTEST:pcm[0] <= din[3];
-					REG_PCM:	pcm[8:1]<= din;
-					REG_PCM_EN:	pcm_en	<= din[7];
+					REG_LFO:	{ lfo_en, lfo_freq } <= fifo_out[3:0];
+					REG_DACTEST:pcm[0] <= fifo_out[3];
+					REG_PCM:	pcm[8:1]<= fifo_out[7:0];
+					REG_PCM_EN:	pcm_en	<= fifo_out[7];
 					// clock divider
 					REG_CLK_N6:	cen_cnt_lim <= 3'd5;
 					REG_CLK_N3:	cen_cnt_lim <= 3'd2;
@@ -260,12 +302,12 @@ always @(posedge clk) begin : memory_mapped_registers
 							8'hA0, 8'hA1, 8'hA2:	up_fnumlo	<= 1'b1;
 							8'hA4, 8'hA5, 8'hA6:	up_block	<= 1'b1;
 							// CH3 special registers
-							8'hA9: { block_ch3op1, fnum_ch3op1 } <= { latch_ch3op1, din };
-                            8'hA8: { block_ch3op3, fnum_ch3op3 } <= { latch_ch3op3, din };
-                            8'hAA: { block_ch3op2, fnum_ch3op2 } <= { latch_ch3op2, din };
-                            8'hAD: latch_ch3op1 <= din[5:0];
-							8'hAC: latch_ch3op3 <= din[5:0];
-                            8'hAE: latch_ch3op2 <= din[5:0];
+							8'hA9: { block_ch3op1, fnum_ch3op1 } <= { latch_ch3op1, fifo_out[7:0] };
+                            8'hA8: { block_ch3op3, fnum_ch3op3 } <= { latch_ch3op3, fifo_out[7:0] };
+                            8'hAA: { block_ch3op2, fnum_ch3op2 } <= { latch_ch3op2, fifo_out[7:0] };
+                            8'hAD: latch_ch3op1 <= fifo_out[5:0];
+							8'hAC: latch_ch3op3 <= fifo_out[5:0];
+                            8'hAE: latch_ch3op2 <= fifo_out[5:0];
 							// FB + Algorithm
                             8'hB0, 8'hB1, 8'hB2:	up_alg		<= 1'b1;
 							8'hB4, 8'hB5, 8'hB6:	up_pms		<= 1'b1;
@@ -390,5 +432,55 @@ jt12_reg u_reg(
 	.s3_enters	( s3_enters	),
 	.s4_enters	( s4_enters	)
 );
+
+endmodule
+
+module fm_fifo
+(
+	input	       aclr,
+
+	input	       rdclk,
+	input	       rdreq,
+	output       rdempty,
+	output [9:0] q,
+
+	input	       wrclk,
+	input	       wrreq,
+	input	 [9:0] data,
+	output [7:0] wrusedw
+);
+
+dcfifo dcfifo_component
+(
+	.aclr (aclr),
+	.data (data),
+	.rdclk (rdclk),
+	.rdreq (rdreq),
+	.wrclk (wrclk),
+	.wrreq (wrreq),
+	.q (q),
+	.wrusedw (wrusedw),
+	.eccstatus (),
+	.rdempty(rdempty),
+	.rdfull (),
+	.rdusedw (),
+	.wrempty (),
+	.wrfull ()
+);
+
+defparam
+	dcfifo_component.intended_device_family = "Cyclone V",
+	dcfifo_component.lpm_numwords = 256,
+	dcfifo_component.lpm_showahead = "OFF",
+	dcfifo_component.lpm_type = "dcfifo",
+	dcfifo_component.lpm_width = 10,
+	dcfifo_component.lpm_widthu = 8,
+	dcfifo_component.overflow_checking = "ON",
+	dcfifo_component.rdsync_delaypipe = 5,
+	dcfifo_component.read_aclr_synch = "OFF",
+	dcfifo_component.underflow_checking = "ON",
+	dcfifo_component.use_eab = "ON",
+	dcfifo_component.write_aclr_synch = "OFF",
+	dcfifo_component.wrsync_delaypipe = 5;
 
 endmodule
