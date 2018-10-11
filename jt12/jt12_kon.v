@@ -33,7 +33,7 @@ module jt12_kon(
 	input	[2:0]	cur_ch,
 	input			up_keyon,
 	input			csm,
-	input			flag_A,
+	// input			flag_A,
 	input			overflow_A,
 
 	output	reg		keyon_II
@@ -60,10 +60,10 @@ always @(*) begin
 	din = keyon_ch==cur_ch && up_keyon ? |(keyon_op&cur_op_hot) : drop;
 end
 
-jt12_sh #(.width(1),.stages(24)) u_konch(
+jt12_sh_rst #(.width(1),.stages(24),.rstval(1'b0)) u_konch(
 	.clk	( clk		),
 	.clk_en	( clk_en	),
-//	.rst	( rst		),
+	.rst	( rst		),
 	.din	( din		),
 	.drop	( drop		)
 );

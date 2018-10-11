@@ -44,7 +44,7 @@ generate
 	for (i=0; i < width; i=i+1) begin: bit_shifter
 		always @(posedge clk) 
 			if( rst ) begin
-				bits[i] <= 1'b1;
+				bits[i] <= rstval;
 			end else if(clk_en) begin
 				if( stages> 1 )
 					bits[i] <= {bits[i][stages-2:0], din[i]};

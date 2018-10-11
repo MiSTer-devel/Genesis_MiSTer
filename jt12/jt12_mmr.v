@@ -97,8 +97,8 @@ module jt12_mmr(
 	output 			s4_enters
 );
 
-reg [2:0] cen_cnt;
-reg [2:0] cen_cnt_lim;
+reg [2:0] cen_cnt=3'd0;
+reg [2:0] cen_cnt_lim=3'd5;
 reg cen_int;
 
 assign clk_en = cen & cen_int;
@@ -166,8 +166,6 @@ reg [ 5:0] latch_ch3op2,  latch_ch3op3,  latch_ch3op1;
 reg [2:0] up_ch;
 reg [1:0] up_op;
 
-`include "jt12_mmr_sim.vh"
-
 reg old_write;
 reg [7:0] din_copy;
 
@@ -227,6 +225,11 @@ always @(posedge clk) begin : memory_mapped_registers
 		{ 	up_keyon,		up_alg, 	up_block, 	up_fnumlo,
 			up_pms, 	up_dt1, 	up_tl, 		up_ks_ar,
 			up_amen_d1r,up_d2r,		up_d1l,		up_ssgeg } <=  12'd0;
+
+		{ block_ch3op1, fnum_ch3op1, latch_ch3op1,
+        block_ch3op3, fnum_ch3op3, latch_ch3op3,
+        block_ch3op2, fnum_ch3op2, latch_ch3op2 } <= 0;
+
 		`ifdef TEST_SUPPORT
 		{ test_eg, test_op0 } <= 2'd0;
 		`endif
@@ -303,14 +306,14 @@ always @(posedge clk) begin : memory_mapped_registers
 							8'hA4, 8'hA5, 8'hA6:	up_block	<= 1'b1;
 							// CH3 special registers
 							8'hA9: { block_ch3op1, fnum_ch3op1 } <= { latch_ch3op1, fifo_out[7:0] };
-                            8'hA8: { block_ch3op3, fnum_ch3op3 } <= { latch_ch3op3, fifo_out[7:0] };
-                            8'hAA: { block_ch3op2, fnum_ch3op2 } <= { latch_ch3op2, fifo_out[7:0] };
-                            8'hAD: latch_ch3op1 <= fifo_out[5:0];
+                     8'hA8: { block_ch3op3, fnum_ch3op3 } <= { latch_ch3op3, fifo_out[7:0] };
+                     8'hAA: { block_ch3op2, fnum_ch3op2 } <= { latch_ch3op2, fifo_out[7:0] };
+                     8'hAD: latch_ch3op1 <= fifo_out[5:0];
 							8'hAC: latch_ch3op3 <= fifo_out[5:0];
-                            8'hAE: latch_ch3op2 <= fifo_out[5:0];
+                     8'hAE: latch_ch3op2 <= fifo_out[5:0];
 							// FB + Algorithm
-                            8'hB0, 8'hB1, 8'hB2:	up_alg		<= 1'b1;
-							8'hB4, 8'hB5, 8'hB6:	up_pms		<= 1'b1;
+                     8'hB0, 8'hB1, 8'hB2:	up_alg <= 1'b1;
+							8'hB4, 8'hB5, 8'hB6:	up_pms <= 1'b1;
 						endcase
 					end
 					else

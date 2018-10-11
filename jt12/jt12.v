@@ -1,5 +1,5 @@
 module jt12 (
-	input			rst,
+	input			rst,		// rst should be at least 6 clk&cen cycles long
 	input			clk,		// CPU clock
 	input			cen,		// optional clock enable, it not needed leave as 1'b1
 	input	[7:0]	din,

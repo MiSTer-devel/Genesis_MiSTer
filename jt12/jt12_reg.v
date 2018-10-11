@@ -108,8 +108,8 @@ module jt12_reg(
 
 
 reg	 [4:0] cnt;
-reg  [1:0] next_op, cur_op;
-reg  [2:0] next_ch, cur_ch;
+reg  [1:0] next_op = 0, cur_op = 0;
+reg  [2:0] next_ch = 0, cur_ch = 0;
 
 assign s1_enters = cur_op == 2'b00;
 assign s3_enters = cur_op == 2'b01;
@@ -154,7 +154,7 @@ jt12_sumch u_opch_II ( .chin(req_opch_I  ), .chout(req_opch_II)  );
 jt12_sumch u_opch_III( .chin(req_opch_II ), .chout(req_opch_III) );
 jt12_sumch u_opch_IV ( .chin(req_opch_III), .chout(req_opch_IV)  );
 jt12_sumch u_opch_V  ( .chin(req_opch_IV ), .chout(req_opch_V)   );
-jt12_sumch u_opch_VI ( .chin(req_opch_V  ), .chout(req_opch_VI)  );
+// jt12_sumch u_opch_VI ( .chin(req_opch_V  ), .chout(req_opch_VI)  );
 
 wire update_op_I  = cur == req_opch_I;
 wire update_op_II = cur == req_opch_II;
@@ -231,8 +231,8 @@ always @(*) begin
 	next_ch = cur_ch[1:0]==2'b10 ? cur_ch+2'd2 : cur_ch+1'd1;
 end
 
-reg		busy_op; 
-reg		up_keyon_long;
+reg		busy_op = 0; 
+reg		up_keyon_long = 0;
 
 assign	busy = busy_op;
 
@@ -264,7 +264,7 @@ jt12_kon u_kon(
 	.cur_ch		( cur_ch	),
 	.up_keyon	( up_keyon_long	),
 	.csm		( csm		),
-	.flag_A		( flag_A	),
+	// .flag_A		( flag_A	),
 	.overflow_A	( overflow_A),
 	
 	.keyon_II	( keyon_II	)
@@ -294,7 +294,7 @@ jt12_opram u_opram(
 	.clk_en	( clk_en	),
 	.wr_addr( cur 		),
 	.rd_addr( next 		),
-	.data	( rst ? {regop_width{1'b0}} : regop_in ),
+	.data	( rst ? { ~7'd0, 37'd0 } : regop_in ),
 	.q		( regop_out )
 );
 
@@ -348,10 +348,10 @@ jt12_sh_rst #(.width(regch_width),.stages(6)) u_regch(
 
 // RL is on a different register to 
 // have the reset to 1
-jt12_sh #(.width(2),.stages(6)) u_regch_rl(
+jt12_sh_rst #(.width(2),.stages(6),.rstval(1'b1)) u_regch_rl(
 	.clk	( clk		),
 	.clk_en	( clk_en	),
-//	.rst	( rst		),
+	.rst	( rst		),
 	.din	( up_pms_ch	? rl_in :  rl	),
 	.drop	( rl	)
 );
