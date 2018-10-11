@@ -291,6 +291,11 @@ architecture logic of TG68KdotC_Kernel is
 	signal micro_state          : micro_states;
 	signal next_micro_state     : micro_states;
 
+	-- signals to implement decending pre-decrement long word write order for seg genesis
+	signal lwpredecwr           : std_logic;
+	signal lwpredecwr2          : std_logic;
+	signal lwpredecwr_mux	    : std_logic_vector(31 downto 0);
+
 BEGIN
 ALU: TG68K_ALU
 	generic map(
@@ -358,6 +363,11 @@ ALU: TG68K_ALU
 	clkena_lw <= '1' WHEN clkena_in='1' AND memmaskmux(3)='1' ELSE '0'; -- step
 	clr_berr <= '1' WHEN setopcode='1' AND trap_berr='1' ELSE '0';
 
+   -- long word write on pre decrement is a special case and writes the word in
+   -- opposite order
+   lwpredecwr <= '1' WHEN lwrena ='1' AND state = "11" AND exec(presub) = '1' AND
+		set_exec(opcMOVE) = '1' AND exe_datatype(1) = '1' ELSE '0';
+
 	PROCESS (clk, nReset)
 	BEGIN
 		IF nReset='0' THEN
@@ -410,12 +420,20 @@ PROCESS (clk, long_done, last_data_in, data_in, byte, addr_int, long_start, memm
 	END PROCESS;
 
 PROCESS (byte, long_start, reg_QB, data_write_tmp, exec, data_read, data_write_mux, memmaskmux, bf_ext_out,
-		 data_write_muxin, memmask, oddout, addr_int)
+		 data_write_muxin, memmask, oddout, addr_int, lwpredecwr, lwpredecwr_mux)
 	BEGIN
 		IF exec(write_reg)='1' THEN
-			data_write_muxin <= reg_QB;
+			lwpredecwr_mux <= reg_QB;
 		ELSE
-			data_write_muxin <= data_write_tmp;
+			lwpredecwr_mux <= data_write_tmp;
+		END IF;
+
+		-- pre decrement longword write writes words in opposite order
+		-- addresses also have to be changed to make this work
+		IF lwpredecwr = '1' THEN
+			data_write_muxin <= lwpredecwr_mux(15 downto 0) & lwpredecwr_mux(31 downto 16);
+		ELSE
+			data_write_muxin <= lwpredecwr_mux;
 		END IF;
 
 		IF BitField=0 THEN
@@ -735,7 +753,7 @@ PROCESS (brief, OP1out, OP1outbrief, cpu)
 -- MEM_IO
 -----------------------------------------------------------------------------
 PROCESS (clk, setdisp, memaddr_a, briefdata, memaddr_delta, setdispbyte, datatype, interrupt, rIPL_nr, IPL_vec,
-		 memaddr_reg, reg_QA, use_base, VBR, last_data_read, trap_vector, exec, set, cpu)
+		 memaddr_reg, reg_QA, use_base, VBR, last_data_read, trap_vector, exec, set, cpu, lwpredecwr, lwpredecwr2)
 	BEGIN
 
 		IF rising_edge(clk) THEN
@@ -851,10 +869,24 @@ PROCESS (clk, setdisp, memaddr_a, briefdata, memaddr_delta, setdispbyte, datatyp
 				IF (long_done='0' AND state(1)='1') OR movem_presub='0' THEN
 				  memaddr <= addr_int;
 				END IF;
+
+				lwpredecwr2 <= lwpredecwr;
 			END IF;
 		END IF;
 		-- if access done, and not aligned, don't increment
-		addr_int <= memaddr_reg+memaddr_delta;
+
+		IF lwpredecwr = '1' THEN
+			IF lwpredecwr2 = '0' THEN
+				-- if writing longword with predecrement then reverse order
+				addr_int <= memaddr_reg + memaddr_delta + 2;
+			ELSE
+				-- if writing second word of longword with predecrement then reverse order
+				addr_int <= memaddr_reg + memaddr_delta - 4;
+			END IF;
+		ELSE
+			addr_int <= memaddr_reg + memaddr_delta;
+		END IF;
+
 		IF use_base='0' THEN
 			memaddr_reg <= (others=>'0');
 		ELSE
