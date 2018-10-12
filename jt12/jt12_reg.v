@@ -108,8 +108,22 @@ module jt12_reg(
 
 
 reg	 [4:0] cnt;
-reg  [1:0] next_op = 0, cur_op = 0;
-reg  [2:0] next_ch = 0, cur_ch = 0;
+reg  [1:0] next_op, cur_op;
+reg  [2:0] next_ch, cur_ch;
+
+`ifdef SIMULATION
+// These signals need to operate during rst
+// initial state is not relevant (or critical) in real life
+// but we need a clear value during simulation
+initial begin
+	cur_op = 2'd0;
+	cur_ch = 3'd0;
+	cnt		= 5'h0;
+	last	= 1'b0;
+	zero	= 1'b1;
+	busy_op	= 1'b0;
+end
+`endif
 
 assign s1_enters = cur_op == 2'b00;
 assign s3_enters = cur_op == 2'b01;
@@ -231,13 +245,16 @@ always @(*) begin
 	next_ch = cur_ch[1:0]==2'b10 ? cur_ch+2'd2 : cur_ch+1'd1;
 end
 
-reg		busy_op = 0; 
-reg		up_keyon_long = 0;
+reg		busy_op; 
+reg		up_keyon_long;
 
 assign	busy = busy_op;
 
 
 always @(posedge clk) begin : up_counter
+	if( rst ) begin
+		up_keyon_long <= 1'b0;
+	end
 	if( clk_en ) begin
 		{ cur_op, cur_ch }	<= { next_op, next_ch };
 		zero 	<= next == 5'd0;
@@ -288,6 +305,7 @@ jt12_mod u_mod(
 parameter regop_width=44;
 
 wire [regop_width-1:0] regop_in, regop_out;
+
 
 jt12_opram u_opram(
 	.clk	( clk 		),

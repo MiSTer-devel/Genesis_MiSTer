@@ -161,7 +161,7 @@ always @(*) begin : dt1_limit_mux
 end
 
 always @(posedge clk) if ( clk_en ) begin // phase_calculation_III
-	dt1_offset_IV <= dt1_unlimited > dt1_limit ? 
+	dt1_offset_IV <= dt1_unlimited > {1'b0, dt1_limit} ? 
 							dt1_limit : dt1_unlimited[4:0];
 	dt1_IV   <= dt1_III;	
 	phinc_IV <= phinc_III;	

@@ -231,6 +231,7 @@ always @(posedge clk) if( clk_en ) begin
 							state_III <= HOLD; // repeats!
 							ar_off_III <= 1'b0;
 						end
+					default:;
 				endcase
 			end
 		end
@@ -390,11 +391,11 @@ reg [8:0] ar_sum0;
 reg [9:0] ar_result, ar_sum;
 
 always @(*) begin : ar_calculation
-	casex( rate_VI[5:2] )
+	casez( rate_VI[5:2] )
 		default: ar_sum0 = {2'd0, eg_VI[9:4]} + 8'd1;
 		4'b1100: ar_sum0 = {2'd0, eg_VI[9:4]} + 8'd1;
 		4'b1101: ar_sum0 = {1'd0, eg_VI[9:3]} + 8'd1;
-		4'b111x: ar_sum0 = eg_VI[9:2] + 8'd1;
+		4'b111?: ar_sum0 = eg_VI[9:2] + 8'd1;
 	endcase
 	if( rate_VI[5:4] == 2'b11 )
 		ar_sum = step_VI ? { ar_sum0, 1'b0 } : { 1'b0, ar_sum0 };
@@ -441,8 +442,8 @@ reg		[8:0]	am_final;
 reg		[11:0]	sum_eg_tl;
 
 always @(*) begin : sum_eg_and_tl
-	casex( {amsen_VII, ams_VII } )
-		3'b0xx,3'b100: am_final = 9'd0;
+	casez( {amsen_VII, ams_VII } )
+		3'b0??,3'b100: am_final = 9'd0;
 		3'b101: am_final = { 2'b00, am };
 		3'b110: am_final = { 1'b0, am, 1'b0};
 		3'b111: am_final = { am, 2'b0	  };

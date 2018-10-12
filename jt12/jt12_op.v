@@ -99,7 +99,8 @@ reg [11:0]	logsin;
 reg [10:0]	subtresult;
 
 reg [12:0]	etb;
-reg [ 9:0]	etf, etg, mantissa_XI;
+reg [ 9:0]	etf, mantissa_XI;
+reg [ 2:0] 	etg;
 reg [ 3:0]	exponent_XI;
 
 reg [12:0]	shifter, shifter_2, shifter_3;
@@ -280,7 +281,7 @@ end
 
 always @(posedge clk) if( clk_en ) begin
     //RESULT
-	mantissa_XI <= etf + ( totalatten_X[0] ? 3'd0 : etg ); //carry-out discarded
+	mantissa_XI <= etf + { 7'd0, ( totalatten_X[0] ? 3'd0 : etg )}; //carry-out discarded
 	exponent_XI <= totalatten_X[11:8];
 	signbit_XI <= signbit_X;     
 end

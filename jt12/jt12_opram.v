@@ -36,41 +36,6 @@ module jt12_opram
 );
 
 	reg [43:0] ram[31:0];
-	initial
-	begin
-		ram[0]  = 43'd0;
-		ram[1]  = 43'd0;
-		ram[2]  = 43'd0;
-		ram[3]  = 43'd0;
-		ram[4]  = 43'd0;
-		ram[5]  = 43'd0;
-		ram[6]  = 43'd0;
-		ram[7]  = 43'd0;
-		ram[8]  = 43'd0;
-		ram[9]  = 43'd0;
-		ram[10] = 43'd0;
-		ram[11] = 43'd0;
-		ram[12] = 43'd0;
-		ram[13] = 43'd0;
-		ram[14] = 43'd0;
-		ram[15] = 43'd0;
-		ram[16] = 43'd0;
-		ram[17] = 43'd0;
-		ram[18] = 43'd0;
-		ram[19] = 43'd0;
-		ram[20] = 43'd0;
-		ram[21] = 43'd0;
-		ram[22] = 43'd0;
-		ram[23] = 43'd0;
-		ram[24] = 43'd0;
-		ram[25] = 43'd0;
-		ram[26] = 43'd0;
-		ram[27] = 43'd0;
-		ram[28] = 43'd0;
-		ram[29] = 43'd0;
-		ram[30] = 43'd0;
-		ram[31] = 43'd0;
-	end
 
 	always @ (posedge clk) if(clk_en) begin
 		q <= ram[rd_addr];
