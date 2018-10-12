@@ -110,6 +110,8 @@ module jt12_reg(
 reg	 [4:0] cnt;
 reg  [1:0] next_op, cur_op;
 reg  [2:0] next_ch, cur_ch;
+reg busy_op; 
+reg up_keyon_long;
 
 `ifdef SIMULATION
 // These signals need to operate during rst
@@ -122,6 +124,7 @@ initial begin
 	last	= 1'b0;
 	zero	= 1'b1;
 	busy_op	= 1'b0;
+	up_keyon_long = 1'b0;
 end
 `endif
 
@@ -245,16 +248,9 @@ always @(*) begin
 	next_ch = cur_ch[1:0]==2'b10 ? cur_ch+2'd2 : cur_ch+1'd1;
 end
 
-reg		busy_op; 
-reg		up_keyon_long;
-
 assign	busy = busy_op;
 
-
 always @(posedge clk) begin : up_counter
-	if( rst ) begin
-		up_keyon_long <= 1'b0;
-	end
 	if( clk_en ) begin
 		{ cur_op, cur_ch }	<= { next_op, next_ch };
 		zero 	<= next == 5'd0;

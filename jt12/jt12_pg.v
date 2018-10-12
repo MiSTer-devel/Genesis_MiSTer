@@ -164,7 +164,7 @@ always @(posedge clk) if ( clk_en ) begin // phase_calculation_III
 	dt1_offset_IV <= dt1_unlimited > {1'b0, dt1_limit} ? 
 							dt1_limit : dt1_unlimited[4:0];
 	dt1_IV   <= dt1_III;	
-	phinc_IV <= phinc_III;	
+	phinc_IV <= phinc_III > 17'd69905 ? 17'd69905 : phinc_III;	
 end
 
 //////////////////////////////////////////////////
@@ -198,6 +198,7 @@ wire		keyon_VI;
 wire [19:0]	phase_drop;
 reg  [19:0] phase_in;
 reg  [ 9:0] phase_VII;
+
 
 always @(*)
 	phase_in =  pg_rst_VI ? 20'd0 : 
