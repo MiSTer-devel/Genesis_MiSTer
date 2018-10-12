@@ -297,6 +297,9 @@ signal TG68_FM_DTACK_N	: std_logic;
 signal T80_FM_SEL			: std_logic;
 signal T80_FM_D			: std_logic_vector(7 downto 0);
 signal T80_FM_DTACK_N	: std_logic;
+signal FM_FIFO_DO       : std_logic_vector(9 downto 0);
+signal FM_FIFO_RD       : std_logic;
+signal FM_FIFO_EMPTY    : std_logic;
 
 -- PSG
 signal PSG_WR_n		: std_logic;
@@ -585,9 +588,9 @@ port map(
 
 	limiter_en 	=> FM_LIMITER,
 	cs_n	      => '0',
-	addr	      => FM_A,
-	wr_n	      => FM_RNW,
-	din	      => FM_DI,
+	addr	      => FM_FIFO_DO(9 downto 8),
+	wr_n	      => FM_FIFO_RD,
+	din	      => FM_FIFO_DO(7 downto 0),
 	dout	      => FM_DO,
 
 	snd_left   => snd_left,
@@ -596,6 +599,23 @@ port map(
 
 DAC_LDATA <= (snd_left(11)  &  snd_left) + (PSG_SND&"00");
 DAC_RDATA <= (snd_right(11) & snd_right) + (PSG_SND&"00");
+
+fifo : work.fmfifo
+port map (
+	aclr    => not T80_RESET_N,
+
+	rdclk   => MCLK,
+	rdreq   => FM_FIFO_RD,
+	rdempty => FM_FIFO_EMPTY,
+	q       => FM_FIFO_DO,
+
+	wrclk   => MCLK,
+	wrreq   => not FM_RNW,
+	data    => FM_A&FM_DI
+);
+
+FM_FIFO_RD <= not (FM_DO(7) or FM_FIFO_EMPTY or FM_FIFO_RD) when rising_edge(MCLK);
+
 
 ----------------------------------------------------------------
 -- INTERRUPTS CONTROL
@@ -1044,14 +1064,14 @@ end process;
 
 TG68_FM_SEL <= '1' when TG68_A(23 downto 13) = x"A0"&"010" and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') else '0';
 T80_FM_SEL  <= '1' when T80_A(15 downto 13) = "010" and T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0') else '0';
+TG68_FM_D   <= FM_DO & FM_DO;
+T80_FM_D    <= FM_DO;
 
 process( RESET_N, MCLK ) begin
 	if RESET_N = '0' then
 		TG68_FM_DTACK_N <= '1';	
 		T80_FM_DTACK_N <= '1';	
-		
 		FM_RNW <= '1';
-		FM_A <= (others => '0');
 		
 	elsif rising_edge(MCLK) then
 		if TG68_FM_SEL = '0' then 
@@ -1061,12 +1081,9 @@ process( RESET_N, MCLK ) begin
 			T80_FM_DTACK_N <= '1';
 		end if;
 		
-		if TG68_FM_DTACK_N <= '1' and T80_FM_DTACK_N <= '1' then
-			FM_RNW <= '1';
-		end if;
+		FM_RNW <= '1';
 
 		if TG68_FM_SEL = '1' and TG68_FM_DTACK_N = '1' then
-			TG68_FM_D <= FM_DO & FM_DO;
 			FM_A(1) <= TG68_A(1);
 			FM_RNW <= TG68_RNW;
 			if TG68_LDS_N = '0' then
@@ -1079,7 +1096,6 @@ process( RESET_N, MCLK ) begin
 			TG68_FM_DTACK_N <= '0';
 
 		elsif T80_FM_SEL = '1' and T80_FM_DTACK_N = '1' then
-			T80_FM_D <= FM_DO;
 			FM_A <= T80_A(1 downto 0);
 			FM_RNW <= T80_WR_N;
 			FM_DI <= T80_DO;
