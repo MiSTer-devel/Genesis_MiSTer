@@ -346,7 +346,7 @@ always @(posedge clk_sys) begin
 	end
 
 	old_download <= ioctl_download;
-	if(status[8] & (old_download ^ ioctl_download)) begin
+	if(status[8] & (old_download ^ ioctl_download) & |ioctl_index) begin
 		region_set <= ioctl_download;
 		region_req <= ioctl_index[7:6];
 	end
