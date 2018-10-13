@@ -74,7 +74,7 @@ entity vdp is
 		VBUS_SEL			: out std_logic;
 		VBUS_DTACK_N	: in  std_logic;
 		VBUS_BUSY      : out std_logic;
-		
+
 		PAL				: in  std_logic := '0';
 		FIELD      		: out std_logic;
 		INTERLACE 		: out std_logic;
@@ -252,7 +252,7 @@ signal HSCB			: std_logic_vector(5 downto 0);
 signal NTBB			: std_logic_vector(2 downto 0);
 signal NTWB			: std_logic_vector(4 downto 0);
 signal NTAB			: std_logic_vector(2 downto 0);
-signal SATB			: std_logic_vector(6 downto 0);
+signal SATB			: std_logic_vector(7 downto 0);
 
 
 ----------------------------------------------------------------
@@ -407,9 +407,9 @@ signal BGA_DTACK_N			: std_logic;
 ----------------------------------------------------------------
 -- SPRITE CACHE
 ----------------------------------------------------------------
-signal CACHE_OBJ		: std_logic_vector(6 downto 0);
-signal CACHE_ADDR		: std_logic_vector(6 downto 0);
-signal CACHE_WE		: std_logic;
+signal CACHE_ADDR		: std_logic_vector(8 downto 0);
+signal CACHE_WE_L		: std_logic;
+signal CACHE_WE_U		: std_logic;
 
 signal CACHE_Y			: std_logic_vector(15 downto 0);
 signal CACHE_SZ_LINK	: std_logic_vector(15 downto 0);
@@ -438,10 +438,10 @@ signal SPC						: spc_t;
 signal SP_Y						: std_logic_vector(8 downto 0);
 
 signal SP_VRAM_ADDR			: std_logic_vector(14 downto 0);
-signal SP_VRAM_DO			: std_logic_vector(15 downto 0);
+signal SP_VRAM_DO				: std_logic_vector(15 downto 0);
 signal SP_VRAM_DO_REG		: std_logic_vector(15 downto 0);
 signal SP_SEL					: std_logic;
-signal SP_DTACK_N			: std_logic;
+signal SP_DTACK_N				: std_logic;
 
 signal OBJ_COLINFO_ADDR_A	: std_logic_vector(8 downto 0);
 signal OBJ_COLINFO_ADDR_B	: std_logic_vector(8 downto 0);
@@ -450,6 +450,7 @@ signal OBJ_COLINFO_WE_A		: std_logic;
 signal OBJ_COLINFO_WE_B		: std_logic;
 signal OBJ_COLINFO_Q_A		: std_logic_vector(6 downto 0);
 signal OBJ_COLINFO_Q_B		: std_logic_vector(6 downto 0);
+signal OBJ_NUM					: std_logic_vector(6 downto 0);
 
 ----------------------------------------------------------------
 -- VIDEO OUTPUT
@@ -494,44 +495,44 @@ port map(
 cache_y_u : entity work.dpram generic map(7,8)
 port map(
 	clock			=> MEMCLK,
-	address_a	=> CACHE_ADDR,
+	address_a	=> CACHE_ADDR(8 downto 2),
 	data_a		=> DMA_VRAM_DI(15 downto 8),
-	wren_a		=> CACHE_WE and not DMA_VRAM_ADDR(0) and not DMA_VRAM_UDS_N,
+	wren_a		=> CACHE_WE_U and not CACHE_ADDR(0),
 
-	address_b	=> CACHE_OBJ,
+	address_b	=> OBJ_NUM,
 	q_b			=> CACHE_Y(15 downto 8)
 );
 
 cache_y_l : entity work.dpram generic map(7,8)
 port map(
 	clock			=> MEMCLK,
-	address_a	=> CACHE_ADDR,
+	address_a	=> CACHE_ADDR(8 downto 2),
 	data_a		=> DMA_VRAM_DI(7 downto 0),
-	wren_a		=> CACHE_WE and not DMA_VRAM_ADDR(0) and not DMA_VRAM_LDS_N,
+	wren_a		=> CACHE_WE_L and not CACHE_ADDR(0),
 
-	address_b	=> CACHE_OBJ,
+	address_b	=> OBJ_NUM,
 	q_b			=> CACHE_Y(7 downto 0)
 );
 
 cache_sz_u : entity work.dpram generic map(7,8)
 port map(
 	clock			=> MEMCLK,
-	address_a	=> CACHE_ADDR,
+	address_a	=> CACHE_ADDR(8 downto 2),
 	data_a		=> DMA_VRAM_DI(15 downto 8),
-	wren_a		=> CACHE_WE and DMA_VRAM_ADDR(0) and not DMA_VRAM_UDS_N,
+	wren_a		=> CACHE_WE_U and CACHE_ADDR(0),
 
-	address_b	=> CACHE_OBJ,
+	address_b	=> OBJ_NUM,
 	q_b			=> CACHE_SZ_LINK(15 downto 8)
 );
 
 cache_sz_l : entity work.dpram generic map(7,8)
 port map(
 	clock			=> MEMCLK,
-	address_a	=> CACHE_ADDR,
+	address_a	=> CACHE_ADDR(8 downto 2),
 	data_a		=> DMA_VRAM_DI(7 downto 0),
-	wren_a		=> CACHE_WE and DMA_VRAM_ADDR(0) and not DMA_VRAM_LDS_N,
+	wren_a		=> CACHE_WE_L and CACHE_ADDR(0),
 
-	address_b	=> CACHE_OBJ,
+	address_b	=> OBJ_NUM,
 	q_b			=> CACHE_SZ_LINK(7 downto 0)
 );
 
@@ -551,7 +552,7 @@ M128  <= REG(1)(7);
 NTAB  <= REG(2)(5 downto 3);
 NTWB  <= REG(3)(5 downto 1);
 NTBB  <= REG(4)(2 downto 0);
-SATB  <= REG(5)(6 downto 0);
+SATB  <= REG(5);
 
 BGCOL <= REG(7)(5 downto 0);
 
@@ -1269,16 +1270,18 @@ end process;
 
 process( MEMCLK )
 	variable old_dma_sel : std_logic;
-	variable addr : std_logic_vector(13 downto 0);
+	variable addr : std_logic_vector(15 downto 0);
 begin
 	if rising_edge(MEMCLK) then
-		CACHE_WE <= '0';
 
-		addr := DMA_VRAM_ADDR(15 downto 2) - (SATB & "000000");
+		addr := DMA_VRAM_ADDR - (SATB & "00000000");
 
-		if old_dma_sel = '0' and DMA_SEL = '1' and DMA_VRAM_RNW = '0' and DMA_VRAM_ADDR(1) = '0' and addr < 80 then
-			CACHE_ADDR <= addr(6 downto 0);
-			CACHE_WE <= '1';
+		CACHE_WE_U <= '0';
+		CACHE_WE_L <= '0';
+		if old_dma_sel = '0' and DMA_SEL = '1' and DMA_VRAM_RNW = '0' and addr(1) = '0' and addr(15 downto 9) = 0 then
+			CACHE_ADDR <= addr(8 downto 0);
+			CACHE_WE_U <= not DMA_VRAM_UDS_N;
+			CACHE_WE_L <= not DMA_VRAM_LDS_N;
 		end if;
 
 		old_dma_sel := DMA_SEL;
@@ -1308,6 +1311,7 @@ process( RST_N, MEMCLK )
 	variable OBJ_MASKED		: std_logic;
 	variable OBJ_VALID_X		: std_logic;
 	variable OBJ_DOT_OVERFLOW: std_logic;
+	variable OBJ_CNT      	: integer range 0 to 127;
 begin
 	if RST_N = '0' then
 		SP_SEL <= '0';
@@ -1328,7 +1332,7 @@ begin
 			if SPE_ACTIVE = '1' then
 				SP_SEL <= '0';
 
-				CACHE_OBJ <= (others => '0');
+				OBJ_NUM <= (others => '0');
 
 				OBJ_COLINFO_ADDR_A <= (others => '0');
 				OBJ_NB := (others => '0');
@@ -1336,6 +1340,7 @@ begin
 				OBJ_MASKED := '0';
 				OBJ_VALID_X := OBJ_DOT_OVERFLOW;
 				OBJ_DOT_OVERFLOW := '0';
+				OBJ_CNT := 0;
 
 				SPC <= SPC_Y_RD;
 			end if;
@@ -1356,7 +1361,7 @@ begin
 			end if;
 			OBJ_LINK := CACHE_SZ_LINK(6 downto 0);
 
-			SP_VRAM_ADDR <= (SATB & "00000000") + (CACHE_OBJ & "11");
+			SP_VRAM_ADDR <= (SATB(6 downto 0) & "00000000") + (OBJ_NUM & "11");
 
 			SPC <= SPC_NEXT;
 			case OBJ_VS(1 downto 0) is
@@ -1398,7 +1403,7 @@ begin
 			if OBJ_X /= "000000000" then
 				OBJ_VALID_X := '1';
 			end if;
-			SP_VRAM_ADDR <= (SATB & "00000000") + (CACHE_OBJ & "10");
+			SP_VRAM_ADDR <= (SATB(6 downto 0) & "00000000") + (OBJ_NUM & "10");
 			SP_SEL <= '1';
 			SPC <= SPC_CALC_XY;
 
@@ -1573,13 +1578,19 @@ begin
 			end if;
 
 		when SPC_NEXT =>
-			CACHE_OBJ <= OBJ_LINK;
+			OBJ_NUM <= OBJ_LINK;
+			
+			-- counter to prevent endless loop.
+			OBJ_CNT := OBJ_CNT + 1;
 
 			-- limit number of sprites per line to 20 / 16
 			if (H40 = '1' and OBJ_NB = 20)  or (H40 = '0' and  OBJ_NB = 16) then
 				SPC <= SPC_DONE;
 				SOVR_SET <= '1';
-			elsif	OBJ_LINK = "0000000" then
+			elsif OBJ_LINK = 0 or 
+				 (H40 = '1' and (OBJ_LINK >= 80 or OBJ_CNT >= 80)) or 
+				 (H40 = '0' and (OBJ_LINK >= 64 or OBJ_CNT >= 64))
+			then
 				SPC <= SPC_DONE;
 			else
 				SPC <= SPC_Y_RD;
@@ -1874,7 +1885,6 @@ process( RST_N, CLK )
 	variable DT_WR_DATA : std_logic_vector(15 downto 0);
 	variable DMA_LENGTH : std_logic_vector(15 downto 0);
 	variable DMA_SOURCE : std_logic_vector(15 downto 0);
-	variable need_wait  : std_logic;
 begin
 	if RST_N = '0' then
 
@@ -2009,8 +2019,9 @@ begin
 						DMA_VRAM_LDS_N <= '0';
 						DTC <= DTC_VRAM_RD;
 					end case;
-				else
-					if ADDR_SET_REQ = '1' and ADDR_SET_ACK = '0' and IN_DMA = '0' then
+
+				elsif IN_DMA = '0' then
+					if ADDR_SET_REQ = '1' and ADDR_SET_ACK = '0' then
 						ADDR <= ADDR_LATCH;
 						if CODE(5) = '1' and DMA = '1' and PENDING = '1' then
 							if REG(23)(7) = '0' then
@@ -2026,12 +2037,12 @@ begin
 						ADDR_SET_ACK <= '1';
 					end if;
 
-					if REG_SET_REQ = '1' and REG_SET_ACK = '0' and IN_DMA = '0' then
+					if REG_SET_REQ = '1' and REG_SET_ACK = '0' then
 						REG( CONV_INTEGER( REG_LATCH(12 downto 8)) ) <= REG_LATCH(7 downto 0);
 						REG_SET_ACK <= '1';
 					end if;
 
-					if DMAF_SET_REQ = '1' and DMAF_SET_ACK = '0' and IN_DMA = '0' then
+					if DMAF_SET_REQ = '1' and DMAF_SET_ACK = '0' then
 						if DMA_FILL_PRE = '1' then
 							DMA_FILL <= '1';
 						end if;
@@ -2069,18 +2080,16 @@ begin
 			when DTC_DMA_FILL_LOOP =>
 				if early_ack_dma='0' then
 					DMA_SEL <= '0';
-					DMA_VRAM_DI <= DT_DMAF_DATA(7 downto 0) & DT_DMAF_DATA(7 downto 0);
+					DMA_VRAM_DI <= DT_DMAF_DATA(15 downto 8) & DT_DMAF_DATA(15 downto 8);
 					ADDR <= ADDR + ADDR_STEP;
 					DMA_LENGTH := DMA_LENGTH - 1;
-					DTC <= DTC_DMA_FILL_LOOP;
+					DTC <= DTC_DMA_FILL_WR;
 					if DMA_LENGTH = 0 then
 						DMA_FILL_PRE <= '0';
 						DMA_FILL <= '0';
 						REG(20) <= x"00";
 						REG(19) <= x"00";
 						DTC <= DTC_IDLE;
-					else
-						DTC <= DTC_DMA_FILL_WR;
 					end if;
 				end if;
 
@@ -2121,7 +2130,7 @@ begin
 					ADDR <= ADDR + ADDR_STEP;
 					DMA_LENGTH := DMA_LENGTH - 1;
 					DMA_SOURCE := DMA_SOURCE + 1;
-					DTC <= DTC_DMA_COPY_LOOP;
+					DTC <= DTC_DMA_COPY_RD;
 					if DMA_LENGTH = 0 then
 						DMA_COPY <= '0';
 						REG(20) <= x"00";
@@ -2129,8 +2138,6 @@ begin
 						REG(22) <= DMA_SOURCE(15 downto 8);
 						REG(21) <= DMA_SOURCE(7 downto 0);
 						DTC <= DTC_IDLE;
-					else
-						DTC <= DTC_DMA_COPY_RD;
 					end if;
 				end if;
 
@@ -2146,7 +2153,6 @@ begin
 			when DTC_DMA_VBUS_RD2 =>
 				if VBUS_DTACK_N = '0' then
 					FF_VBUS_SEL <= '0';
-					need_wait := '0';
 
 					case CODE(2 downto 0) is
 					when "011"  =>
@@ -2166,7 +2172,6 @@ begin
 						end if;
 						DMA_VRAM_UDS_N <= '0';
 						DMA_VRAM_LDS_N <= '0';
-						need_wait := '1';
 
 					end case;
 
@@ -2174,12 +2179,12 @@ begin
 				end if;
 
 			when DTC_DMA_VBUS_LOOP =>
-				if need_wait='0' or early_ack_dma='0' then
+				if DMA_SEL = '0' or early_ack_dma='0' then
 					DMA_SEL <= '0';
 					ADDR <= ADDR + ADDR_STEP;
 					DMA_LENGTH := DMA_LENGTH - 1;
 					DMA_SOURCE := DMA_SOURCE + 1;
-					DTC <= DTC_DMA_VBUS_LOOP;
+					DTC <= DTC_DMA_VBUS_RD;
 					if DMA_LENGTH = 0 or
 						((CODE(2 downto 0) = "011" or CODE(2 downto 0) = "101") and ADDR(6 downto 1)="111111") then
 						DMA_VBUS <= '0';
@@ -2188,16 +2193,12 @@ begin
 						REG(22) <= DMA_SOURCE(15 downto 8);
 						REG(21) <= DMA_SOURCE(7 downto 0);
 						DTC <= DTC_IDLE;
-					else
-						DTC <= DTC_DMA_VBUS_RD;
 					end if;
 				end if;
 
 			when others => null;
 			end case;
-		else	-- DT_ACTIVE = '0'
-			-- Do nothing
-		end if;
+		end if;	-- DT_ACTIVE = '0'
 	end if;
 end process;
 

@@ -351,7 +351,7 @@ port map
 	q_a		=> vram_q(7 downto 0)
 );
 
-vram_r : entity work.dpram generic map(15)
+vram_u : entity work.dpram generic map(15)
 port map
 (
 	clock		=> RAMCLK,
@@ -373,7 +373,7 @@ port map
 	q_a		=> ram68k_q(7 downto 0)
 );
 
-ram68k_r : entity work.dpram generic map(15)
+ram68k_u : entity work.dpram generic map(15)
 port map
 (
 	clock		=> RAMCLK,
