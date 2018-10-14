@@ -683,6 +683,7 @@ begin
 						else
 							-- Address Set
 							CODE(1 downto 0) <= DIN(15 downto 14);
+							CODE(5 downto 4) <= "00";
 							ADDR_LATCH(13 downto 0) <= DIN(13 downto 0);
 							if ADDR_SET_ACK = '0' then
 								ADDR_SET_REQ <= '1';
@@ -2021,7 +2022,7 @@ begin
 				elsif IN_DMA = '0' then
 					if ADDR_SET_REQ = '1' and ADDR_SET_ACK = '0' then
 						ADDR <= ADDR_LATCH;
-						if CODE(5) = '1' and DMA = '1' and PENDING = '1' then
+						if CODE(5) = '1' and PENDING = '1' then
 							if REG(23)(7) = '0' then
 								DMA_VBUS <= '1';
 							else
