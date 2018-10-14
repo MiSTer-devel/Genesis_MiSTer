@@ -169,8 +169,6 @@ signal ADDR_LATCH	: std_logic_vector(16 downto 0);
 signal REG_LATCH	: std_logic_vector(15 downto 0);
 signal CODE			: std_logic_vector(5 downto 0);
 
-type fifo_size_t is array(0 to 3) of std_logic;
-signal FIFO_SIZE	: fifo_size_t;
 type fifo_addr_t is array(0 to 3) of std_logic_vector(16 downto 0);
 signal FIFO_ADDR	: fifo_addr_t;
 type fifo_data_t is array(0 to 3) of std_logic_vector(15 downto 0);
@@ -340,7 +338,6 @@ type vmc_t is (
 );
 signal VMC	: vmc_t := VMC_IDLE;
 signal VMC_NEXT : vmc_t := VMC_IDLE;
---signal VMC_SEL	: vmc_t := VMC_IDLE;
 
 signal early_ack_bga : std_logic;
 signal early_ack_bgb : std_logic;
@@ -629,7 +626,7 @@ begin
 				if A(4 downto 2) = "000" then
 					-- Data Port
 					PENDING <= '0';
-
+					
 					if CODE = "000011" -- CRAM Write
 					or CODE = "000101" -- VSRAM Write
 					or CODE = "000001" -- VRAM Write
@@ -660,7 +657,8 @@ begin
 				elsif A(4 downto 2) = "001" then
 					-- Control Port
 					if PENDING = '1' then
-						CODE(5 downto 2) <= DIN(7 downto 4);
+						CODE(5 downto 2) <= (DMA and DIN(7)) & DIN(6 downto 4);
+						CODE(4) <= '0'; -- CD4 isn't implemented
 						ADDR_LATCH <= DIN(2 downto 0) & ADDR(13 downto 0);
 
 						-- In case of DMA VBUS request, hold the TG68 with DTACK_N
@@ -673,7 +671,7 @@ begin
 							PENDING <= '0';
 						end if;
 					else
-						if DIN(15 downto 13) = "100" then
+						if DIN(15 downto 14) = "10" then
 							-- Register Set
 							REG_LATCH <= DIN;
 							if REG_SET_ACK = '0' then
