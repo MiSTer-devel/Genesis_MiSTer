@@ -61,7 +61,8 @@ entity TG68KdotC_Kernel is
 		extAddr_Mode   : integer := 0; --0=>no,     1=>yes,             2=>switchable with CPU(1)
 		MUL_Mode       : integer := 0; --0=>16Bit,  1=>32Bit,           2=>switchable with CPU(1),  3=>no MUL,
 		DIV_Mode       : integer := 0; --0=>16Bit,  1=>32Bit,           2=>switchable with CPU(1),  3=>no DIV,
-		BitField       : integer := 0  --0=>no,     1=>yes,             2=>switchable with CPU(1)
+		BitField       : integer := 0; --0=>no,     1=>yes,             2=>switchable with CPU(1)
+		TASbug         : integer := 0  --0=>normal  1=>disable write (as Genesis 1/2 does)
 	);
 	port(
 		clk            : in std_logic;
@@ -1992,10 +1993,12 @@ PROCESS (clk, cpu, OP1out, OP2out, opcode, exe_condition, nextpass, micro_state,
 								set_exec(opcMOVE) <= '1';
 								IF opcode(7 downto 6)="11" THEN         --tas
 									set_exec_tas <= '1';
-									write_back <= '1';
 									datatype <= "00";                           --Byte
-									IF opcode(5 downto 4)="00" THEN
-										set_exec(Regwrena) <= '1';
+									IF TASbug = 0 THEN
+										write_back <= '1';
+										IF opcode(5 downto 4)="00" THEN
+											set_exec(Regwrena) <= '1';
+										END IF;
 									END IF;
 								END IF;
 							END IF;

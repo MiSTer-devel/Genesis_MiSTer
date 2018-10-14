@@ -425,6 +425,7 @@ TG68_INTACK <= '1' when TG68_FC = "111" else '0';
 
 -- 68K
 tg68 : entity work.TG68KdotC_Kernel
+generic map(TASbug => 1)
 port map(
 	clk			=> MCLK,
 	nReset		=> RESET_N,
