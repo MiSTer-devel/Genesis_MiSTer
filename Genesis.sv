@@ -128,7 +128,7 @@ localparam CONF_STR = {
 	"O5,6 buttons mode,No,Yes;",
 	"-;",
 	"J1,A,B,C,Start,Mode,X,Y,Z;",
-	"V,v1.50.",`BUILD_DATE
+	"V,v1.51.",`BUILD_DATE
 };
 
 
