@@ -1996,9 +1996,9 @@ PROCESS (clk, cpu, OP1out, OP2out, opcode, exe_condition, nextpass, micro_state,
 									datatype <= "00";                           --Byte
 									IF TASbug = 0 THEN
 										write_back <= '1';
-										IF opcode(5 downto 4)="00" THEN
-											set_exec(Regwrena) <= '1';
-										END IF;
+									END IF;
+									IF opcode(5 downto 4)="00" THEN
+										set_exec(Regwrena) <= '1';
 									END IF;
 								END IF;
 							END IF;
