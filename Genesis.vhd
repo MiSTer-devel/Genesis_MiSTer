@@ -222,6 +222,7 @@ signal TG68_OS_D			: std_logic_vector(15 downto 0);
 signal TG68_OS_DTACK_N	: std_logic;
 
 -- CONTROL AREA
+signal ZBUSACK_N			: std_logic;
 signal CART_EN				: std_logic;
 
 signal TG68_CTRL_SEL		: std_logic;
@@ -758,7 +759,6 @@ process( RESET_N, MCLK, TG68_AS_N, TG68_RNW,
 	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
 	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N)
 	variable ZRESET_N  : std_logic;
-	variable ZBUSACK_N : std_logic;
 begin
 	if (TG68_A(23 downto 12) = x"A11" or TG68_A(23 downto 12) = x"A14")
 		and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') 
@@ -789,10 +789,10 @@ begin
 	
 		if T80_RESET_N = '0' then
 			T80_RESET_N <= T80_BUSRQ_N and ZRESET_N;
-			ZBUSACK_N := T80_BUSRQ_N;
+			ZBUSACK_N <= T80_BUSRQ_N;
 		else
 			T80_RESET_N <= ZRESET_N;
-			ZBUSACK_N := T80_BUSAK_N;
+			ZBUSACK_N <= T80_BUSAK_N;
 		end if;
 
 		if TG68_CTRL_SEL = '0' then 
@@ -1356,12 +1356,12 @@ end process;
 process( RESET_N, MCLK, TG68_AS_N, TG68_RNW,
 	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
 	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N,
-	VBUS_SEL, VBUS_ADDR)
+	VBUS_SEL, VBUS_ADDR, ZBUSACK_N)
 begin
-	if TG68_A(23 downto 16) = x"A0" -- Z80 Address Space
-		and TG68_A(14) = '0' -- Z80 RAM (gen-hw.txt lines 89 and 272-273)
+	if TG68_A(23 downto 14) = x"A0"&"00" -- Z80 Address Space
 		and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') 
-	then	
+		and ZBUSACK_N = '0'
+	then
 		TG68_ZRAM_SEL <= '1';
 	else
 		TG68_ZRAM_SEL <= '0';
