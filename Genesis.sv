@@ -50,6 +50,7 @@ module emu
 	output        VGA_VS,
 	output        VGA_DE,    // = ~(VBlank | HBlank)
 	output        VGA_F1,
+	output [1:0]  VGA_SL,
 
 	output        LED_USER,  // 1 - ON, 0 - OFF.
 
@@ -102,8 +103,8 @@ module emu
 assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 assign {SDRAM_DQ, SDRAM_A, SDRAM_BA, SDRAM_CLK, SDRAM_CKE, SDRAM_DQML, SDRAM_DQMH, SDRAM_nWE, SDRAM_nCAS, SDRAM_nRAS, SDRAM_nCS} = 'Z;
 
-assign VIDEO_ARX = status[1] ? 8'd16 : 8'd4;
-assign VIDEO_ARY = status[1] ? 8'd9  : 8'd3;
+assign VIDEO_ARX = status[9] ? 8'd16 : 8'd4;
+assign VIDEO_ARY = status[9] ? 8'd9  : 8'd3;
 
 assign AUDIO_S = 1;
 assign AUDIO_MIX = 0;
@@ -121,8 +122,8 @@ localparam CONF_STR = {
 	"O67,Region,JP,US,EU;",
 	"O8,Auto Region,No,Yes;",
 	"-;",
-	"O1,Aspect ratio,4:3,16:9;",
-	"O23,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%;",
+	"O9,Aspect ratio,4:3,16:9;",
+	"O13,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
 	"-;",
 	"O4,Swap joysticks,No,Yes;",
 	"O5,6 buttons mode,No,Yes;",
@@ -185,14 +186,11 @@ pll pll
 );
 
 ///////////////////////////////////////////////////
-wire [1:0] scale = status[3:2];
 wire [3:0] r, g, b;
 wire vs,hs;
 wire ce_pix;
 wire hblank, vblank;
 wire interlace;
-
-assign CLK_VIDEO = clk_sys;
 
 assign DDRAM_CLK = clk_ram;
 wire reset = RESET | status[0] | buttons[1] | region_set;
@@ -240,14 +238,25 @@ Genesis Genesis
 	.ROM_ACK(rom_rdack)
 );
 
+wire [2:0] scale = status[3:1];
+wire [2:0] sl = scale ? scale - 1'd1 : 3'd0;
+
+assign CLK_VIDEO = clk_ram;
+assign VGA_SL = {~interlace,~interlace}&sl[1:0];
+
+reg old_ce_pix;
+always @(posedge CLK_VIDEO) old_ce_pix <= ce_pix;
+
+
 video_mixer #(.LINE_LENGTH(320), .HALF_DEPTH(1)) video_mixer
 (
 	.*,
 
-	.ce_pix(ce_pix),
+	.clk_sys(CLK_VIDEO),
+	.ce_pix(~old_ce_pix & ce_pix),
 	.ce_pix_out(CE_PIXEL),
 
-	.scanlines({~interlace,~interlace}&{scale == 3, scale == 2}),
+	.scanlines(0),
 	.scandoubler(~interlace && (scale || forced_scandoubler)),
 	.hq2x(scale==1),
 

@@ -664,7 +664,19 @@ hdmi_config hdmi_config
 );
 
 wire [23:0] hdmi_data;
+wire [23:0] hdmi_data_sl;
 wire        hdmi_de;
+
+scanlines #(1) HDMI_scanlines
+(
+	.clk(clk_sys),
+
+	.scanlines(scanlines),
+	.din(hdmi_data),
+	.dout(hdmi_data_sl),
+	.hs(HDMI_TX_HS),
+	.vs(HDMI_TX_VS)
+);
 
 osd hdmi_osd
 (
@@ -675,7 +687,7 @@ osd hdmi_osd
 	.io_din(io_din),
 
 	.clk_video(iHdmiClk),
-	.din(hdmi_data),
+	.din(hdmi_data_sl),
 	.dout(HDMI_TX_D),
 	.de_in(hdmi_de),
 	.de_out(HDMI_TX_DE)
@@ -700,7 +712,19 @@ i2s i2s
 
 /////////////////////////  VGA output  //////////////////////////////////
 
-wire [23:0] vga_q;
+wire [23:0] vga_data_sl;
+
+scanlines #(0) VGA_scanlines
+(
+	.clk(clk_sys),
+
+	.scanlines(scanlines),
+	.din(de ? {r_out, g_out, b_out} : 24'd0),
+	.dout(vga_data_sl),
+	.hs(hs),
+	.vs(vs)
+);
+
 osd vga_osd
 (
 	.clk_sys(clk_sys),
@@ -710,11 +734,12 @@ osd vga_osd
 	.io_din(io_din),
 
 	.clk_video(clk_vid),
-	.din(de ? {r_out, g_out, b_out} : 24'd0),
+	.din(vga_data_sl),
 	.dout(vga_q),
 	.de_in(de)
 );
 
+wire [23:0] vga_q;
 wire [23:0] vga_o;
 
 vga_out vga_out
@@ -833,6 +858,7 @@ wire        audio_s;
 wire  [1:0] audio_mix;
 wire  [7:0] r_out, g_out, b_out;
 wire        vs, hs, de, f1;
+wire  [1:0] scanlines;
 wire        clk_sys, clk_vid, ce_pix;
 
 wire        ram_clk;
@@ -870,6 +896,7 @@ emu emu
 	.VGA_VS(vs_emu),
 	.VGA_DE(de),
 	.VGA_F1(f1),
+	.VGA_SL(scanlines),
 
 	.LED_USER(led_user),
 	.LED_POWER(led_power),

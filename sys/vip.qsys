@@ -869,7 +869,7 @@
  <module name="Output" kind="out_mix" version="17.0" enabled="1" />
  <module name="Reset_Source" kind="reset_source" version="17.0" enabled="1" />
  <module name="Scaler" kind="alt_vip_cl_scl" version="17.0" enabled="1">
-  <parameter name="ALGORITHM_NAME" value="POLYPHASE" />
+  <parameter name="ALGORITHM_NAME" value="NEAREST_NEIGHBOUR" />
   <parameter name="ALWAYS_DOWNSCALE" value="0" />
   <parameter name="ARE_IDENTICAL" value="1" />
   <parameter name="AUTO_DEVICE" value="5CSEBA6U23I7" />
