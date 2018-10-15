@@ -127,6 +127,7 @@ localparam CONF_STR = {
 	"O4,Swap joysticks,No,Yes;",
 	"O5,6 buttons mode,No,Yes;",
 	"-;",
+	"R0,Reset;",
 	"J1,A,B,C,Start,Mode,X,Y,Z;",
 	"V,v1.51.",`BUILD_DATE
 };

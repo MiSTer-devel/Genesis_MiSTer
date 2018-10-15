@@ -819,11 +819,11 @@ begin
 					-- Cartridge Control Register
 					if TG68_LDS_N = '0' then
 						CART_EN <= TG68_DO(0);
-					end if;								
+					end if;
 				end if;
 			else
 				-- Read
-				TG68_CTRL_D <= NO_DATA;
+				TG68_CTRL_D <= (others => '0');
 				if TG68_A(15 downto 8) = x"11" then
 					TG68_CTRL_D(8) <= ZBUSACK_N;
 					TG68_CTRL_D(0) <= ZBUSACK_N;
@@ -848,15 +848,15 @@ begin
 					-- Cartridge Control Register
 					if T80_A(0) = '1' then
 						CART_EN <= T80_DO(0);
-					end if;								
+					end if;
 				end if;
 			else
 				-- Read
-				T80_CTRL_D <= x"FF";
+				T80_CTRL_D <= (others => '0');
 				if BAR(15) & T80_A(14 downto 8) = x"11" and T80_A(0) = '0' then
 					T80_CTRL_D(0) <= ZBUSACK_N;
 				end if;
-			end if;			
+			end if;
 		end if;
 		
 	end if;
