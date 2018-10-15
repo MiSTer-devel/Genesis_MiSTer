@@ -1084,7 +1084,7 @@ begin
 			end if;
 
 			if WIN_H = '1' or WIN_V = '1' then
-				V_BGA_BASE := (NTWB & "00000000000") + (BGA_POS(9 downto 3) & "0");
+				V_BGA_BASE := (NTWB(4 downto 1) & (not H40 and NTWB(0)) & "00000000000") + (BGA_POS(9 downto 3) & "0");
 				if H40 = '0' then -- WIN is 32 tiles wide in H32 mode
 					V_BGA_BASE := V_BGA_BASE + (BGA_Y(9 downto 3) & "00000" & "0");
 				else              -- WIN is 64 tiles wide in H40 mode
