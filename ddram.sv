@@ -53,7 +53,7 @@ assign DDRAM_RD       = ram_read;
 assign DDRAM_DIN      = ram_data;
 assign DDRAM_WE       = ram_write;
 
-assign dout = ram_q[{rdaddr[2:1], 4'b0000} +:16];
+assign dout = (rdaddr[27:1] < wraddr[27:1]) ? ram_q[{rdaddr[2:1], 4'b0000} +:16] : 16'd0;
 
 reg  [7:0] ram_burst;
 reg [63:0] ram_q, next_q;
