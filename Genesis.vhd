@@ -823,7 +823,7 @@ begin
 				end if;
 			else
 				-- Read
-				TG68_CTRL_D <= (others => '0');
+				TG68_CTRL_D <= not TG68_CTRL_D;
 				if TG68_A(15 downto 8) = x"11" then
 					TG68_CTRL_D(8) <= ZBUSACK_N;
 					TG68_CTRL_D(0) <= ZBUSACK_N;
@@ -852,7 +852,7 @@ begin
 				end if;
 			else
 				-- Read
-				T80_CTRL_D <= (others => '0');
+				T80_CTRL_D <= not T80_CTRL_D;
 				if BAR(15) & T80_A(14 downto 8) = x"11" and T80_A(0) = '0' then
 					T80_CTRL_D(0) <= ZBUSACK_N;
 				end if;
