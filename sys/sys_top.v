@@ -669,7 +669,7 @@ wire        hdmi_de;
 
 scanlines #(1) HDMI_scanlines
 (
-	.clk(clk_sys),
+	.clk(iHdmiClk),
 
 	.scanlines(scanlines),
 	.din(hdmi_data),
@@ -716,13 +716,13 @@ wire [23:0] vga_data_sl;
 
 scanlines #(0) VGA_scanlines
 (
-	.clk(clk_sys),
+	.clk(clk_vid),
 
 	.scanlines(scanlines),
 	.din(de ? {r_out, g_out, b_out} : 24'd0),
 	.dout(vga_data_sl),
-	.hs(hs),
-	.vs(vs)
+	.hs(hs1),
+	.vs(vs1)
 );
 
 osd vga_osd
