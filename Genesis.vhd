@@ -598,8 +598,8 @@ port map(
 	snd_right  => snd_right
 );
 
-DAC_LDATA <= (snd_left(11)  &  snd_left) + (PSG_SND&"00");
-DAC_RDATA <= (snd_right(11) & snd_right) + (PSG_SND&"00");
+DAC_LDATA <= (snd_left(11)  &  snd_left) + (PSG_SND&"000");
+DAC_RDATA <= (snd_right(11) & snd_right) + (PSG_SND&"000");
 
 fifo : work.fmfifo
 port map (

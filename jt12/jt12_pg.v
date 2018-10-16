@@ -44,8 +44,8 @@ module jt12_pg(
 	// Operator detuning
 	input		[ 2:0]	dt1_II, // same as JT51's DT1
 	// phase modulation from LFO
-	//input		[ 7:0]	pm,
-	//input		[ 2:0]	pms,
+	input		[ 6:0]	lfo_mod,
+	input		[ 2:0]	pms_I,
 	// phase operation
 	input				pg_rst_III,
 	input				zero,
@@ -55,50 +55,28 @@ module jt12_pg(
 	output	reg	[ 9:0]	phase_VIII
 );
 
-/*
-reg signed [8:0] mod;
-
-always @(*) begin
-	case( pms ) // comprobar en silicio
-		3'd0: mod = 9'd0;
-		3'd1: mod = { 7'd0, pm[6:5] };
-		3'd2: mod = { 6'd0, pm[6:4] };
-		3'd3: mod = { 5'd0, pm[6:3] };
-		3'd4: mod = { 4'd0, pm[6:2] };
-		3'd5: mod = { 3'd0, pm[6:1] };
-		3'd6: mod = { 1'd0, pm[6:0], 1'b0 };
-		3'd7: mod = {		 pm[6:0], 2'b0 };
-	endcase 	
-end
-
-jt12_pm u_pm(
-	// Channel frequency
-	.kc(kc),
-	.kf(kf),
-	.add(~pm[7]),
-	.mod(mod),
-	.kcex(keycode_I)
-);
-*/
-
 wire pg_rst_VI;
 
 //////////////////////////////////////////////////
 // I
 reg [4:0] keycode_II;
-reg [16:0] phinc_II;
+reg [ 2:0] block_II;
+reg [11:0] fnum_II;
+wire signed [7:0] pm_offset_I;
+
+jt12_pm u_pm(
+	.lfo_mod( lfo_mod[6:2] ),
+	.fnum	( fnum_I 	),
+	.pms	( pms_I		),
+	.pm_offset( pm_offset_I )
+);
+
+wire [11:0] pm_offset_I_12b = { {4{pm_offset_I[7]}}, pm_offset_I};
 
 always @(posedge clk) if ( clk_en ) begin // phase_calculation_I
-	case ( block_I )
-		3'd0: phinc_II <= { 7'd0, fnum_I[10:1] };
-		3'd1: phinc_II <= { 6'd0, fnum_I       };
-		3'd2: phinc_II <= { 5'd0, fnum_I, 1'd0 };
-		3'd3: phinc_II <= { 4'd0, fnum_I, 2'd0 };
-		3'd4: phinc_II <= { 3'd0, fnum_I, 3'd0 };
-		3'd5: phinc_II <= { 2'd0, fnum_I, 4'd0 };
-		3'd6: phinc_II <= { 1'd0, fnum_I, 5'd0 };
-		3'd7: phinc_II <= {       fnum_I, 6'd0 };
-	endcase
+	block_II <= block_I;
+	fnum_II <= {fnum_I,1'b0} + pm_offset_I_12b;
+	// fnum_II <= {fnum_I,1'b0}; // + { {3{pm_offset_I[7]}}, pm_offset_I};
 	keycode_II <= { block_I, fnum_I[10], fnum_I[10] ? (|fnum_I[9:7]) : (&fnum_I[9:7])};
 end
 
@@ -116,7 +94,16 @@ always @(posedge clk) if ( clk_en ) begin // phase_calculation_II
 		default:dt1_kf_III	<=	{ 1'b0, keycode_II };
 	endcase
 	dt1_III     <= dt1_II;
-	phinc_III   <= phinc_II;
+	case ( block_II )
+		3'd0: phinc_III <= { 7'd0, fnum_II[11:2] };
+		3'd1: phinc_III <= { 6'd0, fnum_II[11:1] };
+		3'd2: phinc_III <= { 5'd0, fnum_II };
+		3'd3: phinc_III <= { 4'd0, fnum_II, 1'd0 };
+		3'd4: phinc_III <= { 3'd0, fnum_II, 2'd0 };
+		3'd5: phinc_III <= { 2'd0, fnum_II, 3'd0 };
+		3'd6: phinc_III <= { 1'd0, fnum_II, 4'd0 };
+		3'd7: phinc_III <= {       fnum_II, 5'd0 };
+	endcase
 	keycode_III <= keycode_II;
 end
 

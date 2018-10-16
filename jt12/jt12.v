@@ -65,7 +65,7 @@ wire	[ 2:0]	block_I;
 wire	[ 1:0]	rl;
 wire	[ 2:0]	fb_II;
 wire	[ 2:0]	alg;
-wire	[ 2:0]	pms;
+wire	[ 2:0]	pms_I;
 wire	[ 1:0]	ams_VII;
 // PCM
 wire			pcm_en;
@@ -138,7 +138,7 @@ jt12_mmr u_mmr(
 	.rl			( rl		),
 	.fb_II		( fb_II		),
 	.alg		( alg		),
-	.pms		( pms		),
+	.pms_I		( pms_I		),
 	.ams_VII	( ams_VII	),
 	.amsen_VII	( amsen_VII	),
 	.dt1_II		( dt1_II	),
@@ -201,6 +201,9 @@ jt12_pg u_pg(
 	.rst		( rst			),
 	.clk		( clk			),
 	.clk_en		( clk_en		),
+	// Phase modulation by LFO
+	.pms_I		( pms_I			),
+	.lfo_mod	( lfo_mod		),
 	// Channel frequency
 	.fnum_I		( fnum_I		),
 	.block_I	( block_I		),
@@ -231,8 +234,8 @@ jt12_eg u_eg(
 	.rate1_II		( d1r_II		), // decay   rate
 	.rate2_II		( d2r_II		), // sustain rate
 	.rrate_II		( rr_II			), // release rate
-	.d1l			( d1l			),   // sustain level
-	.ks_III			( ks_III		),	   // key scale
+	.d1l			( d1l			), // sustain level
+	.ks_III			( ks_III		), // key scale
 	// SSG operation
 	.ssg_en_II		( ssg_en_II		),
 	.ssg_eg_II		( ssg_eg_II		),

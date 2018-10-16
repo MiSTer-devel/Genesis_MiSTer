@@ -68,7 +68,7 @@ module jt12_mmr(
 	output	[ 1:0]	rl,
 	output	[ 2:0]	fb_II,
 	output	[ 2:0]	alg,
-	output	[ 2:0]	pms,
+	output	[ 2:0]	pms_I,
 	output	[ 1:0]	ams_VII,
 	output			amsen_VII,
 	output	[ 2:0]	dt1_II,
@@ -224,6 +224,7 @@ always @(posedge clk) begin : memory_mapped_registers
 				up_op	<= din[3:2]; // 0=S1,1=S3,2=S2,3=S4
 			end else begin
 				// Global registers
+				// busy <= 1'b1; // only set for data port writes, according to Eke (spritesmind.net)
 				din_copy <= din;
 				if( selected_register < 8'h30 ) begin
 					case( selected_register)
@@ -382,7 +383,7 @@ jt12_reg u_reg(
 	.ssg_eg_II	( ssg_eg_II	),
 	// envelope number
 	.tl_VII		(tl_VII		),
-	.pms		(pms		),
+	.pms_I		(pms_I		),
 	.ams_VII	(ams_VII	),
 	.amsen_VII	(amsen_VII	),
 	// channel configuration

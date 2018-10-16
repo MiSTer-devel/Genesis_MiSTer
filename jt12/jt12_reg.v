@@ -98,7 +98,7 @@ module jt12_reg(
 	output				ssg_en_II,
 	output		[2:0]	ssg_eg_II,
 	output		[6:0]	tl_VII,
-	output		[2:0]	pms,
+	output		[2:0]	pms_I,
 	output		[1:0]	ams_VII,
 	output				amsen_VII,
 
@@ -345,12 +345,12 @@ wire [regch_width-1:0] regch_in = {
 	up_block_ch	? { block_in, fnhi_in } : { block_latch, fnum_latch }, // 3+3
 	up_fnumlo_ch? { block_latch, fnum_latch, fnlo_in } : { block_I_raw, fnum_I_raw }, // 14
 	up_alg_ch	? { fb_in, alg_in } : { fb_I, alg },//3+3
-	up_pms_ch	? { ams_in, pms_in } : { ams_VII, pms }//2+2+3
+	up_pms_ch	? { ams_in, pms_in } : { ams_VII, pms_I }//2+2+3
 }; 
 
 assign { block_latch, fnum_latch, 
 			block_I_raw, fnum_I_raw, 
-			fb_I, alg, ams_VII, pms } = regch_out;
+			fb_I, alg, ams_VII, pms_I } = regch_out;
 
 jt12_sh_rst #(.width(regch_width),.stages(6)) u_regch(
 	.clk	( clk		),
