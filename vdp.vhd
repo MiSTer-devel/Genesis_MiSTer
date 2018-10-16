@@ -173,7 +173,7 @@ type fifo_addr_t is array(0 to 3) of std_logic_vector(16 downto 0);
 signal FIFO_ADDR	: fifo_addr_t;
 type fifo_data_t is array(0 to 3) of std_logic_vector(15 downto 0);
 signal FIFO_DATA	: fifo_data_t;
-type fifo_code_t is array(0 to 3) of std_logic_vector(2 downto 0);
+type fifo_code_t is array(0 to 3) of std_logic_vector(3 downto 0);
 signal FIFO_CODE	: fifo_code_t;
 signal FIFO_WR_POS: std_logic_vector(1 downto 0);
 signal FIFO_RD_POS: std_logic_vector(1 downto 0);
@@ -286,7 +286,7 @@ signal DMA_DTACK_N		: std_logic;
 signal DMA_VRAM_A			: std_logic_vector(14 downto 0);
 
 signal DT_FF_DATA		: std_logic_vector(15 downto 0);
-signal DT_FF_CODE		: std_logic_vector(2 downto 0);
+signal DT_FF_CODE		: std_logic_vector(3 downto 0);
 signal DT_FF_SEL		: std_logic;
 signal DT_FF_DTACK_N	: std_logic;
 
@@ -300,11 +300,6 @@ signal ADDR_SET_REQ	: std_logic;
 signal ADDR_SET_ACK	: std_logic;
 signal REG_SET_REQ	: std_logic;
 signal REG_SET_ACK	: std_logic;
-
-signal DT_DMAF_DATA	: std_logic_vector(15 downto 0);
-signal DMAF_SET_REQ	: std_logic;
-signal DMAF_SET_ACK	: std_logic;
-
 
 signal FF_VBUS_ADDR	: std_logic_vector(23 downto 0);
 signal FF_VBUS_SEL	: std_logic;
@@ -598,7 +593,6 @@ begin
 		ADDR_LATCH <= (others => '0');
 		ADDR_SET_REQ <= '0';
 		REG_SET_REQ <= '0';
-		DMAF_SET_REQ <= '0';
 		CODE <= (others => '0');
 
 		DT_RD_SEL <= '0';
@@ -627,31 +621,14 @@ begin
 					-- Data Port
 					PENDING <= '0';
 					
-					if CODE = "000011" -- CRAM Write
-					or CODE = "000101" -- VSRAM Write
-					or CODE = "000001" -- VRAM Write
-					then
-						DT_FF_DATA <= DIN;
-						DT_FF_CODE <= CODE(2 downto 0);
+					DT_FF_DATA <= DIN;
+					DT_FF_CODE <= CODE(3 downto 0);
 
-						if DT_FF_DTACK_N = '1' then
-							DT_FF_SEL <= '1';
-						else
-							DT_FF_SEL <= '0';
-							FF_DTACK_N <= '0';
-						end if;
+					if DT_FF_DTACK_N = '1' then
+						DT_FF_SEL <= '1';
 					else
-						DT_DMAF_DATA <= DIN;
-						if DMA_FILL_PRE = '1' then
-							if DMAF_SET_ACK = '0' then
-								DMAF_SET_REQ <= '1';
-							else
-								DMAF_SET_REQ <= '0';
-								FF_DTACK_N <= '0';
-							end if;
-						else
-							FF_DTACK_N <= '0';
-						end if;
+						DT_FF_SEL <= '0';
+						FF_DTACK_N <= '0';
 					end if;
 
 				elsif A(4 downto 2) = "001" then
@@ -1941,9 +1918,6 @@ begin
 		if REG_SET_REQ = '0' then
 			REG_SET_ACK <= '0';
 		end if;
-		if DMAF_SET_REQ = '0' then
-			DMAF_SET_ACK <= '0';
-		end if;
 
 		if DT_FF_SEL = '1' and (FIFO_WR_POS + 1 /= FIFO_RD_POS) and DT_FF_DTACK_N = '1' then
 			FIFO_ADDR( CONV_INTEGER( FIFO_WR_POS ) ) <= ADDR;
@@ -1963,7 +1937,7 @@ begin
 					DTC <= DTC_DMA_VBUS_RD;
 
 				elsif DMA_FILL = '1' then
-					DMA_VRAM_DI <= DT_DMAF_DATA(7 downto 0) & DT_DMAF_DATA(7 downto 0);
+					DMA_VRAM_DI <= DT_WR_DATA(7 downto 0) & DT_WR_DATA(7 downto 0);
 					DMA_LENGTH := REG(20) & REG(19);
 					DTC <= DTC_DMA_FILL_WR;
 
@@ -1976,14 +1950,15 @@ begin
 					DT_WR_ADDR := FIFO_ADDR( CONV_INTEGER( FIFO_RD_POS ) );
 					DT_WR_DATA := FIFO_DATA( CONV_INTEGER( FIFO_RD_POS ) );
 					FIFO_RD_POS <= FIFO_RD_POS + 1;
+					DMA_FILL <= DMA_FILL_PRE;
 					case FIFO_CODE( CONV_INTEGER( FIFO_RD_POS ) ) is
-					when "011"  =>
+					when "0011"  =>
 						CRAM( CONV_INTEGER(DT_WR_ADDR(6 downto 1)) ) <= DT_WR_DATA;
 
-					when "101"  =>
+					when "0101"  =>
 						VSRAM( CONV_INTEGER(DT_WR_ADDR(6 downto 1)) ) <= DT_WR_DATA;
 
-					when others =>
+					when "0001"  =>
 						DMA_SEL <= '1';
 						DMA_VRAM_ADDR <= DT_WR_ADDR(16 downto 1);
 						DMA_VRAM_RNW <= '0';
@@ -1994,8 +1969,9 @@ begin
 						end if;
 						DMA_VRAM_UDS_N <= '0';
 						DMA_VRAM_LDS_N <= '0';
-
 						DTC <= DTC_VRAM_WR;
+
+					when others => null;
 					end case;
 
 				elsif DT_RD_SEL = '1' and DT_RD_DTACK_N = '1' then
@@ -2040,13 +2016,6 @@ begin
 						REG( CONV_INTEGER( REG_LATCH(12 downto 8)) ) <= REG_LATCH(7 downto 0);
 						REG_SET_ACK <= '1';
 					end if;
-
-					if DMAF_SET_REQ = '1' and DMAF_SET_ACK = '0' then
-						if DMA_FILL_PRE = '1' then
-							DMA_FILL <= '1';
-						end if;
-						DMAF_SET_ACK <= '1';
-					end if;
 				end if;
 
 			when DTC_VRAM_WR =>
@@ -2079,7 +2048,7 @@ begin
 			when DTC_DMA_FILL_LOOP =>
 				if early_ack_dma='0' then
 					DMA_SEL <= '0';
-					DMA_VRAM_DI <= DT_DMAF_DATA(15 downto 8) & DT_DMAF_DATA(15 downto 8);
+					DMA_VRAM_DI <= DT_WR_DATA(15 downto 8) & DT_WR_DATA(15 downto 8);
 					ADDR <= ADDR + ADDR_STEP;
 					DMA_LENGTH := DMA_LENGTH - 1;
 					DTC <= DTC_DMA_FILL_WR;
