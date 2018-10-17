@@ -321,8 +321,6 @@ signal BG_Y				: std_logic_vector(8 downto 0);
 type bgc_t is (
 	BGC_INIT,
 	BGC_HS_RD,
-	BGC_VSRAM_SET,
-	BGC_VSRAM_RD,
 	BGC_CALC_Y,
 	BGC_BASE_RD,
 	BGC_LOOP,
@@ -409,12 +407,12 @@ signal OBJ_NUM					: std_logic_vector(6 downto 0);
 ----------------------------------------------------------------
 -- VIDEO OUTPUT
 ----------------------------------------------------------------
-signal T_COLOR			: std_logic_vector(8 downto 0);
 signal COLOR_ADDR		: std_logic_vector(5 downto 0);
 signal COLOR_D			: std_logic_vector(8 downto 0);
 signal COLOR_Q			: std_logic_vector(8 downto 0);
 signal COLOR_WE		: std_logic;
 signal COLOR_NUM		: std_logic_vector(5 downto 0);
+signal COLOR			: std_logic_vector(8 downto 0);
 
 signal VSRAM_ADDR		: std_logic_vector(5 downto 0);
 signal VSRAM_D			: std_logic_vector(9 downto 0);
@@ -515,7 +513,7 @@ port map(
 	q_a			=> COLOR_Q,
 
 	address_b	=> COLOR_NUM,
-	q_b			=> T_COLOR
+	q_b			=> COLOR
 );
 
 vsram0 : entity work.dpram generic map(5,10)
@@ -716,19 +714,13 @@ begin
 				BGB_SEL <= '0';
 				BGB_X := ( V_BGB_XSTART(9 downto 3) & "000" ) and (HSIZE & "11111111");
 				BGB_POS := "0000000000" - ( "0000000" & V_BGB_XSTART(2 downto 0) );
-				BGBC <= BGC_VSRAM_SET;
+				if BGB_POS(9) = '1' or VSCR = '0' then
+					VSRAM_NUMB <= (others => '0');
+				else
+					VSRAM_NUMB <= BGB_POS(8 downto 4);
+				end if;
+				BGBC <= BGC_CALC_Y;
 			end if;
-
-		when BGC_VSRAM_SET =>
-			if BGB_POS(9) = '1' or VSCR = '0' then
-				VSRAM_NUMB <= (others => '0');
-			else
-				VSRAM_NUMB <= BGB_POS(8 downto 4);
-			end if;
-			BGBC <= BGC_VSRAM_RD;
-
-		when BGC_VSRAM_RD =>
-			BGBC <= BGC_CALC_Y;
 
 		when BGC_CALC_Y =>
 			if LSM /= 3 then
@@ -823,11 +815,16 @@ begin
 				else
 					BGB_POS := BGB_POS + 1;
 					if BGB_X(2 downto 0) = "111" then
-						BGBC <= BGC_VSRAM_SET;
+						BGBC <= BGC_CALC_Y;
 					end if;
 				end if;
 				BGB_X := (BGB_X + 1) and (HSIZE & "11111111");
 				BGB_SEL <= '0';
+			end if;
+			if BGB_POS(9) = '1' or VSCR = '0' then
+				VSRAM_NUMB <= (others => '0');
+			else
+				VSRAM_NUMB <= BGB_POS(8 downto 4);
 			end if;
 
 		when BGC_TILE_RD =>
@@ -906,19 +903,13 @@ begin
 				BGA_SEL <= '0';
 				BGA_X := ( V_BGA_XSTART(9 downto 3) & "000" ) and (HSIZE & "11111111");
 				BGA_POS := "0000000000" - ( "0000000" & V_BGA_XSTART(2 downto 0) );
-				BGAC <= BGC_VSRAM_SET;
+				if BGA_POS(9) = '1' or VSCR = '0' then
+					VSRAM_NUMA <= (others => '0');
+				else
+					VSRAM_NUMA <= BGA_POS(8 downto 4);
+				end if;
+				BGAC <= BGC_CALC_Y;
 			end if;
-
-		when BGC_VSRAM_SET =>
-			if BGA_POS(9) = '1' or VSCR = '0' then
-				VSRAM_NUMA <= (others => '0');
-			else
-				VSRAM_NUMA <= BGA_POS(8 downto 4);
-			end if;
-			BGAC <= BGC_VSRAM_RD;
-
-		when BGC_VSRAM_RD =>
-			BGAC <= BGC_CALC_Y;
 
 		when BGC_CALC_Y =>
 			if WIN_H = '1' or WIN_V = '1' then
@@ -982,12 +973,12 @@ begin
 				and BGA_POS(3 downto 0) = "0000" and BGA_POS(8 downto 4) = WHP
 			then
 				WIN_H := not WIN_H;
-				BGAC <= BGC_VSRAM_SET;
+				BGAC <= BGC_CALC_Y;
 			elsif BGA_POS(9) = '0' and WIN_H = '1' and WRIGT = '0'
 				and BGA_POS(3 downto 0) = "0000" and BGA_POS(8 downto 4) = WHP
 			then
 				WIN_H := not WIN_H;
-				BGAC <= BGC_VSRAM_SET;
+				BGAC <= BGC_CALC_Y;
 			elsif BGA_POS(1 downto 0) = "00" and BGA_SEL = '0' and (WIN_H = '1' or WIN_V = '1') then
 				if BGA_POS(2) = '0' then
 					if BGA_HF = '1' then
@@ -1084,14 +1075,19 @@ begin
 					BGAC <= BGC_DONE;
 				else
 					if BGA_X(2 downto 0) = "111" and (WIN_H = '0' and WIN_V = '0') then
-						BGAC <= BGC_VSRAM_SET;
+						BGAC <= BGC_CALC_Y;
 					elsif BGA_POS(2 downto 0) = "111" and (WIN_H = '1' or WIN_V = '1') then
-						BGAC <= BGC_VSRAM_SET;
+						BGAC <= BGC_CALC_Y;
 					end if;
 					BGA_POS := BGA_POS + 1;
 				end if;
 				BGA_X := (BGA_X + 1) and (HSIZE & "11111111");
 				BGA_SEL <= '0';
+			end if;
+			if BGA_POS(9) = '1' or VSCR = '0' then
+				VSRAM_NUMA <= (others => '0');
+			else
+				VSRAM_NUMA <= BGA_POS(8 downto 4);
 			end if;
 
 		when BGC_TILE_RD =>
@@ -1712,17 +1708,17 @@ begin
 				B <= (others => '0');
 			else
 				if sh(1 downto 0) = 0 then
-					B <= '0' & T_COLOR(8 downto 6);
-					G <= '0' & T_COLOR(5 downto 3);
-					R <= '0' & T_COLOR(2 downto 0);
+					B <= '0' & COLOR(8 downto 6);
+					G <= '0' & COLOR(5 downto 3);
+					R <= '0' & COLOR(2 downto 0);
 				elsif sh(1 downto 0) = 1 then
-					B <= T_COLOR(8 downto 6) & '0';
-					G <= T_COLOR(5 downto 3) & '0';
-					R <= T_COLOR(2 downto 0) & '0';
+					B <= COLOR(8 downto 6) & '0';
+					G <= COLOR(5 downto 3) & '0';
+					R <= COLOR(2 downto 0) & '0';
 				else
-					B <= '0' & T_COLOR(8 downto 6) + 7;
-					G <= '0' & T_COLOR(5 downto 3) + 7;
-					R <= '0' & T_COLOR(2 downto 0) + 7;
+					B <= '0' & COLOR(8 downto 6) + 7;
+					G <= '0' & COLOR(5 downto 3) + 7;
+					R <= '0' & COLOR(2 downto 0) + 7;
 				end if;
 			end if;
 		when others => null;
@@ -1863,7 +1859,6 @@ process( RST_N, CLK )
 	variable DT_WR_DATA : std_logic_vector(15 downto 0);
 	variable DMA_LENGTH : std_logic_vector(15 downto 0);
 	variable DMA_SOURCE : std_logic_vector(15 downto 0);
-	variable color      : std_logic_vector(8 downto 0);
 begin
 	if RST_N = '0' then
 
@@ -1895,6 +1890,9 @@ begin
 		DMA_LENGTH := (others => '0');
 
 		DTC <= DTC_IDLE;
+
+		COLOR_WE <= '0';
+		VSRAM_WE <= '0';
 		
 	elsif rising_edge(CLK) then
 
