@@ -262,8 +262,6 @@ signal IOC : ioc_t;
 -- VDP AREA
 signal VDP_SEL				: std_logic;
 signal VDP_A 				: std_logic_vector(4 downto 1);
-signal VDP_UDS_N			: std_logic;
-signal VDP_LDS_N			: std_logic;
 signal VDP_RNW				: std_logic;
 signal VDP_DI				: std_logic_vector(15 downto 0);
 signal VDP_DO				: std_logic_vector(15 downto 0);
@@ -526,8 +524,6 @@ port map(
 
 	SEL		=> VDP_SEL,
 	A			=> VDP_A,
-	UDS_N		=> VDP_UDS_N,
-	LDS_N		=> VDP_LDS_N,
 	RNW		=> VDP_RNW,
 	DI			=> VDP_DI,
 	DO			=> VDP_DO,
@@ -1023,16 +1019,12 @@ begin
 				-- VDP
 				VDP_SEL <= '1';
 				VDP_A <= TG68_A(4 downto 1);
-				VDP_UDS_N <= TG68_UDS_N;
-				VDP_LDS_N <= TG68_LDS_N;
 				VDP_RNW <= TG68_RNW;
 				VDP_DI <= TG68_DO;
 				VDPC <= VDPC_TG68_ACC;
 			elsif T80_VDP_SEL = '1' and T80_VDP_DTACK_N = '1' then
 				VDP_SEL <= '1';
 				VDP_A <= T80_A(4 downto 1);
-				VDP_UDS_N <= T80_A(0);
-				VDP_LDS_N <= not T80_A(0);
 				VDP_RNW <= T80_WR_N;
 				VDP_DI <= T80_DO & T80_DO;
 				VDPC <= VDPC_T80_ACC;			

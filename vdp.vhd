@@ -46,8 +46,6 @@ entity vdp is
 
 		SEL				: in  std_logic;
 		A					: in  std_logic_vector(4 downto 1);
-		UDS_N				: in  std_logic;
-		LDS_N				: in  std_logic;
 		RNW				: in  std_logic;
 		DI					: in  std_logic_vector(15 downto 0);
 		DO					: out std_logic_vector(15 downto 0);
@@ -74,7 +72,7 @@ entity vdp is
 		VBUS_SEL			: out std_logic;
 		VBUS_DTACK_N	: in  std_logic;
 		VBUS_BUSY      : out std_logic;
-
+		
 		PAL				: in  std_logic := '0';
 		FIELD      		: out std_logic;
 		INTERLACE 		: out std_logic;
@@ -1605,7 +1603,7 @@ begin
 		case PIXDIV is
 		when "0000" =>
 			hcnt := H_CNT - HDISP_START;
-			vcnt := V_CNT - VDISP_START;
+			vcnt := V_CNT - VDISP_START + 1;
 
 			BGB_COLINFO_ADDR_B <= hcnt;
 			BGA_COLINFO_ADDR_B <= hcnt;
