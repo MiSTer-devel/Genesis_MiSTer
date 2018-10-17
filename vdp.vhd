@@ -174,28 +174,16 @@ signal IN_HBL		: std_logic;
 signal IN_VBL		: std_logic;
 
 signal SOVR			: std_logic;
-signal SOVR_SET	: std_logic;
 signal SOVR_CLR	: std_logic;
 
 signal SCOL			: std_logic;
-signal SCOL_SET	: std_logic;
 signal SCOL_CLR	: std_logic;
 
 ----------------------------------------------------------------
 -- INTERRUPTS
 ----------------------------------------------------------------
-signal HINT_COUNT		: std_logic_vector(7 downto 0);
-signal HINT_PENDING	: std_logic;
-signal HINT_PENDING_SET	: std_logic;
-signal HINT_FF			: std_logic;
-
-signal VINT_TG68_PENDING		: std_logic;
-signal VINT_TG68_PENDING_SET	: std_logic;
-signal VINT_TG68_FF				: std_logic;
-
-signal VINT_T80_SET	: std_logic;
-signal VINT_T80_CLR	: std_logic;
-signal VINT_T80_FF	: std_logic;
+signal HINT_COUNT				: std_logic_vector(7 downto 0);
+signal VINT_TG68_PENDING	: std_logic;
 
 ----------------------------------------------------------------
 -- REGISTERS
@@ -301,6 +289,7 @@ signal DMA_CYC			: std_logic;
 ----------------------------------------------------------------
 signal H_CNT		: std_logic_vector(8 downto 0);
 signal V_CNT		: std_logic_vector(8 downto 0);
+signal HV_CNT		: std_logic_vector(8 downto 0);
 signal FF_CE_PIX	: std_logic;
 
 signal PRE_Y		: std_logic_vector(8 downto 0);
@@ -1109,7 +1098,6 @@ begin
 	end if;
 end process;
 
-
 ----------------------------------------------------------------
 -- SPRITE RENDER
 ----------------------------------------------------------------
@@ -1138,14 +1126,20 @@ begin
 		SP_SEL <= '0';
 		SPC <= SPC_INIT;
 		OBJ_COLINFO_WE_A <= '0';
-		SCOL_SET <= '0';
-		SOVR_SET <= '0';
+		SCOL <= '0';
+		SOVR <= '0';
 		OBJ_DOT_OVERFLOW := '0';
 
 	elsif rising_edge(MEMCLK) then
 
-		SCOL_SET <= '0';
-		SOVR_SET <= '0';
+		if SCOL_CLR = '1' then
+			SCOL <= '0';
+		end if;
+
+		if SOVR_CLR = '1' then
+			SOVR <= '0';
+		end if;
+
 		OBJ_COLINFO_WE_A <= '0';
 
 		case SPC is
@@ -1303,7 +1297,7 @@ begin
 				-- limit total sprite pixels per line
 				OBJ_DOT_OVERFLOW := '1';
 				SPC <= SPC_DONE;
-				SOVR_SET <= '1';
+				SOVR <= '1';
 			else
 				OBJ_COLINFO_ADDR_A <= OBJ_POS;
 				if (OBJ_X_OFS(1 downto 0) = "00" and OBJ_HF = '0') or (OBJ_X_OFS(1 downto 0) = "11" and OBJ_HF = '1') then
@@ -1360,7 +1354,7 @@ begin
 					end if;
 				else
 					if OBJ_COLNO /= "0000" then
-						SCOL_SET <= '1';
+						SCOL <= '1';
 					end if;
 				end if;
 			end if;
@@ -1407,7 +1401,7 @@ begin
 			-- limit number of sprites per line to 20 / 16
 			if (H40 = '1' and OBJ_NB = 20)  or (H40 = '0' and  OBJ_NB = 16) then
 				SPC <= SPC_DONE;
-				SOVR_SET <= '1';
+				SOVR <= '1';
 			elsif OBJ_LINK = 0 or 
 				 (H40 = '1' and (OBJ_LINK >= 80 or OBJ_CNT >= 80)) or 
 				 (H40 = '0' and (OBJ_LINK >= 64 or OBJ_CNT >= 64))
@@ -1427,7 +1421,7 @@ begin
 end process;
 
 ----------------------------------------------------------------
--- VIDEO COUNTING
+-- VIDEO COUNTERS AND INTERRUPTS
 ----------------------------------------------------------------
 HDISP_START <= conv_std_logic_vector(HDISP_START_320,9)  when H40='1' else conv_std_logic_vector(HDISP_START_256,9);
 HDISP_END   <= conv_std_logic_vector(HDISP_END_320,9)    when H40='1' else conv_std_logic_vector(HDISP_END_256,9);
@@ -1445,7 +1439,8 @@ VSYNC_SZ    <= conv_std_logic_vector(VSYNC_SZ_240,9)     when PAL='1' else conv_
 
 VSYNC_STARTi<= conv_std_logic_vector(VSYNC_START_320i,9) when H40='1' else conv_std_logic_vector(VSYNC_START_256i,9);
 
--- COUNTERS AND INTERRUPTS
+VINT_TG68 <= IE0 and VINT_TG68_PENDING;
+
 CE_PIX <= FF_CE_PIX;
 process( RST_N, CLK )
 	variable hscnt : std_logic_vector(8 downto 0);
@@ -1459,10 +1454,9 @@ begin
 		V_CNT <= (others => '0');
 		H_CNT <= (others => '0');
 
-		HINT_PENDING_SET <= '0';
-		VINT_TG68_PENDING_SET <= '0';
-		VINT_T80_SET <= '0';
-		VINT_T80_CLR <= '0';
+		HINT <= '0';
+		VINT_T80 <= '0';
+		VINT_TG68_PENDING <= '0';
 
 		IN_HBL <= '0';
 		IN_VBL <= '1';
@@ -1472,15 +1466,22 @@ begin
 		DT_ACTIVE <= '0';
 	elsif rising_edge(CLK) then
 
+		if HINT_ACK = '1' then
+			HINT <= '0';
+		end if;
+
+		if VINT_TG68_ACK = '1' then
+			VINT_TG68_PENDING <= '0';
+		end if;
+
+		if VINT_T80_ACK = '1' then
+			VINT_T80 <= '0';
+		end if;
+
 		-- DATA TRANSFER ACTIVE
 		DT_ACTIVE <= '1';
 
 		FF_CE_PIX <= '0';
-
-		HINT_PENDING_SET <= '0';
-		VINT_TG68_PENDING_SET <= '0';
-		VINT_T80_SET <= '0';
-		VINT_T80_CLR <= '0';
 
 		PIXDIV <= PIXDIV + 1;
 		if (H40 = '1' and PIXDIV = 8-1) or (H40 = '0' and PIXDIV = 10-1) then
@@ -1533,36 +1534,39 @@ begin
 
 				if V_CNT = VDISP_START then
 					IN_VBL <= '0';
+					VINT_TG68_PENDING <= '0';
 				end if;
 
 				if V_CNT = VDISP_END then
 					IN_VBL <= '1';
-					VINT_TG68_PENDING_SET <= '1';
-					VINT_T80_SET <= '1';
 					ODD <= not ODD and LSM(0);
+
+					VINT_TG68_PENDING <= '1';
+					VINT_T80 <= '1';
 				end if;
 
 				if V_CNT = VDISP_END+1 then
-					VINT_T80_CLR <= '1';
+					VINT_T80 <= '0';
 				end if;
 			--end if;
 
 			--if H_CNT = HDISP_END-60 then
 				if V_CNT = VDISP_START then
 					if HIT = 0 then
-						HINT_PENDING_SET <= '1';
+						HINT <= IE1;
 						HINT_COUNT <= (others => '0');
 					else
 						HINT_COUNT <= HIT - 1;
 					end if;
 				elsif V_CNT > VDISP_START and V_CNT <= VDISP_END then
 					if HINT_COUNT = 0 then
-						HINT_PENDING_SET <= '1';
+						HINT <= IE1;
 						HINT_COUNT <= HIT;
 					else
 						HINT_COUNT <= HINT_COUNT - 1;
 					end if;
 				end if;
+				HV_CNT <= V_CNT - VDISP_START;
 			end if;
 
 			if H_CNT = HDISP_END-1 then
@@ -1603,7 +1607,7 @@ begin
 		case PIXDIV is
 		when "0000" =>
 			hcnt := H_CNT - HDISP_START;
-			vcnt := V_CNT - VDISP_START + 1;
+			vcnt := HV_CNT + 1;
 
 			BGB_COLINFO_ADDR_B <= hcnt;
 			BGA_COLINFO_ADDR_B <= hcnt;
@@ -2157,110 +2161,5 @@ begin
 end process;
 
 VBUS_BUSY <= DMA_VBUS;
-
-----------------------------------------------------------------
--- INTERRUPTS AND VARIOUS LATCHES
-----------------------------------------------------------------
-
--- HINT PENDING
-process( RST_N, CLK )
-begin
-	if RST_N = '0' then
-		HINT_PENDING <= '0';
-	elsif rising_edge( CLK) then
-		if HINT_PENDING_SET = '1' then
-			HINT_PENDING <= '1';
-		elsif HINT_ACK = '1' then
-			HINT_PENDING <= '0';
-		end if;
-	end if;
-end process;
-
--- HINT
-HINT <= HINT_FF;
-process( RST_N, CLK )
-begin
-	if RST_N = '0' then
-		HINT_FF <= '0';
-	elsif rising_edge( CLK) then
-		if HINT_PENDING = '1' and IE1 = '1' then
-			HINT_FF <= '1';
-		else
-			HINT_FF <= '0';
-		end if;
-	end if;
-end process;
-
--- VINT - TG68 - PENDING
-process( RST_N, CLK )
-begin
-	if RST_N = '0' then
-		VINT_TG68_PENDING <= '0';
-	elsif rising_edge( CLK) then
-		if VINT_TG68_PENDING_SET = '1' then
-			VINT_TG68_PENDING <= '1';
-		elsif VINT_TG68_ACK = '1' then
-			VINT_TG68_PENDING <= '0';
-		end if;
-	end if;
-end process;
-
--- VINT - TG68
-VINT_TG68 <= VINT_TG68_FF;
-process( RST_N, CLK )
-begin
-	if RST_N = '0' then
-		VINT_TG68_FF <= '0';
-	elsif rising_edge( CLK) then
-		if VINT_TG68_PENDING = '1' and IE0 = '1' then
-			VINT_TG68_FF <= '1';
-		else
-			VINT_TG68_FF <= '0';
-		end if;
-	end if;
-end process;
-
--- VINT - T80
-VINT_T80 <= VINT_T80_FF;
-process( RST_N, CLK )
-begin
-	if RST_N = '0' then
-		VINT_T80_FF <= '0';
-	elsif rising_edge( CLK) then
-		if VINT_T80_SET = '1' then
-			VINT_T80_FF <= '1';
-		elsif VINT_T80_CLR = '1' or VINT_T80_ACK = '1' then
-			VINT_T80_FF <= '0';
-		end if;
-	end if;
-end process;
-
--- Sprite Collision
-process( RST_N, CLK )
-begin
-	if RST_N = '0' then
-		SCOL <= '0';
-	elsif rising_edge( CLK) then
-		if SCOL_SET = '1' then
-			SCOL <= '1';
-		elsif SCOL_CLR = '1' then
-			SCOL <= '0';
-		end if;
-	end if;
-end process;
-
--- Sprite Overflow
-process( RST_N, CLK )
-begin
-	if RST_N = '0' then
-		SOVR <= '0';
-	elsif rising_edge( CLK) then
-		if SOVR_SET = '1' then
-			SOVR <= '1';
-		elsif SOVR_CLR = '1' then
-			SOVR <= '0';
-		end if;
-	end if;
-end process;
 
 end rtl;
