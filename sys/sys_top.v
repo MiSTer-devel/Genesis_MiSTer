@@ -206,14 +206,20 @@ reg [31:0] cfg_custom_p2;
 
 reg  [4:0] vol_att = 0;
 
+reg  [6:0] coef_addr;
+reg  [8:0] coef_data;
+reg        coef_wr = 0;
+
 reg        vip_newcfg = 0;
 always@(posedge clk_sys) begin
 	reg  [7:0] cmd;
 	reg        has_cmd;
 	reg        old_strobe;
-	reg  [7:0] cnt = 0;
+	reg  [3:0] cnt = 0;
 
 	old_strobe <= io_strobe;
+
+	coef_wr <= 0;
 
 	if(~io_uio) has_cmd <= 0;
 	else
@@ -224,13 +230,14 @@ always@(posedge clk_sys) begin
 			cnt <= 0;
 		end
 		else begin
+			if(~&cnt) cnt <= cnt + 1'd1;
+
 			if(cmd == 1) begin
 				cfg <= io_din;
 				cfg_set <= 1;
 			end
 			if(cmd == 'h20) begin
 				cfg_set <= 0;
-				cnt <= cnt + 1'd1;
 				if(cnt<8) begin
 					if(!cnt) vip_newcfg <= ~cfg_ready;
 					case(cnt)
@@ -262,6 +269,7 @@ always@(posedge clk_sys) begin
 			if(cmd == 'h25) {led_overtake, led_state} <= io_din;
 			if(cmd == 'h26) vol_att <= io_din[4:0];
 			if(cmd == 'h27) VSET    <= io_din[11:0];
+			if(cmd == 'h2A) {coef_wr,coef_addr,coef_data} <= {1'b1,io_din};
 		end
 	end
 end
@@ -392,6 +400,11 @@ vip_config vip_config
 	.VBP(VBP),
 	.VS(VS),
 	.VSET(VSET),
+
+	.coef_clk(clk_sys),
+	.coef_addr(coef_addr),
+	.coef_data(coef_data),
+	.coef_wr(coef_wr),
 
 	.address(ctl_address),
 	.write(ctl_write),
