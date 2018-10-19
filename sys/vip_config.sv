@@ -253,6 +253,7 @@ defparam
 	altsyncram_component.operation_mode = "DUAL_PORT",
 	altsyncram_component.outdata_aclr_b = "NONE",
 	altsyncram_component.outdata_reg_b = "UNREGISTERED",
+	altsyncram_component.init_file = "coeff.mif", 
 	altsyncram_component.power_up_uninitialized = "FALSE",
 	altsyncram_component.widthad_a = 7,
 	altsyncram_component.widthad_b = 7,

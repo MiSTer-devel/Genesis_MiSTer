@@ -206,11 +206,13 @@ reg [31:0] cfg_custom_p2;
 
 reg  [4:0] vol_att = 0;
 
+`ifndef LITE
 reg  [6:0] coef_addr;
 reg  [8:0] coef_data;
 reg        coef_wr = 0;
-
 reg        vip_newcfg = 0;
+`endif
+
 always@(posedge clk_sys) begin
 	reg  [7:0] cmd;
 	reg        has_cmd;
@@ -219,7 +221,9 @@ always@(posedge clk_sys) begin
 
 	old_strobe <= io_strobe;
 
+`ifndef LITE
 	coef_wr <= 0;
+`endif
 
 	if(~io_uio) has_cmd <= 0;
 	else
@@ -239,6 +243,7 @@ always@(posedge clk_sys) begin
 			if(cmd == 'h20) begin
 				cfg_set <= 0;
 				if(cnt<8) begin
+`ifndef LITE
 					if(!cnt) vip_newcfg <= ~cfg_ready;
 					case(cnt)
 						0: if(WIDTH  != io_din[11:0]) begin WIDTH  <= io_din[11:0]; vip_newcfg <= 1; end
@@ -250,6 +255,7 @@ always@(posedge clk_sys) begin
 						6: if(VS     != io_din[11:0]) begin VS     <= io_din[11:0]; vip_newcfg <= 1; end
 						7: if(VBP    != io_din[11:0]) begin VBP    <= io_din[11:0]; vip_newcfg <= 1; end
 					endcase
+`endif
 					if(cnt == 1) begin
 						cfg_custom_p1 <= 0;
 						cfg_custom_p2 <= 0;
@@ -268,8 +274,10 @@ always@(posedge clk_sys) begin
 			end
 			if(cmd == 'h25) {led_overtake, led_state} <= io_din;
 			if(cmd == 'h26) vol_att <= io_din[4:0];
+`ifndef LITE
 			if(cmd == 'h27) VSET    <= io_din[11:0];
 			if(cmd == 'h2A) {coef_wr,coef_addr,coef_data} <= {1'b1,io_din};
+`endif
 		end
 	end
 end
@@ -381,6 +389,7 @@ wire [31:0] ctl_writedata;
 wire        ctl_waitrequest;
 wire        ctl_reset;
 wire  [7:0] ARX, ARY;
+reg  [11:0] VSET = 0;
 
 vip_config vip_config
 (
@@ -611,7 +620,6 @@ reg  [11:0] HEIGHT = 1080;
 reg  [11:0] VFP    = 4;
 reg  [11:0] VS     = 5;
 reg  [11:0] VBP    = 36;
-reg  [11:0] VSET   = 0;
 
 wire [63:0] reconfig_to_pll;
 wire [63:0] reconfig_from_pll;
