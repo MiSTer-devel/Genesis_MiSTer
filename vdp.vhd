@@ -283,7 +283,6 @@ signal DMA_CYC			: std_logic;
 ----------------------------------------------------------------
 signal H_CNT		: std_logic_vector(8 downto 0);
 signal V_CNT		: std_logic_vector(8 downto 0);
-signal HV_CNT		: std_logic_vector(8 downto 0);
 signal FF_CE_PIX	: std_logic;
 
 signal PRE_Y		: std_logic_vector(8 downto 0);
@@ -1470,8 +1469,6 @@ VSYNC_SZ    <= conv_std_logic_vector(VSYNC_SZ_240,9)     when PAL='1' else conv_
 
 VSYNC_STARTi<= conv_std_logic_vector(VSYNC_START_320i,9) when H40='1' else conv_std_logic_vector(VSYNC_START_256i,9);
 
-VINT_TG68 <= IE0 and VINT_TG68_PENDING;
-
 CE_PIX <= FF_CE_PIX;
 process( RST_N, CLK )
 	variable hscnt : std_logic_vector(8 downto 0);
@@ -1502,6 +1499,7 @@ begin
 
 		if VINT_TG68_ACK = '1' then
 			VINT_TG68_PENDING <= '0';
+			VINT_TG68 <= '0';
 		end if;
 
 		if VINT_T80_ACK = '1' then
@@ -1561,7 +1559,6 @@ begin
 
 				if V_CNT = VDISP_START then
 					IN_VBL <= '0';
-					VINT_TG68_PENDING <= '0';
 				end if;
 
 				if V_CNT = VDISP_END then
@@ -1569,6 +1566,7 @@ begin
 					ODD <= not ODD and LSM(0);
 
 					VINT_TG68_PENDING <= '1';
+					VINT_TG68 <= IE0;
 					VINT_T80 <= '1';
 				end if;
 
@@ -1593,7 +1591,6 @@ begin
 						HINT_COUNT <= HINT_COUNT - 1;
 					end if;
 				end if;
-				HV_CNT <= V_CNT - VDISP_START;
 			end if;
 
 			if H_CNT = HDISP_END-1 then
@@ -1634,7 +1631,7 @@ begin
 		case PIXDIV is
 		when "0000" =>
 			hcnt := H_CNT - HDISP_START;
-			vcnt := HV_CNT;
+			vcnt := V_CNT - VDISP_START;
 
 			BGB_COLINFO_ADDR_B <= hcnt;
 			BGA_COLINFO_ADDR_B <= hcnt;
