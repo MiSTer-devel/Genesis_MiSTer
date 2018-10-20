@@ -1634,7 +1634,7 @@ begin
 		case PIXDIV is
 		when "0000" =>
 			hcnt := H_CNT - HDISP_START;
-			vcnt := HV_CNT + 1;
+			vcnt := HV_CNT;
 
 			BGB_COLINFO_ADDR_B <= hcnt;
 			BGA_COLINFO_ADDR_B <= hcnt;

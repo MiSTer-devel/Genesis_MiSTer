@@ -161,6 +161,7 @@ signal TG68_ENA		: std_logic;
 signal TG68_ENA_DIV	: std_logic_vector(1 downto 0);
 signal TG68_ENARDREG	: std_logic;
 signal TG68_ENAWRREG	: std_logic;
+signal CPU_ENA			: std_logic;
 
 -- Z80
 signal T80_RESET_N	: std_logic;
@@ -417,8 +418,8 @@ begin
 		end if;		
 	end if;
 end process;
-	
-TG68_ENA <= '1' when TG68_ENARDREG = '1' and TG68_ENA_DIV = "11" and TG68_DTACK_N = '0' else '0';
+
+TG68_ENA <= CPU_ENA when TG68_ENARDREG = '1' and TG68_ENA_DIV = "11" and TG68_DTACK_N = '0' else '0';
 TG68_INTACK <= '1' when TG68_FC = "111" else '0';
 
 -- 68K
@@ -624,22 +625,33 @@ TG68_IPL_N <= "001" when VINT_TG68 = '1' else "011" when HINT = '1' else "111";
 
 process(RESET_N, MCLK)
 	variable old_ack : std_logic;
+	variable cnt : integer;
 begin
 	if RESET_N = '0' then
 		HINT_ACK <= '0';
 		VINT_TG68_ACK <= '0';
 		old_ack := '0';
+		CPU_ENA <= '1';
+		cnt := 0;
 	elsif rising_edge( MCLK ) then
 		VINT_TG68_ACK <= '0';
 		HINT_ACK <= '0';
 		if old_ack = '0' and TG68_INTACK = '1' then
 			if VINT_TG68 = '1' then
 				VINT_TG68_ACK <= '1';
+				cnt := 3000;
+				CPU_ENA <= '0';
 			elsif HINT = '1' then
 				HINT_ACK <= '1';
 			end if;
 		end if;
 		old_ack := TG68_INTACK;
+		
+		if cnt > 0 then
+			cnt := cnt - 1;
+		else
+			CPU_ENA <= '1';
+		end if;
 	end if;
 end process;
 
