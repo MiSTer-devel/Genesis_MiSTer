@@ -176,6 +176,7 @@ signal SCOL_CLR	: std_logic;
 ----------------------------------------------------------------
 signal HINT_COUNT				: std_logic_vector(7 downto 0);
 signal VINT_TG68_PENDING	: std_logic;
+signal HINT_PENDING			: std_logic;
 
 ----------------------------------------------------------------
 -- REGISTERS
@@ -232,7 +233,6 @@ type dtc_t is (
 	DTC_VSRAM_RD2,
 	DTC_VRAM_WR,
 	DTC_VRAM_RD,
-	DTC_DMA_WAIT,
 	DTC_DMA_FILL_WR,
 	DTC_DMA_FILL_LOOP,
 	DTC_DMA_COPY_RD,
@@ -276,7 +276,6 @@ signal DMA_VBUS		: std_logic;
 signal DMA_FILL_PRE	: std_logic;
 signal DMA_FILL		: std_logic;
 signal DMA_COPY		: std_logic;
-signal DMA_CYC			: std_logic;
 
 ----------------------------------------------------------------
 -- VIDEO COUNTING
@@ -1469,6 +1468,8 @@ VSYNC_SZ    <= conv_std_logic_vector(VSYNC_SZ_240,9)     when PAL='1' else conv_
 
 VSYNC_STARTi<= conv_std_logic_vector(VSYNC_START_320i,9) when H40='1' else conv_std_logic_vector(VSYNC_START_256i,9);
 
+HINT <= IE1 and HINT_PENDING;
+
 CE_PIX <= FF_CE_PIX;
 process( RST_N, CLK )
 	variable hscnt : std_logic_vector(8 downto 0);
@@ -1482,9 +1483,9 @@ begin
 		V_CNT <= (others => '0');
 		H_CNT <= (others => '0');
 
-		HINT <= '0';
 		VINT_T80 <= '0';
 		VINT_TG68_PENDING <= '0';
+		HINT_PENDING <= '0';
 
 		IN_HBL <= '0';
 		IN_VBL <= '1';
@@ -1494,7 +1495,7 @@ begin
 	elsif rising_edge(CLK) then
 
 		if HINT_ACK = '1' then
-			HINT <= '0';
+			HINT_PENDING <= '0';
 		end if;
 
 		if VINT_TG68_ACK = '1' then
@@ -1578,14 +1579,14 @@ begin
 			--if H_CNT = HDISP_END-60 then
 				if V_CNT = VDISP_START then
 					if HIT = 0 then
-						HINT <= IE1;
+						HINT_PENDING <= '1';
 						HINT_COUNT <= (others => '0');
 					else
 						HINT_COUNT <= HIT - 1;
 					end if;
 				elsif V_CNT > VDISP_START and V_CNT <= VDISP_END then
 					if HINT_COUNT = 0 then
-						HINT <= IE1;
+						HINT_PENDING <= '1';
 						HINT_COUNT <= HIT;
 					else
 						HINT_COUNT <= HINT_COUNT - 1;
@@ -1827,27 +1828,6 @@ end process;
 -- DATA TRANSFER CONTROLLER
 ----------------------------------------------------------------
 
-process( RST_N, CLK )
-	variable CNT : std_logic_vector(4 downto 0);
-begin
-	if RST_N = '0' then
-		CNT := (others => '0');
-	elsif rising_edge(CLK) then
-
-		DMA_CYC <= '0';
-		if FF_CE_PIX = '1' then
-			CNT := CNT + 1;
-			if CNT = 22 then
-				CNT := (others => '0');
-				DMA_CYC <= DE and not IN_VBL;
-			end if;
-			if IN_VBL = '1' or DE = '0' then 
-				DMA_CYC <= H_CNT(0);
-			end if;
-		end if;
-	end if;
-end process;
-
 VBUS_BUSY <= DMA_VBUS;
 VBUS_ADDR <= FF_VBUS_ADDR;
 VBUS_SEL <= FF_VBUS_SEL;
@@ -2050,7 +2030,7 @@ begin
 		when DTC_VRAM_WR =>
 			if early_ack_dma='0' then
 				DMA_SEL <= '0';
-				DTC <= DTC_DMA_WAIT;
+				DTC <= DTC_IDLE;
 			end if;
 
 		when DTC_VRAM_RD =>
@@ -2059,27 +2039,20 @@ begin
 				DT_RD_DATA <= DMA_VRAM_DO;
 				DT_RD_DTACK_N <= '0';
 				ADDR <= ADDR + ADDR_STEP;
-				DTC <= DTC_DMA_WAIT;
-			end if;
-			
-		when DTC_DMA_WAIT =>
-			if DMA_CYC = '1' then
 				DTC <= DTC_IDLE;
 			end if;
-
+			
 ----------------------------------------------------------------
 -- DMA FILL
 ----------------------------------------------------------------
 
 		when DTC_DMA_FILL_WR =>
-			if DMA_CYC = '1' then
-				DMA_SEL <= '1';
-				DMA_VRAM_ADDR <= ADDR(16 downto 1);
-				DMA_VRAM_RNW <= '0';
-				DMA_VRAM_UDS_N <= not ADDR(0);
-				DMA_VRAM_LDS_N <= ADDR(0);
-				DTC <= DTC_DMA_FILL_LOOP;
-			end if;
+			DMA_SEL <= '1';
+			DMA_VRAM_ADDR <= ADDR(16 downto 1);
+			DMA_VRAM_RNW <= '0';
+			DMA_VRAM_UDS_N <= not ADDR(0);
+			DMA_VRAM_LDS_N <= ADDR(0);
+			DTC <= DTC_DMA_FILL_LOOP;
 
 		when DTC_DMA_FILL_LOOP =>
 			if early_ack_dma='0' then
@@ -2102,14 +2075,12 @@ begin
 ----------------------------------------------------------------
 
 		when DTC_DMA_COPY_RD =>
-			if DMA_CYC = '1' then
-				DMA_SEL <= '1';
-				DMA_VRAM_ADDR <= REG(23)(0) & DMA_SOURCE(15 downto 1);
-				DMA_VRAM_RNW <= '1';
-				DMA_VRAM_UDS_N <= '0';
-				DMA_VRAM_LDS_N <= '0';
-				DTC <= DTC_DMA_COPY_RD2;
-			end if;
+			DMA_SEL <= '1';
+			DMA_VRAM_ADDR <= REG(23)(0) & DMA_SOURCE(15 downto 1);
+			DMA_VRAM_RNW <= '1';
+			DMA_VRAM_UDS_N <= '0';
+			DMA_VRAM_LDS_N <= '0';
+			DTC <= DTC_DMA_COPY_RD2;
 
 		when DTC_DMA_COPY_RD2 =>
 			if early_ack_dma='0' then
@@ -2123,14 +2094,12 @@ begin
 			end if;
 
 		when DTC_DMA_COPY_WR =>
-			if DMA_CYC = '1' then
-				DMA_SEL <= '1';
-				DMA_VRAM_ADDR <= ADDR(16 downto 1);
-				DMA_VRAM_RNW <= '0';
-				DMA_VRAM_UDS_N <= not ADDR(0);
-				DMA_VRAM_LDS_N <= ADDR(0);
-				DTC <= DTC_DMA_COPY_LOOP;
-			end if;
+			DMA_SEL <= '1';
+			DMA_VRAM_ADDR <= ADDR(16 downto 1);
+			DMA_VRAM_RNW <= '0';
+			DMA_VRAM_UDS_N <= not ADDR(0);
+			DMA_VRAM_LDS_N <= ADDR(0);
+			DTC <= DTC_DMA_COPY_LOOP;
 
 		when DTC_DMA_COPY_LOOP =>
 			if early_ack_dma='0' then
@@ -2154,11 +2123,9 @@ begin
 ----------------------------------------------------------------
 
 		when DTC_DMA_VBUS_RD =>
-			if DMA_CYC = '1' then
-				FF_VBUS_SEL <= '1';
-				FF_VBUS_ADDR <= REG(23)(6 downto 0) & DMA_SOURCE & '0';
-				DTC <= DTC_DMA_VBUS_RD2;
-			end if;
+			FF_VBUS_SEL <= '1';
+			FF_VBUS_ADDR <= REG(23)(6 downto 0) & DMA_SOURCE & '0';
+			DTC <= DTC_DMA_VBUS_RD2;
 
 		when DTC_DMA_VBUS_RD2 =>
 			if VBUS_DTACK_N = '0' then
