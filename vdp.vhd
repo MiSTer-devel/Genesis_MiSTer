@@ -413,13 +413,13 @@ signal COLOR_NUM		: std_logic_vector(5 downto 0);
 signal COLOR			: std_logic_vector(8 downto 0);
 
 signal VSRAM_ADDR		: std_logic_vector(5 downto 0);
-signal VSRAM_D			: std_logic_vector(9 downto 0);
-signal VSRAM_Q0		: std_logic_vector(9 downto 0);
-signal VSRAM_Q1		: std_logic_vector(9 downto 0);
+signal VSRAM_D			: std_logic_vector(10 downto 0);
+signal VSRAM_Q0		: std_logic_vector(10 downto 0);
+signal VSRAM_Q1		: std_logic_vector(10 downto 0);
 signal VSRAM_NUMA		: std_logic_vector(4 downto 0);
 signal VSRAM_NUMB		: std_logic_vector(4 downto 0);
-signal VSRAM_BGA		: std_logic_vector(9 downto 0);
-signal VSRAM_BGB		: std_logic_vector(9 downto 0);
+signal VSRAM_BGA		: std_logic_vector(10 downto 0);
+signal VSRAM_BGB		: std_logic_vector(10 downto 0);
 signal VSRAM_WE		: std_logic;
 
 signal DBG				: std_logic_vector(15 downto 0);
@@ -514,7 +514,7 @@ port map(
 	q_b			=> COLOR
 );
 
-vsram0 : entity work.dpram generic map(5,10)
+vsram0 : entity work.dpram generic map(5,11)
 port map(
 	clock			=> MEMCLK,
 	address_a	=> VSRAM_ADDR(5 downto 1),
@@ -526,7 +526,7 @@ port map(
 	q_b			=> VSRAM_BGA
 );
 
-vsram1 : entity work.dpram generic map(5,10)
+vsram1 : entity work.dpram generic map(5,11)
 port map(
 	clock			=> MEMCLK,
 	address_a	=> VSRAM_ADDR(5 downto 1),
@@ -552,9 +552,9 @@ DE    <= REG(1)(6);
 M128  <= REG(1)(7);
 
 NTAB  <= REG(2)(5 downto 3);
-NTWB  <= REG(3)(5 downto 1);
+NTWB  <= REG(3)(5 downto 2)&(REG(3)(1) and not H40);
 NTBB  <= REG(4)(2 downto 0);
-SATB  <= REG(5);
+SATB  <= REG(5)(7 downto 1)&(REG(5)(0) and not H40);
 
 BGCOL <= REG(7)(5 downto 0);
 
@@ -921,7 +921,7 @@ begin
 			end if;
 
 			if WIN_H = '1' or WIN_V = '1' then
-				V_BGA_BASE := (NTWB(4 downto 1) & (not H40 and NTWB(0)) & "00000000000") + (BGA_POS(9 downto 3) & "0");
+				V_BGA_BASE := (NTWB & "00000000000") + (BGA_POS(9 downto 3) & "0");
 				if H40 = '0' then -- WIN is 32 tiles wide in H32 mode
 					V_BGA_BASE := V_BGA_BASE + (BGA_Y(9 downto 3) & "00000" & "0");
 				else              -- WIN is 64 tiles wide in H40 mode
@@ -1936,7 +1936,7 @@ begin
 
 					when "0101"  =>
 						VSRAM_ADDR <= DT_WR_ADDR(6 downto 1);
-						VSRAM_D <= DT_WR_DATA(9 downto 0);
+						VSRAM_D <= DT_WR_DATA(10 downto 0);
 						VSRAM_WE <= '1';
 
 					when "0001"  =>
@@ -2020,9 +2020,9 @@ begin
 
 		when DTC_VSRAM_RD2 =>
 			if VSRAM_ADDR(0) = '0' then
-				DT_RD_DATA <= "000000" & VSRAM_Q0;
+				DT_RD_DATA <= "00000" & VSRAM_Q0;
 			else
-				DT_RD_DATA <= "000000" & VSRAM_Q1;
+				DT_RD_DATA <= "00000" & VSRAM_Q1;
 			end if;
 			DT_RD_DTACK_N <= '0';
 			DTC <= DTC_IDLE;
@@ -2139,7 +2139,7 @@ begin
 
 				when "101"  =>
 					VSRAM_ADDR <= ADDR(6 downto 1);
-					VSRAM_D <= VBUS_DATA(9 downto 0);
+					VSRAM_D <= VBUS_DATA(10 downto 0);
 					VSRAM_WE <= '1';
 
 				when others =>
