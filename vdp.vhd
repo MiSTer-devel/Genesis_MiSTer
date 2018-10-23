@@ -59,13 +59,12 @@ entity vdp is
 		VRAM_DO 			: out std_logic_vector(15 downto 0);
 		VRAM_DI 			: in  std_logic_vector(15 downto 0);
 
-		HINT				: out std_logic;
-		HINT_ACK			: in  std_logic;
+		TG68_HINT		: out std_logic;
+		TG68_VINT		: out std_logic;
+		TG68_INTACK		: in  std_logic;
 
-		VINT_TG68		: out std_logic;
-		VINT_T80			: out std_logic;
-		VINT_TG68_ACK	: in  std_logic;
-		VINT_T80_ACK	: in  std_logic;
+		T80_VINT			: out std_logic;
+		T80_INTACK		: in  std_logic;
 
 		VBUS_ADDR		: out std_logic_vector(23 downto 0);
 		VBUS_DATA		: in  std_logic_vector(15 downto 0);
@@ -175,8 +174,10 @@ signal SCOL_CLR	: std_logic;
 -- INTERRUPTS
 ----------------------------------------------------------------
 signal HINT_COUNT				: std_logic_vector(7 downto 0);
-signal VINT_TG68_PENDING	: std_logic;
 signal HINT_PENDING			: std_logic;
+signal TG68_VINT_PENDING	: std_logic;
+signal TG68_VINT_FF			: std_logic;
+signal TG68_HINT_FF			: std_logic;
 
 ----------------------------------------------------------------
 -- REGISTERS
@@ -584,7 +585,7 @@ INTERLACE <= LSM(1) and LSM(0);
 STATUS <= "111111"
 			& FIFO_EMPTY
 			& FIFO_FULL
-			& VINT_TG68_PENDING
+			& TG68_VINT_PENDING
 			& SOVR
 			& SCOL
 			& ODD
@@ -1468,13 +1469,16 @@ VSYNC_SZ    <= conv_std_logic_vector(VSYNC_SZ_240,9)     when PAL='1' else conv_
 
 VSYNC_STARTi<= conv_std_logic_vector(VSYNC_START_320i,9) when H40='1' else conv_std_logic_vector(VSYNC_START_256i,9);
 
-HINT <= IE1 and HINT_PENDING;
+TG68_HINT_FF <= IE1 and HINT_PENDING;
+TG68_HINT <= TG68_HINT_FF;
+TG68_VINT <= TG68_VINT_FF;
 
 CE_PIX <= FF_CE_PIX;
 process( RST_N, CLK )
 	variable hscnt : std_logic_vector(8 downto 0);
 	variable vscnt : std_logic_vector(8 downto 0);
 	variable ytemp : std_logic_vector(8 downto 0);
+	variable old_INTACK : std_logic;
 begin
 	if RST_N = '0' then
 		ODD <= '0';
@@ -1483,8 +1487,9 @@ begin
 		V_CNT <= (others => '0');
 		H_CNT <= (others => '0');
 
-		VINT_T80 <= '0';
-		VINT_TG68_PENDING <= '0';
+		T80_VINT <= '0';
+		TG68_VINT_FF <= '0';
+		TG68_VINT_PENDING <= '0';
 		HINT_PENDING <= '0';
 
 		IN_HBL <= '0';
@@ -1494,17 +1499,18 @@ begin
 		SPE_ACTIVE <= '0';
 	elsif rising_edge(CLK) then
 
-		if HINT_ACK = '1' then
-			HINT_PENDING <= '0';
+		if old_INTACK = '0' and TG68_INTACK = '1' then
+			if TG68_VINT_FF = '1' then
+				TG68_VINT_PENDING <= '0';
+				TG68_VINT_FF <= '0';
+			elsif TG68_HINT_FF = '1' then
+				HINT_PENDING <= '0';
+			end if;
 		end if;
+		old_INTACK := TG68_INTACK;
 
-		if VINT_TG68_ACK = '1' then
-			VINT_TG68_PENDING <= '0';
-			VINT_TG68 <= '0';
-		end if;
-
-		if VINT_T80_ACK = '1' then
-			VINT_T80 <= '0';
+		if T80_INTACK = '1' then
+			T80_VINT <= '0';
 		end if;
 
 		FF_CE_PIX <= '0';
@@ -1566,13 +1572,13 @@ begin
 					IN_VBL <= '1';
 					ODD <= not ODD and LSM(0);
 
-					VINT_TG68_PENDING <= '1';
-					VINT_TG68 <= IE0;
-					VINT_T80 <= '1';
+					TG68_VINT_PENDING <= '1';
+					TG68_VINT_FF <= IE0;
+					T80_VINT <= '1';
 				end if;
 
 				if V_CNT = VDISP_END+1 then
-					VINT_T80 <= '0';
+					T80_VINT <= '0';
 				end if;
 			--end if;
 

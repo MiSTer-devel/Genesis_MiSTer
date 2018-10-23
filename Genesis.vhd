@@ -159,15 +159,12 @@ signal TG68_STATE		: std_logic_vector(1 downto 0);
 signal TG68_FC			: std_logic_vector(2 downto 0);
 signal TG68_ENA		: std_logic;
 signal TG68_ENA_DIV	: std_logic_vector(1 downto 0);
-signal TG68_ENARDREG	: std_logic;
-signal TG68_ENAWRREG	: std_logic;
-signal CPU_ENA			: std_logic;
+signal TG68_CLKEN		: std_logic;
 
 -- Z80
 signal T80_RESET_N	: std_logic;
 signal T80_CLKEN		: std_logic;
 signal T80_WAIT_N		: std_logic;
-signal T80_INT_N     : std_logic;
 signal T80_BUSRQ_N   : std_logic;
 signal T80_M1_N      : std_logic;
 signal T80_MREQ_N    : std_logic;
@@ -298,7 +295,6 @@ signal T80_FM_DTACK_N	: std_logic;
 signal FM_FIFO_DO       : std_logic_vector(9 downto 0);
 signal FM_FIFO_RD       : std_logic;
 signal FM_FIFO_EMPTY    : std_logic;
-signal FCLK_EN				: std_logic;
 
 -- PSG
 signal PSG_WR_n		: std_logic;
@@ -315,12 +311,9 @@ signal T80_BAR_D			: std_logic_vector(7 downto 0);
 signal T80_BAR_DTACK_N	: std_logic;
 
 -- INTERRUPTS
-signal HINT				: std_logic;
-signal HINT_ACK		: std_logic;
-signal VINT_TG68		: std_logic;
-signal VINT_T80		: std_logic;
-signal VINT_TG68_ACK	: std_logic;
-signal VINT_T80_ACK	: std_logic;
+signal TG68_HINT		: std_logic;
+signal TG68_VINT		: std_logic;
+signal T80_VINT		: std_logic;
 
 -- VDP VBUS DMA
 signal VBUS_ADDR		: std_logic_vector(23 downto 0);
@@ -344,7 +337,7 @@ begin
 vram_l : entity work.dpram generic map(15)
 port map
 (
-	clock		=> RAMCLK,
+	clock		=> MCLK,
 	address_a=> vram_a(15 downto 1),
 	data_a	=> vram_d(7 downto 0),
 	wren_a	=> vram_we_l and (vram_ack xor vram_req),
@@ -354,19 +347,19 @@ port map
 vram_u : entity work.dpram generic map(15)
 port map
 (
-	clock		=> RAMCLK,
+	clock		=> MCLK,
 	address_a=> vram_a(15 downto 1),
 	data_a	=> vram_d(15 downto 8),
 	wren_a	=> vram_we_u and (vram_ack xor vram_req),
 	q_a		=> vram_q(15 downto 8)
 );
 
-vram_ack <= vram_req when rising_edge(RAMCLK);
+vram_ack <= vram_req when rising_edge(MCLK);
 
 ram68k_l : entity work.dpram generic map(15)
 port map
 (
-	clock		=> RAMCLK,
+	clock		=> MCLK,
 	address_a=> ram68k_a(15 downto 1),
 	data_a	=> ram68k_d(7 downto 0),
 	wren_a	=> not ram68k_l_n and ram68k_we and (ram68k_ack xor ram68k_req),
@@ -376,14 +369,15 @@ port map
 ram68k_u : entity work.dpram generic map(15)
 port map
 (
-	clock		=> RAMCLK,
+	clock		=> MCLK,
 	address_a=> ram68k_a(15 downto 1),
 	data_a	=> ram68k_d(15 downto 8),
 	wren_a	=> not ram68k_u_n and ram68k_we and (ram68k_ack xor ram68k_req),
 	q_a		=> ram68k_q(15 downto 8)
 );
 
-ram68k_ack <= ram68k_req when rising_edge(RAMCLK);
+ram68k_ack <= ram68k_req when rising_edge(MCLK);
+
 
 ramZ80 : entity work.dpram generic map(13)
 port map
@@ -395,32 +389,34 @@ port map
 	q_a		=> zram_q
 );
 
--- a full cpu cycle consists of 4 TG68_ENARDREG "bus" cycles
+-- a full cpu cycle consists of 4 TG68_CLKEN cycles
+-- VCLK = 54 MHz / 7 = 7.7 MHz
 process(MCLK)
 begin
-	if rising_edge( MCLK ) then
-		if TG68_ENAWRREG = '1' then
-			if TG68_ENA_DIV /= "11" or TG68_AS_N = '1' then
-				TG68_ENA_DIV <= TG68_ENA_DIV + 1;
-			end if;
+	if rising_edge(MCLK) then
+		if TG68_CLKEN = '1' then
+			-- advance counter till last cycle
+			if TG68_ENA_DIV /= "11" then TG68_ENA_DIV <= TG68_ENA_DIV + 1; end if;
 
-			-- activate AS
-			if TG68_STATE /= "01" and TG68_ENA_DIV = "00" then
-				TG68_AS_N <= '0';
-			end if;
-			
-		end if;
-		if TG68_ENARDREG = '1' then
-			-- de-activate as in bus cycle 3 if dtack is ok
+			-- activate AS_N in bus cycle 2 if the cpu wants to do I/O
+			if TG68_ENA_DIV = "01" and TG68_STATE /= "01" then TG68_AS_N <= '0'; end if;
+
+			-- de-activate AS_N in bus cycle 3 if dtack is ok. This happens at the same
+			-- time the tg68k is enabled due to dtack and proceeds one clock
 			if TG68_ENA_DIV = "11" and TG68_DTACK_N = '0' then
+				TG68_ENA_DIV <= TG68_ENA_DIV + 1;
 				TG68_AS_N <= '1';
 			end if;
-		end if;		
+
+			-- keep counter at 0 in non-bus cycles.
+			if TG68_STATE = "01" then TG68_ENA_DIV <= (others => '0'); end if;
+		end if;
 	end if;
 end process;
 
-TG68_ENA <= CPU_ENA when TG68_ENARDREG = '1' and TG68_ENA_DIV = "11" and TG68_DTACK_N = '0' else '0';
+TG68_ENA    <= '1' when TG68_CLKEN = '1' and (TG68_STATE = "01" or (TG68_ENA_DIV = "11" and TG68_DTACK_N = '0')) else '0';
 TG68_INTACK <= '1' when TG68_FC = "111" else '0';
+TG68_IPL_N  <= "001" when TG68_VINT = '1' else "011" when TG68_HINT = '1' else "111";
 
 -- 68K
 tg68 : entity work.TG68KdotC_Kernel
@@ -448,7 +444,7 @@ port map(
 	CLK		=> MCLK,
 	CEN		=> T80_CLKEN,
 	WAIT_n	=> T80_WAIT_N,
-	INT_n		=> T80_INT_N,
+	INT_n		=> not T80_VINT,
 	BUSRQ_n	=> T80_BUSRQ_N,
 	M1_n		=> T80_M1_N,
 	MREQ_n	=> T80_MREQ_N,
@@ -473,7 +469,7 @@ port map(
 io : entity work.gen_io
 port map(
 	RST_N		=> RESET_N,
-	CLK		=> MCLK and FCLK_EN,
+	CLK		=> MCLK and TG68_CLKEN,
 
 	J3BUT    => J3BUT,
 
@@ -537,15 +533,14 @@ port map(
 	VRAM_A	=> vram_a,
 	VRAM_DO	=> vram_d,
 	VRAM_DI	=> vram_q,
-	
-	HINT		=> HINT,
-	HINT_ACK	=> HINT_ACK,
 
-	VINT_TG68		=> VINT_TG68,
-	VINT_T80			=> VINT_T80,
-	VINT_TG68_ACK	=> VINT_TG68_ACK,
-	VINT_T80_ACK	=> VINT_T80_ACK,
-		
+	TG68_HINT	=> TG68_HINT,
+	TG68_VINT	=> TG68_VINT,
+	TG68_INTACK	=> TG68_INTACK,
+
+	T80_VINT		=> T80_VINT,
+	T80_INTACK	=> not T80_M1_N and not T80_IORQ_N,
+
 	VBUS_BUSY		=> VBUS_BUSY,
 	VBUS_ADDR		=> VBUS_ADDR,
 	VBUS_DATA		=> VBUS_DATA,
@@ -582,7 +577,7 @@ fm : jt12
 port map(
 	rst		   => not T80_RESET_N,
 	clk	      => MCLK,
-	cen	     	=> FCLK_EN,
+	cen	     	=> TG68_CLKEN,
 
 	limiter_en 	=> FM_LIMITER,
 	cs_n	      => '0',
@@ -616,47 +611,6 @@ FM_FIFO_RD <= not (FM_DO(7) or FM_FIFO_EMPTY or FM_FIFO_RD) when rising_edge(MCL
 
 
 ----------------------------------------------------------------
--- INTERRUPTS CONTROL
-----------------------------------------------------------------
-
-VINT_T80_ACK <= not T80_M1_N and not T80_IORQ_N;
-T80_INT_N <= not VINT_T80;
-TG68_IPL_N <= "001" when VINT_TG68 = '1' else "011" when HINT = '1' else "111";
-
-process(RESET_N, MCLK)
-	variable old_ack : std_logic;
-	variable cnt : integer;
-begin
-	if RESET_N = '0' then
-		HINT_ACK <= '0';
-		VINT_TG68_ACK <= '0';
-		old_ack := '0';
-		CPU_ENA <= '1';
-		cnt := 0;
-	elsif rising_edge( MCLK ) then
-		VINT_TG68_ACK <= '0';
-		HINT_ACK <= '0';
-		if old_ack = '0' and TG68_INTACK = '1' then
-			if VINT_TG68 = '1' then
-				VINT_TG68_ACK <= '1';
-				cnt := 3000;
-				CPU_ENA <= '0';
-			elsif HINT = '1' then
-				HINT_ACK <= '1';
-			end if;
-		end if;
-		old_ack := TG68_INTACK;
-		
-		if cnt > 0 then
-			cnt := cnt - 1;
-		else
-			CPU_ENA <= '1';
-		end if;
-	end if;
-end process;
-
-
-----------------------------------------------------------------
 -- CLOCK GENERATION
 ----------------------------------------------------------------
 
@@ -673,24 +627,11 @@ begin
 			T80_CLKEN <= '1';
 		end if;
 
+		TG68_CLKEN <= '0';
 		VCLKCNT := VCLKCNT + 1;
 		if VCLKCNT = 7 then
 			VCLKCNT := (others => '0');
-		end if;
-
-		FCLK_EN <= '0';
-		if VCLKCNT = 1 then
-			FCLK_EN <= '1';
-		end if;
-
-		TG68_ENAWRREG <= '0';
-		if VCLKCNT = 0 then
-			TG68_ENAWRREG <= '1';
-		end if;
-
-		TG68_ENARDREG <= '0';
-		if VCLKCNT = 4 then
-			TG68_ENARDREG <= '1';
+			TG68_CLKEN <= '1';
 		end if;
 	end if;
 end process;
