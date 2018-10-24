@@ -208,6 +208,7 @@ signal HSCR 		: std_logic_vector(1 downto 0);
 signal HSIZE		: std_logic_vector(1 downto 0);
 signal VSIZE		: std_logic_vector(1 downto 0);
 signal VSCR 		: std_logic;
+signal INVSZ		: std_logic;
 
 signal WVP			: std_logic_vector(4 downto 0);
 signal WDOWN		: std_logic;
@@ -641,6 +642,7 @@ ADDR_STEP <= REG(15);
 
 HSIZE <= REG(16)(1 downto 0);
 VSIZE <= REG(16)(5 downto 4);
+INVSZ <= '1' when HSIZE = 2 or VSIZE = 2 else '0';
 
 WHP   <= REG(17)(4 downto 0);
 WRIGT <= REG(17)(7);
@@ -795,7 +797,7 @@ begin
 			else
 				VS := VSRAM_BGB(9 downto 0);
 			end if;
-		
+			
 			if INTERLACE_FF = '0' then
 				BGB_Y := (VS(9 downto 0) + BG_Y) and (VSIZE & "11111111");
 			else
@@ -1677,7 +1679,7 @@ begin
 			end if;
 
 			if IN_VBL = '1' or DE = '0' then
-				FIFO_EN <= '1'; --HV_VCNT(0);
+				FIFO_EN <= '1'; --HV_HCNT(0);
 			elsif FIFO_CNT = 0 then
 				FIFO_EN <= '1';
 			end if;
@@ -1736,15 +1738,15 @@ begin
 				col := BGCOL;
 			elsif OBJ_COLINFO_Q_B(3 downto 0) /= "0000" and OBJ_COLINFO_Q_B(6) = '1' and sh(2) = '1' then
 				col := OBJ_COLINFO_Q_B(5 downto 0);
-			elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" and BGA_COLINFO_Q_B(6) = '1' then
+			elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" and BGA_COLINFO_Q_B(6) = '1' and INVSZ = '0' then
 				col := BGA_COLINFO_Q_B(5 downto 0);
-			elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" and BGB_COLINFO_Q_B(6) = '1' then
+			elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" and BGB_COLINFO_Q_B(6) = '1' and INVSZ = '0' then
 				col := BGB_COLINFO_Q_B(5 downto 0);
 			elsif OBJ_COLINFO_Q_B(3 downto 0) /= "0000" and sh(2) = '1' then
 				col := OBJ_COLINFO_Q_B(5 downto 0);
-			elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" then
+			elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" and INVSZ = '0' then
 				col := BGA_COLINFO_Q_B(5 downto 0);
-			elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" then
+			elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" and INVSZ = '0' then
 				col := BGB_COLINFO_Q_B(5 downto 0);
 			else
 				col := BGCOL;
@@ -2104,8 +2106,8 @@ begin
 			end case;
 		
 		when DTC_VRAM_WR1 =>
-			--skip next FIFO slot since we write 16 bit now instead of the original 8
-			FIFO_SKIP <= '1';
+			--skip next FIFO slot if we write 16 bits in single chip mode
+			FIFO_SKIP <= not M128;
 			DMA_SEL <= '1';
 			DMA_VRAM_ADDR <= DT_WR_ADDR(16 downto 1);
 			DMA_VRAM_RNW <= '0';
