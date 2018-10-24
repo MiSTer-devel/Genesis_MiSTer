@@ -141,8 +141,7 @@ type zrcp_t is (
 );
 signal ZRCP : zrcp_t;
 
--- Genesis core
-constant NO_DATA	: std_logic_vector(15 downto 0) := x"4E71";	-- SYNTHESIS gp/m68k.c line 12
+signal NO_DATA			: std_logic_vector(15 downto 0);
 
 -- 68K
 signal TG68_DI			: std_logic_vector(15 downto 0);
@@ -405,8 +404,8 @@ begin
 			-- time the tg68k is enabled due to dtack and proceeds one clock
 			if TG68_ENA_DIV = "11" and TG68_DTACK_N = '0' then
 				TG68_ENA_DIV <= TG68_ENA_DIV + 1;
-				TG68_AS_N <= '1';
-			end if;
+					TG68_AS_N <= '1';
+				end if;
 
 			-- keep counter at 0 in non-bus cycles.
 			if TG68_STATE = "01" then TG68_ENA_DIV <= (others => '0'); end if;
@@ -772,7 +771,7 @@ begin
 				end if;
 			else
 				-- Read
-				TG68_CTRL_D <= not TG68_CTRL_D;
+				TG68_CTRL_D <= NO_DATA;
 				if TG68_A(15 downto 8) = x"11" then
 					TG68_CTRL_D(8) <= ZBUSACK_N;
 					TG68_CTRL_D(0) <= ZBUSACK_N;
@@ -801,7 +800,7 @@ begin
 				end if;
 			else
 				-- Read
-				T80_CTRL_D <= not T80_CTRL_D;
+				T80_CTRL_D <= NO_DATA(7 downto 0);
 				if BAR(15) & T80_A(14 downto 8) = x"11" and T80_A(0) = '0' then
 					T80_CTRL_D(0) <= ZBUSACK_N;
 				end if;
@@ -1375,6 +1374,21 @@ begin
 			ZRC <= ZRC_IDLE;
 		when others => null;
 		end case;
+	end if;
+end process;
+
+-- bus noise generator
+process(MCLK)
+	variable lfsr_zero : std_logic;
+	variable lfsr      : std_logic_vector(16 downto 0);
+begin
+	if rising_edge(MCLK) then
+		if TG68_CLKEN = '1' then
+			lfsr_zero := '0';
+			if lfsr = 0 then lfsr_zero := '1'; end if;
+			lfsr := (lfsr(0) xor lfsr(2) xor lfsr_zero) & lfsr(16 downto 1);
+			NO_DATA <= NO_DATA(14 downto 0) & lfsr(0);
+		end if;
 	end if;
 end process;
 
