@@ -162,7 +162,8 @@ signal TG68_CLKEN		: std_logic;
 
 -- Z80
 signal T80_RESET_N	: std_logic;
-signal T80_CLKEN		: std_logic;
+signal T80_CLKENp		: std_logic;
+signal T80_CLKENn		: std_logic;
 signal T80_WAIT_N		: std_logic;
 signal T80_BUSRQ_N   : std_logic;
 signal T80_M1_N      : std_logic;
@@ -414,8 +415,22 @@ begin
 end process;
 
 TG68_ENA    <= '1' when TG68_CLKEN = '1' and (TG68_STATE = "01" or (TG68_ENA_DIV = "11" and TG68_DTACK_N = '0')) else '0';
-TG68_INTACK <= '1' when TG68_FC = "111" else '0';
-TG68_IPL_N  <= "001" when TG68_VINT = '1' else "011" when TG68_HINT = '1' else "111";
+TG68_INTACK <= '1' when TG68_AS_N = '0' and TG68_FC = "111" else '0';
+
+process( MCLK )
+begin
+	if rising_edge(MCLK) then
+		if TG68_CLKEN = '1' and TG68_ENA_DIV = "00" then
+			if TG68_VINT = '1' then
+				TG68_IPL_N <= "001";
+			elsif TG68_HINT = '1' then
+				TG68_IPL_N <= "011";
+			else
+				TG68_IPL_N <= "111";
+			end if;
+		end if;
+	end if;
+end process;
 
 -- 68K
 tg68 : entity work.TG68KdotC_Kernel
@@ -436,12 +451,13 @@ port map(
 );
 
 -- Z80
-t80 : entity work.t80s
+t80 : entity work.t80pa
 port map(
 	RESET_n	=> T80_RESET_N,
 
 	CLK		=> MCLK,
-	CEN		=> T80_CLKEN,
+	CEN_p		=> T80_CLKENp,
+	CEN_n		=> T80_CLKENn,
 	WAIT_n	=> T80_WAIT_N,
 	INT_n		=> not T80_VINT,
 	BUSRQ_n	=> T80_BUSRQ_N,
@@ -565,7 +581,7 @@ port map(
 u_psg : work.psg
 port map(
 	clk		=> MCLK,
-	clken		=> T80_CLKEN,
+	clken		=> T80_CLKENp,
 	reset    => not RESET_N,
 	WR_n		=> PSG_WR_n,
 	D_in		=> PSG_DI,
@@ -574,7 +590,7 @@ port map(
 
 fm : jt12
 port map(
-	rst		   => not T80_RESET_N,
+	rst		   => not RESET_N, --not T80_RESET_N,
 	clk	      => MCLK,
 	cen	     	=> TG68_CLKEN,
 
@@ -613,17 +629,22 @@ FM_FIFO_RD <= not (FM_DO(7) or FM_FIFO_EMPTY or FM_FIFO_RD) when rising_edge(MCL
 -- CLOCK GENERATION
 ----------------------------------------------------------------
 
-process( RESET_N, MCLK )
+process( MCLK )
 	variable VCLKCNT  : std_logic_vector(3 downto 0) := (others => '0');
 	variable ZCLKCNT  : std_logic_vector(3 downto 0) := (others => '0');
 begin
 	if falling_edge(MCLK) then
 
-		T80_CLKEN <= '0';
+		T80_CLKENp <= '0';
 		ZCLKCNT := ZCLKCNT + 1;
 		if ZCLKCNT = 15 then
 			ZCLKCNT := (others => '0');
-			T80_CLKEN <= '1';
+			T80_CLKENp <= '1';
+		end if;
+
+		T80_CLKENn <= '0';
+		if ZCLKCNT = 7 then
+			T80_CLKENn <= '1';
 		end if;
 
 		TG68_CLKEN <= '0';
@@ -1048,7 +1069,7 @@ process( RESET_N, MCLK ) begin
 			else
 				FM_DI <= TG68_DO(15 downto 8);
 				FM_A(0) <= '0';
-			end if;
+		end if;
 			TG68_FM_DTACK_N <= '0';
 
 		elsif T80_FM_SEL = '1' and T80_FM_DTACK_N = '1' then
@@ -1058,8 +1079,8 @@ process( RESET_N, MCLK ) begin
 			T80_FM_DTACK_N <= '0';
 
 		end if;
-	end if;
-	
+		end if;
+
 end process;
 
 -- PSG AREA
