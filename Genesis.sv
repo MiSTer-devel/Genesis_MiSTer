@@ -220,10 +220,6 @@ Genesis Genesis
 	.FIELD(VGA_F1),
 	.INTERLACE(interlace),
 
-	.PSG_ENABLE(1),
-	.FM_ENABLE(1),
-	.FM_LIMITER(1),
-
 	.J3BUT(~status[5]),
 	.JOY_1((status[4] ? joystick_1[11:0] : joystick_0[11:0])),
 	.JOY_2((status[4] ? joystick_0[11:0] : joystick_1[11:0])),

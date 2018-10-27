@@ -66,10 +66,6 @@ entity Genesis is
 		INTERLACE	: out std_logic;
 		FIELD   		: out std_logic;
 
-		PSG_ENABLE	: in  std_logic;
-		FM_ENABLE   : in  std_logic;
-		FM_LIMITER  : in  std_logic;
-
 		J3BUT       : in  std_logic;
 		JOY_1 		: in  std_logic_vector(11 downto 0);
 		JOY_2 		: in  std_logic_vector(11 downto 0);
@@ -297,8 +293,6 @@ signal FM_FIFO_RD       : std_logic;
 signal FM_FIFO_EMPTY    : std_logic;
 
 -- PSG
-signal PSG_WR_n		: std_logic;
-signal PSG_DI			: std_logic_vector(7 downto 0);
 signal PSG_SND			: std_logic_vector(5 downto 0);
 
 -- BANK ADDRESS REGISTER
@@ -576,15 +570,14 @@ port map(
 	VBL		=> VBL
 );
 
--- PSG
-
+-- PSG 0x10-0x17 in VDP space
 u_psg : work.psg
 port map(
 	clk		=> MCLK,
 	clken		=> T80_CLKENp,
 	reset    => not RESET_N,
-	WR_n		=> PSG_WR_n,
-	D_in		=> PSG_DI,
+	WR_n		=> VDP_RNW or not VDP_SEL or not VDP_A(4) or VDP_A(3),
+	D_in		=> VDP_DI(15 downto 8),
 	output	=> PSG_SND
 );
 
@@ -594,7 +587,7 @@ port map(
 	clk	      => MCLK,
 	cen	     	=> TG68_CLKEN,
 
-	limiter_en 	=> FM_LIMITER,
+	limiter_en 	=> '1',
 	cs_n	      => '0',
 	addr	      => FM_FIFO_DO(9 downto 8),
 	wr_n	      => FM_FIFO_RD,
@@ -1081,29 +1074,6 @@ process( RESET_N, MCLK ) begin
 		end if;
 		end if;
 
-end process;
-
--- PSG AREA
--- Z80: 7F11 - 7F17
--- 68k: C00011 - C00017
-process( RESET_N, MCLK ) begin
-	if RESET_N = '0' then
-		PSG_WR_n <= '1';
-	elsif rising_edge(MCLK) then
-		if TG68_A(31 downto 3) = x"C0001"&'0' and TG68_AS_N = '0' and TG68_RNW='0' then
-			PSG_WR_n <= '0';
-			if TG68_LDS_N = '0' then
-				PSG_DI <= TG68_DO(7 downto 0);
-			else
-				PSG_DI <= TG68_DO(15 downto 8);
-			end if;
-		elsif T80_A(15 downto 3) = x"7F1"&'0' and T80_MREQ_N = '0' and T80_WR_N = '0' then
-			PSG_WR_n <= '0';
-			PSG_DI <= T80_DO;
-		else
-			PSG_WR_n <= '1';
-		end if;
-	end if;
 end process;
 
 -- Z80: 6000-60FF
