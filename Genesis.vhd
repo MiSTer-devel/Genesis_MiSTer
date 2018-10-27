@@ -47,7 +47,6 @@ entity Genesis is
 	port(
 		RESET_N 		: in  std_logic;
 		MCLK 			: in  std_logic;
-		RAMCLK		: in  std_logic;
 
 		DAC_LDATA 	: out std_logic_vector(12 downto 0);
 		DAC_RDATA 	: out std_logic_vector(12 downto 0);
@@ -526,7 +525,6 @@ vdp : entity work.vdp
 port map(
 	RST_N		=> RESET_N,
 	CLK		=> MCLK,
-	MEMCLK   => RAMCLK,
 
 	SEL		=> VDP_SEL,
 	A			=> VDP_A,

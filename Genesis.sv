@@ -201,8 +201,7 @@ Genesis Genesis
 (
 	.RESET_N(~(reset|ioctl_download)),
 	.MCLK(clk_sys),
-	.RAMCLK(clk_ram),
-	
+
 	.EXPORT(|status[7:6]),
 	.PAL(status[7]),
 
