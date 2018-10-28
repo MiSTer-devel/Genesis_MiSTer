@@ -215,7 +215,7 @@ signal TG68_HINT_FF		: std_logic;
 -- REGISTERS
 ----------------------------------------------------------------
 signal H40			: std_logic;
-signal V30			: std_logic;
+signal V30,V30i	: std_logic;
 
 signal ADDR_STEP	: std_logic_vector(7 downto 0);
 
@@ -610,7 +610,7 @@ M3    <= REG(0)(1);
 IE1   <= REG(0)(4);
 
 M5    <= REG(1)(2);
-V30   <= REG(1)(3) and PAL;
+V30i  <= REG(1)(3) and PAL;
 DMA   <= REG(1)(4);
 IE0   <= REG(1)(5);
 DE    <= REG(1)(6);
@@ -1443,6 +1443,7 @@ process( RST_N, CLK )
 	variable hscnt,vscnt : std_logic_vector(8 downto 0);
 	variable hcnt,vcnt   : std_logic_vector(8 downto 0);
 	variable old_INTACK  : std_logic;
+	variable V30prev     : std_logic;
 begin
 	if RST_N = '0' then
 		ODD <= '0';
@@ -1460,6 +1461,8 @@ begin
 
 		BGEN_ACTIVE <= '0';
 		SPE_ACTIVE <= '0';
+		
+		V30prev := '1';
 
 	elsif rising_edge(CLK) then
 
@@ -1547,11 +1550,15 @@ begin
 			if SPE_ACTIVE = '0' and DE = '0' then
 				SPR <= '1';
 			end if;
+			
+			V30prev := V30prev and V30i;
 
 			if H_CNT = HDISP_START + HDISP_SIZE - 1 then
 				V_CNT <= V_CNT + 1;
 				if V_CNT >= VTOTAL + ODD - 1 then
 					V_CNT <= (others => '0');
+					V30 <= V30prev;
+					V30prev := '1';
 				end if;
 
 				if V_CNT = VDISP_START-1 then
