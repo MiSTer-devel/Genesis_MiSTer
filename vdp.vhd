@@ -2088,14 +2088,14 @@ begin
 			DTC <= DTC_IDLE;
 
 		when DTC_VSRAM_RD =>
-			VSRAM_ADDR <= DT_WR_ADDR(6 downto 1);
+			VSRAM_ADDR <= ADDR(6 downto 1);
 			DTC <= DTC_VSRAM_RD1;
 
 		when DTC_VSRAM_RD1 =>
 			DTC <= DTC_VSRAM_RD2;
 
 		when DTC_VSRAM_RD2 =>
-			if ADDR(6 downto 1) < 40 then
+			if VSRAM_ADDR < 40 then
 				if VSRAM_ADDR(0) = '0' then
 					DT_RD_DATA(10 downto 0) <= VSRAM_Q0;
 				else
