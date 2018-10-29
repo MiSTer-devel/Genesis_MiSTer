@@ -1538,19 +1538,7 @@ begin
 					SP_Y <= V_CNT - VDISP_START + 1;
 				end if;
 
-				if V_CNT = VDISP_START-1 then
-					IN_VBL_F <= '0';
-				end if;
-
-				if V_CNT = VDISP_START then
-					IN_VBL <= '0';
-				end if;
-
 				if V_CNT = VDISP_END then
-					IN_VBL <= '1';
-					IN_VBL_F <= '1';
-					ODD <= not ODD and LSM(0);
-
 					TG68_VINT_PENDING <= '1';
 					T80_VINT <= '1';
 				end if;
@@ -1581,13 +1569,27 @@ begin
 					else
 						HINT_COUNT <= HIT - 1;
 					end if;
-				elsif V_CNT >= VDISP_START and V_CNT < VDISP_END then
+				elsif V_CNT >= VDISP_START and V_CNT < VDISP_END-1 then
 					if HINT_COUNT = 0 then
 						TG68_HINT_PENDING <= '1';
 						HINT_COUNT <= HIT;
 					else
 						HINT_COUNT <= HINT_COUNT - 1;
 					end if;
+				end if;
+
+				if V_CNT = VDISP_START-2 then
+					IN_VBL_F <= '0';
+				end if;
+
+				if V_CNT = VDISP_START-1 then
+					IN_VBL <= '0';
+				end if;
+
+				if V_CNT = VDISP_END - 1 then
+					IN_VBL <= '1';
+					IN_VBL_F <= '1';
+					ODD <= not ODD and LSM(0);
 				end if;
 
 				BGB_VSRAM1_LATCH <= VSRAM_BGB(10 downto 0);
