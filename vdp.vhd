@@ -118,17 +118,19 @@ constant HBLANK_DMA4_320 : integer := (HBLANK_DMA3_320+48) mod HTOTAL_320;
 constant OBJ_PER_LINE_320: integer := 20;
 constant OBJ_MAX_320     : integer := 80;
 
-constant VDISP_START_224 : integer := 27;
-constant VDISP_END_224   : integer := VDISP_START_224+224;
-constant VSYNC_START_224N: integer := 1;   -- NTSC centering
-constant VSYNC_START_224P: integer := 286; -- PAL centering
+constant VDISP_START_224N: integer := 27;
+constant VDISP_START_224P: integer := 54;
+constant VDISP_SIZE_224  : integer := 224;
 
 constant VDISP_START_240 : integer := 46;
-constant VDISP_END_240   : integer := VDISP_START_240+240;
-constant VSYNC_START_240 : integer := 310;
+constant VDISP_SIZE_240  : integer := 240;
+
+constant VTOTAL_PAL      : integer := 313;
+constant VSYNC_START_PAL : integer := 310;
 
 constant VTOTAL_NTSC     : integer := 262;
-constant VTOTAL_PAL      : integer := 313;
+constant VSYNC_START_NTSC: integer := 1;
+
 constant VSYNC_SIZE      : integer := 3;
 
 -- Interlaced VSync start for second field
@@ -142,6 +144,7 @@ signal HSYNC_START 		 : std_logic_vector(8 downto 0);
 signal HSYNC_SZ    		 : std_logic_vector(8 downto 0);
 
 signal VDISP_START 		 : std_logic_vector(8 downto 0);
+signal VDISP_SIZE   		 : std_logic_vector(8 downto 0);
 signal VDISP_END   		 : std_logic_vector(8 downto 0);
 signal VTOTAL      		 : std_logic_vector(8 downto 0);
 signal VSYNC_START 		 : std_logic_vector(8 downto 0);
@@ -1423,12 +1426,14 @@ HTOTAL      <= conv_std_logic_vector(HTOTAL_320,9)       when H40='1' else conv_
 HSYNC_START <= conv_std_logic_vector(HSYNC_START_320,9)  when H40='1' else conv_std_logic_vector(HSYNC_START_256,9);
 HSYNC_SZ    <= conv_std_logic_vector(HSYNC_SZ_320,9)     when H40='1' else conv_std_logic_vector(HSYNC_SZ_256,9);
 
-VDISP_START <= conv_std_logic_vector(VDISP_START_240,9)  when V30='1' else conv_std_logic_vector(VDISP_START_224,9);
-VDISP_END   <= conv_std_logic_vector(VDISP_END_240,9)    when V30='1' else conv_std_logic_vector(VDISP_END_224,9);
+VDISP_START <= conv_std_logic_vector(VDISP_START_240,9)  when V30='1' else
+               conv_std_logic_vector(VDISP_START_224P,9) when PAL='1' else
+               conv_std_logic_vector(VDISP_START_224N,9);
+
+VDISP_SIZE  <= conv_std_logic_vector(VDISP_SIZE_240,9)   when V30='1' else conv_std_logic_vector(VDISP_SIZE_224,9);
+
 VTOTAL      <= conv_std_logic_vector(VTOTAL_PAL,9)       when PAL='1' else conv_std_logic_vector(VTOTAL_NTSC,9);
-VSYNC_START <= conv_std_logic_vector(VSYNC_START_240,9)  when V30='1'
-          else conv_std_logic_vector(VSYNC_START_224P,9) when PAL='1'
-          else conv_std_logic_vector(VSYNC_START_224N,9);
+VSYNC_START <= conv_std_logic_vector(VSYNC_START_PAL,9)  when PAL='1' else conv_std_logic_vector(VSYNC_START_NTSC,9);
 VSYNC_SZ    <= conv_std_logic_vector(VSYNC_SIZE,9);
 
 VSYNC_STARTi<= conv_std_logic_vector(VSYNC_START_320i,9) when H40='1' else conv_std_logic_vector(VSYNC_START_256i,9);
@@ -1471,6 +1476,8 @@ begin
 		V30prev := '1';
 
 	elsif rising_edge(CLK) then
+
+		VDISP_END <= VDISP_START + VDISP_SIZE;
 
 		if old_INTACK = '0' and TG68_INTACK = '1' then
 			if TG68_VINT_FF = '1' then
