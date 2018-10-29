@@ -74,10 +74,8 @@ entity gen_io is
 		SEL		: in std_logic;
 		A			: in std_logic_vector(4 downto 1);
 		RNW		: in std_logic;
-		UDS_N		: in std_logic;
-		LDS_N		: in std_logic;
-		DI			: in std_logic_vector(15 downto 0);
-		DO			: out std_logic_vector(15 downto 0);
+		DI			: in std_logic_vector(7 downto 0);
+		DO			: out std_logic_vector(7 downto 0);
 		DTACK_N	: out std_logic;
 
 		PAL		: in std_logic;
@@ -103,9 +101,6 @@ signal SCTA		: std_logic_vector(7 downto 0);
 signal SCTB		: std_logic_vector(7 downto 0);
 signal SCTC		: std_logic_vector(7 downto 0);
 
-signal WD	   : std_logic_vector(7 downto 0);
-signal RD	   : std_logic_vector(7 downto 0);
-
 signal JCNT1   : integer range 0 to 3;
 signal JCNT2   : integer range 0 to 3;
 
@@ -114,16 +109,13 @@ signal JTMR2   : integer range 0 to 129000;
 
 begin
 
-DO <= RD & RD;
 DTACK_N <= FF_DTACK_N;
-
-WD <= DI(7 downto 0) when LDS_N = '0' else DI(15 downto 8);
 
 process( RST_N, CLK )
 begin
 	if RST_N = '0' then
 		FF_DTACK_N <= '1';
-		RD <= (others => '1');
+		DO <= (others => '1');
 
 		DATA <= x"7F";
 		DATB <= x"7F";
@@ -169,190 +161,190 @@ begin
 				-- Write
 				case A is
 				when x"1" =>
-					DATA(7) <= WD(7);
+					DATA(7) <= DI(7);
 					if CTLA(6) = '1' then 
-						DATA(6) <= WD(6);
-						if(DATA(6)='0' and WD(6)='1') then JTMR1 <= 0; JCNT1 <= JCNT1 + 1; end if;
+						DATA(6) <= DI(6);
+						if(DATA(6)='0' and DI(6)='1') then JTMR1 <= 0; JCNT1 <= JCNT1 + 1; end if;
 					end if;
-					if CTLA(5) = '1' then DATA(5) <= WD(5); end if;
-					if CTLA(4) = '1' then DATA(4) <= WD(4); end if;
-					if CTLA(3) = '1' then DATA(3) <= WD(3); end if;
-					if CTLA(2) = '1' then DATA(2) <= WD(2); end if;
-					if CTLA(1) = '1' then DATA(1) <= WD(1); end if;
-					if CTLA(0) = '1' then DATA(0) <= WD(0); end if;
+					if CTLA(5) = '1' then DATA(5) <= DI(5); end if;
+					if CTLA(4) = '1' then DATA(4) <= DI(4); end if;
+					if CTLA(3) = '1' then DATA(3) <= DI(3); end if;
+					if CTLA(2) = '1' then DATA(2) <= DI(2); end if;
+					if CTLA(1) = '1' then DATA(1) <= DI(1); end if;
+					if CTLA(0) = '1' then DATA(0) <= DI(0); end if;
 				when x"2" =>
-					DATB(7) <= WD(7);
+					DATB(7) <= DI(7);
 					if CTLB(6) = '1' then
-						DATB(6) <= WD(6);
-						if(DATB(6)='0' and WD(6)='1') then JTMR2 <= 0; JCNT2 <= JCNT2 + 1; end if;
+						DATB(6) <= DI(6);
+						if(DATB(6)='0' and DI(6)='1') then JTMR2 <= 0; JCNT2 <= JCNT2 + 1; end if;
 					end if;
-					if CTLB(5) = '1' then DATB(5) <= WD(5); end if;
-					if CTLB(4) = '1' then DATB(4) <= WD(4); end if;
-					if CTLB(3) = '1' then DATB(3) <= WD(3); end if;
-					if CTLB(2) = '1' then DATB(2) <= WD(2); end if;
-					if CTLB(1) = '1' then DATB(1) <= WD(1); end if;
-					if CTLB(0) = '1' then DATB(0) <= WD(0); end if;
+					if CTLB(5) = '1' then DATB(5) <= DI(5); end if;
+					if CTLB(4) = '1' then DATB(4) <= DI(4); end if;
+					if CTLB(3) = '1' then DATB(3) <= DI(3); end if;
+					if CTLB(2) = '1' then DATB(2) <= DI(2); end if;
+					if CTLB(1) = '1' then DATB(1) <= DI(1); end if;
+					if CTLB(0) = '1' then DATB(0) <= DI(0); end if;
 				when x"3" =>
-					DATC(7) <= WD(7);
-					if CTLC(6) = '1' then DATC(6) <= WD(6); end if;
-					if CTLC(5) = '1' then DATC(5) <= WD(5); end if;
-					if CTLC(4) = '1' then DATC(4) <= WD(4); end if;
-					if CTLC(3) = '1' then DATC(3) <= WD(3); end if;
-					if CTLC(2) = '1' then DATC(2) <= WD(2); end if;
-					if CTLC(1) = '1' then DATC(1) <= WD(1); end if;
-					if CTLC(0) = '1' then DATC(0) <= WD(0); end if;
+					DATC(7) <= DI(7);
+					if CTLC(6) = '1' then DATC(6) <= DI(6); end if;
+					if CTLC(5) = '1' then DATC(5) <= DI(5); end if;
+					if CTLC(4) = '1' then DATC(4) <= DI(4); end if;
+					if CTLC(3) = '1' then DATC(3) <= DI(3); end if;
+					if CTLC(2) = '1' then DATC(2) <= DI(2); end if;
+					if CTLC(1) = '1' then DATC(1) <= DI(1); end if;
+					if CTLC(0) = '1' then DATC(0) <= DI(0); end if;
 				when x"4" =>
-					CTLA <= WD;
+					CTLA <= DI;
 				when x"5" =>
-					CTLB <= WD;
+					CTLB <= DI;
 				when x"6" =>
-					CTLC <= WD;
+					CTLC <= DI;
 				when x"7" =>
-					TXDA <= WD;
+					TXDA <= DI;
 				when x"8" =>
-					RXDA <= WD;
+					RXDA <= DI;
 				when x"9" =>
-					SCTA <= WD;
+					SCTA <= DI;
 				when x"A" =>
-					TXDB <= WD;
+					TXDB <= DI;
 				when x"B" =>
-					RXDB <= WD;
+					RXDB <= DI;
 				when x"C" =>
-					SCTB <= WD;
+					SCTB <= DI;
 				when x"D" =>
-					TXDC <= WD;
+					TXDC <= DI;
 				when x"E" =>
-					RXDC <= WD;
+					RXDC <= DI;
 				when x"F" =>
-					SCTC <= WD;					
+					SCTC <= DI;					
 				when others => null;
 				end case;
 			else
 				case A is
 				when x"0" =>
-					RD <= EXPORT & PAL & "100000";
+					DO <= EXPORT & PAL & "100000";
 				when x"1" =>
-					RD <= DATA;
-					if CTLA(7) = '0' then RD(7) <= '1'; end if;
+					DO <= DATA;
+					if CTLA(7) = '0' then DO(7) <= '1'; end if;
 					
 					if DATA(6) = '1' then
 						if(J3BUT='1' or JCNT1/=3) then
-							if CTLA(5) = '0' then RD(5) <= P1_C;     end if;
-							if CTLA(4) = '0' then RD(4) <= P1_B;     end if;
-							if CTLA(3) = '0' then RD(3) <= P1_RIGHT; end if;
-							if CTLA(2) = '0' then RD(2) <= P1_LEFT;  end if;
-							if CTLA(1) = '0' then RD(1) <= P1_DOWN;  end if;
-							if CTLA(0) = '0' then RD(0) <= P1_UP;    end if;
+							if CTLA(5) = '0' then DO(5) <= P1_C;     end if;
+							if CTLA(4) = '0' then DO(4) <= P1_B;     end if;
+							if CTLA(3) = '0' then DO(3) <= P1_RIGHT; end if;
+							if CTLA(2) = '0' then DO(2) <= P1_LEFT;  end if;
+							if CTLA(1) = '0' then DO(1) <= P1_DOWN;  end if;
+							if CTLA(0) = '0' then DO(0) <= P1_UP;    end if;
 						else
-							if CTLA(5) = '0' then RD(5) <= P1_C;     end if;
-							if CTLA(4) = '0' then RD(4) <= P1_B;     end if;
-							if CTLA(3) = '0' then RD(3) <= P1_MODE;  end if;
-							if CTLA(2) = '0' then RD(2) <= P1_X;     end if;
-							if CTLA(1) = '0' then RD(1) <= P1_Y;     end if;
-							if CTLA(0) = '0' then RD(0) <= P1_Z;     end if;
+							if CTLA(5) = '0' then DO(5) <= P1_C;     end if;
+							if CTLA(4) = '0' then DO(4) <= P1_B;     end if;
+							if CTLA(3) = '0' then DO(3) <= P1_MODE;  end if;
+							if CTLA(2) = '0' then DO(2) <= P1_X;     end if;
+							if CTLA(1) = '0' then DO(1) <= P1_Y;     end if;
+							if CTLA(0) = '0' then DO(0) <= P1_Z;     end if;
 						end if;
 					else
 						if(J3BUT='1' or JCNT1<2) then
-							if CTLA(5) = '0' then RD(5) <= P1_START; end if;
-							if CTLA(4) = '0' then RD(4) <= P1_A;     end if;
-							if CTLA(3) = '0' then RD(3) <= '0';      end if;
-							if CTLA(2) = '0' then RD(2) <= '0';      end if;
-							if CTLA(1) = '0' then RD(1) <= P1_DOWN;  end if;
-							if CTLA(0) = '0' then RD(0) <= P1_UP;    end if;
+							if CTLA(5) = '0' then DO(5) <= P1_START; end if;
+							if CTLA(4) = '0' then DO(4) <= P1_A;     end if;
+							if CTLA(3) = '0' then DO(3) <= '0';      end if;
+							if CTLA(2) = '0' then DO(2) <= '0';      end if;
+							if CTLA(1) = '0' then DO(1) <= P1_DOWN;  end if;
+							if CTLA(0) = '0' then DO(0) <= P1_UP;    end if;
 						elsif (JCNT1=2) then
-							if CTLA(5) = '0' then RD(5) <= P1_START; end if;
-							if CTLA(4) = '0' then RD(4) <= P1_A;     end if;
-							if CTLA(3) = '0' then RD(3) <= '0';      end if;
-							if CTLA(2) = '0' then RD(2) <= '0';      end if;
-							if CTLA(1) = '0' then RD(1) <= '0';      end if;
-							if CTLA(0) = '0' then RD(0) <= '0';      end if;
+							if CTLA(5) = '0' then DO(5) <= P1_START; end if;
+							if CTLA(4) = '0' then DO(4) <= P1_A;     end if;
+							if CTLA(3) = '0' then DO(3) <= '0';      end if;
+							if CTLA(2) = '0' then DO(2) <= '0';      end if;
+							if CTLA(1) = '0' then DO(1) <= '0';      end if;
+							if CTLA(0) = '0' then DO(0) <= '0';      end if;
 						else
-							if CTLA(5) = '0' then RD(5) <= P1_START; end if;
-							if CTLA(4) = '0' then RD(4) <= P1_A;     end if;
-							if CTLA(3) = '0' then RD(3) <= '1';      end if;
-							if CTLA(2) = '0' then RD(2) <= '1';      end if;
-							if CTLA(1) = '0' then RD(1) <= '1';      end if;
-							if CTLA(0) = '0' then RD(0) <= '1';      end if;
+							if CTLA(5) = '0' then DO(5) <= P1_START; end if;
+							if CTLA(4) = '0' then DO(4) <= P1_A;     end if;
+							if CTLA(3) = '0' then DO(3) <= '1';      end if;
+							if CTLA(2) = '0' then DO(2) <= '1';      end if;
+							if CTLA(1) = '0' then DO(1) <= '1';      end if;
+							if CTLA(0) = '0' then DO(0) <= '1';      end if;
 						end if;
 					end if;
 				when x"2" =>
-					RD <= DATB;
-					if CTLB(7) = '0' then RD(7) <= '1'; end if;
+					DO <= DATB;
+					if CTLB(7) = '0' then DO(7) <= '1'; end if;
 
 					if DATB(6) = '1' then
 						if(J3BUT='1' or JCNT2/=3) then
-							if CTLB(5) = '0' then RD(5) <= P2_C;     end if;
-							if CTLB(4) = '0' then RD(4) <= P2_B;     end if;
-							if CTLB(3) = '0' then RD(3) <= P2_RIGHT; end if;
-							if CTLB(2) = '0' then RD(2) <= P2_LEFT;  end if;
-							if CTLB(1) = '0' then RD(1) <= P2_DOWN;  end if;
-							if CTLB(0) = '0' then RD(0) <= P2_UP;    end if;
+							if CTLB(5) = '0' then DO(5) <= P2_C;     end if;
+							if CTLB(4) = '0' then DO(4) <= P2_B;     end if;
+							if CTLB(3) = '0' then DO(3) <= P2_RIGHT; end if;
+							if CTLB(2) = '0' then DO(2) <= P2_LEFT;  end if;
+							if CTLB(1) = '0' then DO(1) <= P2_DOWN;  end if;
+							if CTLB(0) = '0' then DO(0) <= P2_UP;    end if;
 						else
-							if CTLB(5) = '0' then RD(5) <= P2_C;     end if;
-							if CTLB(4) = '0' then RD(4) <= P2_B;     end if;
-							if CTLB(3) = '0' then RD(3) <= P2_MODE;  end if;
-							if CTLB(2) = '0' then RD(2) <= P2_X;     end if;
-							if CTLB(1) = '0' then RD(1) <= P2_Y;     end if;
-							if CTLB(0) = '0' then RD(0) <= P2_Z;     end if;
+							if CTLB(5) = '0' then DO(5) <= P2_C;     end if;
+							if CTLB(4) = '0' then DO(4) <= P2_B;     end if;
+							if CTLB(3) = '0' then DO(3) <= P2_MODE;  end if;
+							if CTLB(2) = '0' then DO(2) <= P2_X;     end if;
+							if CTLB(1) = '0' then DO(1) <= P2_Y;     end if;
+							if CTLB(0) = '0' then DO(0) <= P2_Z;     end if;
 						end if;
 					else
 						if(J3BUT='1' or JCNT2<2) then
-							if CTLB(5) = '0' then RD(5) <= P2_START; end if;
-							if CTLB(4) = '0' then RD(4) <= P2_A;     end if;
-							if CTLB(3) = '0' then RD(3) <= '0';      end if;
-							if CTLB(2) = '0' then RD(2) <= '0';      end if;
-							if CTLB(1) = '0' then RD(1) <= P2_DOWN;  end if;
-							if CTLB(0) = '0' then RD(0) <= P2_UP;    end if;
+							if CTLB(5) = '0' then DO(5) <= P2_START; end if;
+							if CTLB(4) = '0' then DO(4) <= P2_A;     end if;
+							if CTLB(3) = '0' then DO(3) <= '0';      end if;
+							if CTLB(2) = '0' then DO(2) <= '0';      end if;
+							if CTLB(1) = '0' then DO(1) <= P2_DOWN;  end if;
+							if CTLB(0) = '0' then DO(0) <= P2_UP;    end if;
 						elsif (JCNT2=2) then
-							if CTLB(5) = '0' then RD(5) <= P2_START; end if;
-							if CTLB(4) = '0' then RD(4) <= P2_A;     end if;
-							if CTLB(3) = '0' then RD(3) <= '0';      end if;
-							if CTLB(2) = '0' then RD(2) <= '0';      end if;
-							if CTLB(1) = '0' then RD(1) <= '0';      end if;
-							if CTLB(0) = '0' then RD(0) <= '0';      end if;
+							if CTLB(5) = '0' then DO(5) <= P2_START; end if;
+							if CTLB(4) = '0' then DO(4) <= P2_A;     end if;
+							if CTLB(3) = '0' then DO(3) <= '0';      end if;
+							if CTLB(2) = '0' then DO(2) <= '0';      end if;
+							if CTLB(1) = '0' then DO(1) <= '0';      end if;
+							if CTLB(0) = '0' then DO(0) <= '0';      end if;
 						else
-							if CTLB(5) = '0' then RD(5) <= P2_START; end if;
-							if CTLB(4) = '0' then RD(4) <= P2_A;     end if;
-							if CTLB(3) = '0' then RD(3) <= '1';      end if;
-							if CTLB(2) = '0' then RD(2) <= '1';      end if;
-							if CTLB(1) = '0' then RD(1) <= '1';      end if;
-							if CTLB(0) = '0' then RD(0) <= '1';      end if;
+							if CTLB(5) = '0' then DO(5) <= P2_START; end if;
+							if CTLB(4) = '0' then DO(4) <= P2_A;     end if;
+							if CTLB(3) = '0' then DO(3) <= '1';      end if;
+							if CTLB(2) = '0' then DO(2) <= '1';      end if;
+							if CTLB(1) = '0' then DO(1) <= '1';      end if;
+							if CTLB(0) = '0' then DO(0) <= '1';      end if;
 						end if;
 					end if;
 				when x"3" => -- Unconnected port
-					RD <= DATC;
-					if CTLC(7) = '0' then RD(7) <= '1'; end if;
-					if CTLC(6) = '0' then RD(6) <= '1'; end if;
-					if CTLC(5) = '0' then RD(5) <= '1'; end if;
-					if CTLC(4) = '0' then RD(4) <= '1'; end if;
-					if CTLC(3) = '0' then RD(3) <= '1'; end if;
-					if CTLC(2) = '0' then RD(2) <= '1'; end if;
-					if CTLC(1) = '0' then RD(1) <= '1'; end if;
-					if CTLC(0) = '0' then RD(0) <= '1'; end if;
+					DO <= DATC;
+					if CTLC(7) = '0' then DO(7) <= '1'; end if;
+					if CTLC(6) = '0' then DO(6) <= '1'; end if;
+					if CTLC(5) = '0' then DO(5) <= '1'; end if;
+					if CTLC(4) = '0' then DO(4) <= '1'; end if;
+					if CTLC(3) = '0' then DO(3) <= '1'; end if;
+					if CTLC(2) = '0' then DO(2) <= '1'; end if;
+					if CTLC(1) = '0' then DO(1) <= '1'; end if;
+					if CTLC(0) = '0' then DO(0) <= '1'; end if;
 				when x"4" =>
-					RD <= CTLA;
+					DO <= CTLA;
 				when x"5" =>
-					RD <= CTLB;
+					DO <= CTLB;
 				when x"6" =>
-					RD <= CTLC;
+					DO <= CTLC;
 				when x"7" =>
-					RD <= TXDA;
+					DO <= TXDA;
 				when x"8" =>
-					RD <= RXDA;
+					DO <= RXDA;
 				when x"9" =>
-					RD <= SCTA;
+					DO <= SCTA;
 				when x"A" =>
-					RD <= TXDB;
+					DO <= TXDB;
 				when x"B" =>
-					RD <= RXDB;
+					DO <= RXDB;
 				when x"C" =>
-					RD <= SCTB;
+					DO <= SCTB;
 				when x"D" =>
-					RD <= TXDC;
+					DO <= TXDC;
 				when x"E" =>
-					RD <= RXDC;
+					DO <= RXDC;
 				when x"F" =>
-					RD <= SCTC;
+					DO <= SCTC;
 				when others => null;
 				end case;
 			end if;

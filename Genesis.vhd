@@ -229,10 +229,8 @@ signal T80_CTRL_DTACK_N	: std_logic;
 signal IO_SEL				: std_logic;
 signal IO_A 				: std_logic_vector(4 downto 1);
 signal IO_RNW				: std_logic;
-signal IO_UDS_N			: std_logic;
-signal IO_LDS_N			: std_logic;
-signal IO_DI				: std_logic_vector(15 downto 0);
-signal IO_DO				: std_logic_vector(15 downto 0);
+signal IO_DI				: std_logic_vector(7 downto 0);
+signal IO_DO				: std_logic_vector(7 downto 0);
 signal IO_DTACK_N			: std_logic;
 
 signal TG68_IO_SEL		: std_logic;
@@ -509,8 +507,6 @@ port map(
 	SEL		=> IO_SEL,
 	A			=> IO_A,
 	RNW		=> IO_RNW,
-	UDS_N		=> IO_UDS_N,
-	LDS_N		=> IO_LDS_N,
 	DI			=> IO_DI,
 	DO			=> IO_DO,
 	DTACK_N	=> IO_DTACK_N,
@@ -836,8 +832,6 @@ begin
 		
 		IO_SEL <= '0';
 		IO_RNW <= '1';
-		IO_UDS_N <= '1';
-		IO_LDS_N <= '1';
 		IO_A <= (others => '0');
 
 		IOC <= IOC_IDLE;
@@ -856,29 +850,20 @@ begin
 				IO_SEL <= '1';
 				IO_A <= TG68_A(4 downto 1);
 				IO_RNW <= TG68_RNW;
-				IO_UDS_N <= TG68_UDS_N;
-				IO_LDS_N <= TG68_LDS_N;
-				IO_DI <= TG68_DO;
+				IO_DI <= TG68_DO(7 downto 0);
 				IOC <= IOC_TG68_ACC;
 			elsif T80_IO_SEL = '1' and T80_IO_DTACK_N = '1' then
 				IO_SEL <= '1';
 				IO_A <= T80_A(4 downto 1);
 				IO_RNW <= T80_WR_N;
-				if T80_A(0) = '0' then
-					IO_UDS_N <= '0';
-					IO_LDS_N <= '1';
-				else
-					IO_UDS_N <= '1';
-					IO_LDS_N <= '0';				
-				end if;
-				IO_DI <= T80_DO & T80_DO;
+				IO_DI <= T80_DO;
 				IOC <= IOC_T80_ACC;			
 			end if;
 
 		when IOC_TG68_ACC =>
 			if IO_DTACK_N = '0' then
 				IO_SEL <= '0';
-				TG68_IO_D <= IO_DO;
+				TG68_IO_D <= IO_DO&IO_DO;
 				TG68_IO_DTACK_N <= '0';
 				IOC <= IOC_DESEL;
 			end if;
@@ -886,11 +871,7 @@ begin
 		when IOC_T80_ACC =>
 			if IO_DTACK_N = '0' then
 				IO_SEL <= '0';
-				if T80_A(0) = '0' then
-					T80_IO_D <= IO_DO(15 downto 8);
-				else
-					T80_IO_D <= IO_DO(7 downto 0);
-				end if;
+				T80_IO_D <= IO_DO;
 				T80_IO_DTACK_N <= '0';
 				IOC <= IOC_DESEL;
 			end if;
@@ -898,8 +879,6 @@ begin
 		when IOC_DESEL =>
 			if IO_DTACK_N = '1' then
 				IO_RNW <= '1';
-				IO_UDS_N <= '1';
-				IO_LDS_N <= '1';
 				IO_A <= (others => '0');
 
 				IOC <= IOC_IDLE;
