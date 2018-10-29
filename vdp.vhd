@@ -1621,9 +1621,7 @@ begin
 
 			-- FIFO throttle logic
 			if IN_VBL_F = '1' or DE = '0' then
-				if H_CNT < HDISP_START or hcnt >= HDISP_SIZE or H_CNT(5 downto 0) /= 0 then
-					FIFO_EN <= not H_CNT(0);
-				end if;
+				FIFO_EN <= not H_CNT(0);
 			elsif H_CNT >= HDISP_START and hcnt < HDISP_SIZE and hcnt(3 downto 0) = 5 then
 				FIFO_EN <= not (hcnt(5) and hcnt(4));
 			elsif H_CNT = HBLANK_DMA1 or H_CNT = HBLANK_DMA2 or H_CNT = HBLANK_DMA3 or H_CNT = HBLANK_DMA4 then
