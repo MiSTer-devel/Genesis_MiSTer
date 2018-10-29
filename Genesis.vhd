@@ -209,18 +209,11 @@ signal DMA_RAM_SEL		: std_logic;
 signal DMA_RAM_D			: std_logic_vector(15 downto 0);
 signal DMA_RAM_DTACK_N	: std_logic;
 
--- OPERATING SYSTEM ROM
-signal TG68_OS_SEL		: std_logic;
-signal TG68_OS_D			: std_logic_vector(15 downto 0);
-signal TG68_OS_DTACK_N	: std_logic;
 
 -- CONTROL AREA
-signal CART_EN				: std_logic;
-
 signal TG68_CTRL_SEL		: std_logic;
 signal TG68_CTRL_D		: std_logic_vector(15 downto 0);
 signal TG68_CTRL_DTACK_N: std_logic;
-
 signal T80_CTRL_SEL		: std_logic;
 signal T80_CTRL_D			: std_logic_vector(7 downto 0);
 signal T80_CTRL_DTACK_N	: std_logic;
@@ -462,14 +455,6 @@ port map(
 	DO			=> T80_DO
 );
 
--- OS ROM
-os : entity work.os_rom
-port map(
-	CLK	=> MCLK,
-	A		=> TG68_A(8 downto 1),
-	D		=> TG68_OS_D
-);
-
 -- I/O
 io : entity work.gen_io
 port map(
@@ -644,71 +629,53 @@ end process;
 
 -- DMA VBUS
 VBUS_DTACK_N <= DMA_ROM_DTACK_N when DMA_ROM_SEL = '1'
-	else DMA_RAM_DTACK_N when DMA_RAM_SEL = '1'
-	else '0';
+           else DMA_RAM_DTACK_N when DMA_RAM_SEL = '1'
+           else '0';
+
 VBUS_DATA <= DMA_ROM_D when DMA_ROM_SEL = '1'
-	else DMA_RAM_D when DMA_RAM_SEL = '1'
-	else x"FFFF";
+        else DMA_RAM_D when DMA_RAM_SEL = '1'
+        else x"FFFF";
 
 -- 68K INPUTS
-TG68_DTACK_N <= TG68_ROM_DTACK_N when TG68_ROM_SEL = '1'
-	else TG68_RAM_DTACK_N when TG68_RAM_SEL = '1' 
-	else TG68_ZRAM_DTACK_N when TG68_ZRAM_SEL = '1' 
-	else TG68_CTRL_DTACK_N when TG68_CTRL_SEL = '1' 
-	else TG68_OS_DTACK_N when TG68_OS_SEL = '1' 
-	else TG68_IO_DTACK_N when TG68_IO_SEL = '1' 
-	else TG68_BAR_DTACK_N when TG68_BAR_SEL = '1' 
-	else TG68_VDP_DTACK_N when TG68_VDP_SEL = '1' 
-	else TG68_FM_DTACK_N when TG68_FM_SEL = '1' 
-	else '0';
-TG68_DI(15 downto 8) <= TG68_ROM_D(15 downto 8) when TG68_ROM_SEL = '1' and TG68_UDS_N = '0'
-	else TG68_RAM_D(15 downto 8) when TG68_RAM_SEL = '1' and TG68_UDS_N = '0'
-	else TG68_ZRAM_D(15 downto 8) when TG68_ZRAM_SEL = '1' and TG68_UDS_N = '0'
-	else TG68_CTRL_D(15 downto 8) when TG68_CTRL_SEL = '1' and TG68_UDS_N = '0'
-	else TG68_OS_D(15 downto 8) when TG68_OS_SEL = '1' and TG68_UDS_N = '0'
-	else TG68_IO_D(15 downto 8) when TG68_IO_SEL = '1' and TG68_UDS_N = '0'
-	else TG68_BAR_D(15 downto 8) when TG68_BAR_SEL = '1' and TG68_UDS_N = '0'
-	else TG68_VDP_D(15 downto 8) when TG68_VDP_SEL = '1' and TG68_UDS_N = '0'
-	else TG68_FM_D(15 downto 8) when TG68_FM_SEL = '1' and TG68_UDS_N = '0'
-	else NO_DATA(15 downto 8);
-TG68_DI(7 downto 0) <= TG68_ROM_D(7 downto 0) when TG68_ROM_SEL = '1' and TG68_LDS_N = '0'
-	else TG68_RAM_D(7 downto 0) when TG68_RAM_SEL = '1' and TG68_LDS_N = '0'
-	else TG68_ZRAM_D(7 downto 0) when TG68_ZRAM_SEL = '1' and TG68_LDS_N = '0'
-	else TG68_CTRL_D(7 downto 0) when TG68_CTRL_SEL = '1' and TG68_LDS_N = '0'
-	else TG68_OS_D(7 downto 0) when TG68_OS_SEL = '1' and TG68_LDS_N = '0'
-	else TG68_IO_D(7 downto 0) when TG68_IO_SEL = '1' and TG68_LDS_N = '0'
-	else TG68_BAR_D(7 downto 0) when TG68_BAR_SEL = '1' and TG68_LDS_N = '0'
-	else TG68_VDP_D(7 downto 0) when TG68_VDP_SEL = '1' and TG68_LDS_N = '0'
-	else TG68_FM_D(7 downto 0) when TG68_FM_SEL = '1' and TG68_LDS_N = '0'
-	else NO_DATA(7 downto 0);
+TG68_DTACK_N <= TG68_ROM_DTACK_N  when TG68_ROM_SEL  = '1'
+           else TG68_RAM_DTACK_N  when TG68_RAM_SEL  = '1' 
+           else TG68_ZRAM_DTACK_N when TG68_ZRAM_SEL = '1' 
+           else TG68_CTRL_DTACK_N when TG68_CTRL_SEL = '1' 
+           else TG68_IO_DTACK_N   when TG68_IO_SEL   = '1' 
+           else TG68_BAR_DTACK_N  when TG68_BAR_SEL  = '1' 
+           else TG68_VDP_DTACK_N  when TG68_VDP_SEL  = '1' 
+           else TG68_FM_DTACK_N   when TG68_FM_SEL   = '1' 
+           else '0';
 
-T80_WAIT_N <= not T80_RAM_DTACK_N when T80_RAM_SEL = '1'
-	else not T80_ZRAM_DTACK_N when T80_ZRAM_SEL = '1'
-	else not T80_ROM_DTACK_N when T80_ROM_SEL = '1'
-	else not T80_CTRL_DTACK_N when T80_CTRL_SEL = '1' 
-	else not T80_IO_DTACK_N when T80_IO_SEL = '1' 
-	else not T80_BAR_DTACK_N when T80_BAR_SEL = '1'
-	else not T80_VDP_DTACK_N when T80_VDP_SEL = '1'
-	else not T80_FM_DTACK_N when T80_FM_SEL = '1'
-	else '1';
-T80_DI <= T80_RAM_D when T80_RAM_SEL = '1'
-	else T80_ZRAM_D when T80_ZRAM_SEL = '1'
-	else T80_ROM_D when T80_ROM_SEL = '1'
-	else T80_CTRL_D when T80_CTRL_SEL = '1'
-	else T80_IO_D when T80_IO_SEL = '1'
-	else T80_BAR_D when T80_BAR_SEL = '1'
-	else T80_VDP_D when T80_VDP_SEL = '1'
-	else T80_FM_D when T80_FM_SEL = '1'
-	else x"FF";
+TG68_DI <= TG68_ROM_D  when TG68_ROM_SEL  = '1'
+      else TG68_RAM_D  when TG68_RAM_SEL  = '1'
+      else TG68_ZRAM_D when TG68_ZRAM_SEL = '1'
+      else TG68_CTRL_D when TG68_CTRL_SEL = '1'
+      else TG68_IO_D   when TG68_IO_SEL   = '1'
+      else TG68_BAR_D  when TG68_BAR_SEL  = '1'
+      else TG68_VDP_D  when TG68_VDP_SEL  = '1'
+      else TG68_FM_D   when TG68_FM_SEL   = '1'
+      else NO_DATA;
 
--- OPERATING SYSTEM ROM
-TG68_OS_DTACK_N <= '0';
+T80_WAIT_N <= not T80_RAM_DTACK_N  when T80_RAM_SEL  = '1'
+         else not T80_ZRAM_DTACK_N when T80_ZRAM_SEL = '1'
+         else not T80_ROM_DTACK_N  when T80_ROM_SEL  = '1'
+         else not T80_CTRL_DTACK_N when T80_CTRL_SEL = '1' 
+         else not T80_IO_DTACK_N   when T80_IO_SEL   = '1' 
+         else not T80_BAR_DTACK_N  when T80_BAR_SEL  = '1'
+         else not T80_VDP_DTACK_N  when T80_VDP_SEL  = '1'
+         else not T80_FM_DTACK_N   when T80_FM_SEL   = '1'
+         else '1';
 
-TG68_OS_SEL <= '1' when  TG68_A(23 downto 22) = "00" 
-							and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') 
-							and TG68_RNW = '1' 
-							and CART_EN = '0' else '0';
-
+T80_DI <= T80_RAM_D  when T80_RAM_SEL  = '1'
+     else T80_ZRAM_D when T80_ZRAM_SEL = '1'
+     else T80_ROM_D  when T80_ROM_SEL  = '1'
+     else T80_CTRL_D when T80_CTRL_SEL = '1'
+     else T80_IO_D   when T80_IO_SEL   = '1'
+     else T80_BAR_D  when T80_BAR_SEL  = '1'
+     else T80_VDP_D  when T80_VDP_SEL  = '1'
+     else T80_FM_D   when T80_FM_SEL   = '1'
+     else x"FF";
 
 -- CONTROL AREA
 process( RESET_N, MCLK, TG68_AS_N, TG68_RNW,
@@ -737,7 +704,6 @@ begin
 
 		T80_BUSRQ_N <= '1';
 		T80_RESET_N <= '0';
-		CART_EN <= '0';
 		
 	elsif rising_edge(MCLK) then
 	
@@ -760,11 +726,6 @@ begin
 					if TG68_UDS_N = '0' then
 						T80_RESET_N <= TG68_DO(8);
 					end if;			
-				elsif TG68_A(15 downto 8) = x"41" then
-					-- Cartridge Control Register
-					if TG68_LDS_N = '0' then
-						CART_EN <= TG68_DO(0);
-					end if;
 				end if;
 			else
 				-- Read
@@ -787,11 +748,6 @@ begin
 					if T80_A(0) = '0' then
 						T80_RESET_N <= T80_DO(0);
 					end if;			
-				elsif BAR(15) & T80_A(14 downto 8) = x"41" then
-					-- Cartridge Control Register
-					if T80_A(0) = '1' then
-						CART_EN <= T80_DO(0);
-					end if;
 				end if;
 			else
 				-- Read
@@ -1025,16 +981,16 @@ process( RESET_N, MCLK ) begin
 			else
 				FM_DI <= TG68_DO(15 downto 8);
 				FM_A(0) <= '0';
-		end if;
+			end if;
 			TG68_FM_DTACK_N <= '0';
 
-		elsif T80_FM_SEL = '1' and T80_FM_DTACK_N = '1' then
-			FM_A <= T80_A(1 downto 0);
-			FM_RNW <= T80_WR_N;
-			FM_DI <= T80_DO;
-			T80_FM_DTACK_N <= '0';
+			elsif T80_FM_SEL = '1' and T80_FM_DTACK_N = '1' then
+				FM_A <= T80_A(1 downto 0);
+				FM_RNW <= T80_WR_N;
+				FM_DI <= T80_DO;
+				T80_FM_DTACK_N <= '0';
 
-		end if;
+			end if;
 		end if;
 
 end process;
@@ -1089,8 +1045,7 @@ end process;
 ROM_REQ  <= romrd_req;
 romrd_ack<= ROM_ACK;
 
-TG68_ROM_SEL <= '1' when TG68_A(23) = '0' and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0')
-									and TG68_RNW = '1' and CART_EN = '1' else '0';
+TG68_ROM_SEL <= '1' when TG68_A(23) = '0' and TG68_AS_N = '0' and TG68_RNW = '1' else '0';
 T80_ROM_SEL  <= '1' when T80_A(15) = '1' and BAR(23) = '0' and T80_MREQ_N = '0' and T80_RD_N = '0' else '0';
 DMA_ROM_SEL  <= '1' when VBUS_ADDR(23) = '0' and VBUS_SEL = '1' else '0';
 
@@ -1255,11 +1210,11 @@ end process;
 process( RESET_N, MCLK, TG68_AS_N, TG68_RNW,
 	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
 	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N,
-	VBUS_SEL, VBUS_ADDR, T80_BUSAK_N)
+	VBUS_SEL, VBUS_ADDR, T80_BUSAK_N, T80_RESET_N)
 begin
 	if TG68_A(23 downto 14) = x"A0"&"00" -- Z80 Address Space
 		and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') 
-		and T80_BUSAK_N = '0'
+		and (T80_BUSAK_N = '0' or T80_RESET_N = '0')
 	then
 		TG68_ZRAM_SEL <= '1';
 	else
