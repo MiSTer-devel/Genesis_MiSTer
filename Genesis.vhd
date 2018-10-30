@@ -303,7 +303,6 @@ signal VBUS_ADDR		: std_logic_vector(23 downto 0);
 signal VBUS_DATA		: std_logic_vector(15 downto 0);		
 signal VBUS_SEL		: std_logic;
 signal VBUS_DTACK_N	: std_logic;
-signal VBUS_BUSY		: std_logic;
 
 type romStates is (ROM_IDLE, ROM_READ);
 signal romState : romStates := ROM_IDLE;
@@ -528,7 +527,6 @@ port map(
 	T80_VINT		=> T80_VINT,
 	T80_INTACK	=> not T80_M1_N and not T80_IORQ_N,
 
-	VBUS_BUSY		=> VBUS_BUSY,
 	VBUS_ADDR		=> VBUS_ADDR,
 	VBUS_DATA		=> VBUS_DATA,
 	VBUS_SEL			=> VBUS_SEL,
@@ -1069,13 +1067,7 @@ process (RESET_N, MCLK) begin
 
 		case ROMC is
 		when ROMC_IDLE =>
-			if VBUS_BUSY = '1' then
-				if DMA_ROM_SEL = '1' and DMA_ROM_DTACK_N = '1' then
-					romrd_req <= not romrd_ack;
-					ROM_ADDR <= VBUS_ADDR(22 downto 1);
-					ROMC <= ROMC_DMA_RD;
-				end if;
-			elsif TG68_ROM_SEL = '1' and TG68_ROM_DTACK_N = '1' then
+			if TG68_ROM_SEL = '1' and TG68_ROM_DTACK_N = '1' then
 				romrd_req <= not romrd_ack;
 				ROM_ADDR <= TG68_A(22 downto 1);
 				ROMC <= ROMC_TG68_RD;
@@ -1083,6 +1075,10 @@ process (RESET_N, MCLK) begin
 				romrd_req <= not romrd_ack;
 				ROM_ADDR <= BAR(22 downto 15) & T80_A(14 downto 1);
 				ROMC <= ROMC_T80_RD;
+			elsif DMA_ROM_SEL = '1' and DMA_ROM_DTACK_N = '1' then
+				romrd_req <= not romrd_ack;
+				ROM_ADDR <= VBUS_ADDR(22 downto 1);
+				ROMC <= ROMC_DMA_RD;
 			end if;
 
 		when ROMC_TG68_RD =>
@@ -1148,16 +1144,7 @@ begin
 
 		case RAMC is
 		when RAMC_IDLE =>
-			if VBUS_BUSY = '1' then
-				if DMA_RAM_SEL = '1' and DMA_RAM_DTACK_N = '1' then
-					ram68k_req <= not ram68k_req;
-					ram68k_a <= VBUS_ADDR(15 downto 1);
-					ram68k_we <= '0';
-					ram68k_u_n <= '0';
-					ram68k_l_n <= '0';
-					RAMC <= RAMC_DMA;
-				end if;
-			elsif TG68_RAM_SEL = '1' and TG68_RAM_DTACK_N = '1' then
+			if TG68_RAM_SEL = '1' and TG68_RAM_DTACK_N = '1' then
 				ram68k_req <= not ram68k_req;
 				ram68k_a <= TG68_A(15 downto 1);
 				ram68k_d <= TG68_DO;
@@ -1173,6 +1160,13 @@ begin
 				ram68k_u_n <= T80_A(0);
 				ram68k_l_n <= not T80_A(0);
 				RAMC <= RAMC_T80;
+			elsif DMA_RAM_SEL = '1' and DMA_RAM_DTACK_N = '1' then
+				ram68k_req <= not ram68k_req;
+				ram68k_a <= VBUS_ADDR(15 downto 1);
+				ram68k_we <= '0';
+				ram68k_u_n <= '0';
+				ram68k_l_n <= '0';
+				RAMC <= RAMC_DMA;
 			end if;
 
 		when RAMC_TG68 =>

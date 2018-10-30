@@ -69,7 +69,6 @@ entity vdp is
 		VBUS_DATA		: in  std_logic_vector(15 downto 0);
 		VBUS_SEL			: out std_logic;
 		VBUS_DTACK_N	: in  std_logic;
-		VBUS_BUSY      : out std_logic;
 
 		PAL				: in  std_logic;
 		FIELD      		: out std_logic;
@@ -1885,7 +1884,6 @@ end process;
 ----------------------------------------------------------------
 VBUS_ADDR <= FF_VBUS_ADDR;
 VBUS_SEL <= FF_VBUS_SEL;
-VBUS_BUSY <= DMA_VBUS;
 
 process( RST_N, CLK )
 begin
