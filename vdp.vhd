@@ -145,6 +145,7 @@ signal HSYNC_SZ    		 : std_logic_vector(8 downto 0);
 
 signal VDISP_START 		 : std_logic_vector(8 downto 0);
 signal VDISP_SIZE   		 : std_logic_vector(8 downto 0);
+signal VDISP_SIZEi  		 : std_logic_vector(8 downto 0);
 signal VDISP_END   		 : std_logic_vector(8 downto 0);
 signal VTOTAL      		 : std_logic_vector(8 downto 0);
 signal VSYNC_START 		 : std_logic_vector(8 downto 0);
@@ -1420,28 +1421,29 @@ end process;
 ----------------------------------------------------------------
 -- VIDEO COUNTERS AND INTERRUPTS
 ----------------------------------------------------------------
-HDISP_START <= conv_std_logic_vector(HDISP_START_320,9)  when H40='1' else conv_std_logic_vector(HDISP_START_256,9);
-HDISP_SIZE  <= conv_std_logic_vector(HDISP_SIZE_320,9)   when H40='1' else conv_std_logic_vector(HDISP_SIZE_256,9);
-HTOTAL      <= conv_std_logic_vector(HTOTAL_320,9)       when H40='1' else conv_std_logic_vector(HTOTAL_256,9);
-HSYNC_START <= conv_std_logic_vector(HSYNC_START_320,9)  when H40='1' else conv_std_logic_vector(HSYNC_START_256,9);
-HSYNC_SZ    <= conv_std_logic_vector(HSYNC_SZ_320,9)     when H40='1' else conv_std_logic_vector(HSYNC_SZ_256,9);
+HDISP_START <= conv_std_logic_vector(HDISP_START_320,9)  when H40='1'  else conv_std_logic_vector(HDISP_START_256,9);
+HDISP_SIZE  <= conv_std_logic_vector(HDISP_SIZE_320,9)   when H40='1'  else conv_std_logic_vector(HDISP_SIZE_256,9);
+HTOTAL      <= conv_std_logic_vector(HTOTAL_320,9)       when H40='1'  else conv_std_logic_vector(HTOTAL_256,9);
+HSYNC_START <= conv_std_logic_vector(HSYNC_START_320,9)  when H40='1'  else conv_std_logic_vector(HSYNC_START_256,9);
+HSYNC_SZ    <= conv_std_logic_vector(HSYNC_SZ_320,9)     when H40='1'  else conv_std_logic_vector(HSYNC_SZ_256,9);
 
-VDISP_START <= conv_std_logic_vector(VDISP_START_240,9)  when V30='1' else
-               conv_std_logic_vector(VDISP_START_224P,9) when PAL='1' else
+VDISP_START <= conv_std_logic_vector(VDISP_START_240,9)  when V30='1'  else
+               conv_std_logic_vector(VDISP_START_224P,9) when PAL='1'  else
                conv_std_logic_vector(VDISP_START_224N,9);
 
-VDISP_SIZE  <= conv_std_logic_vector(VDISP_SIZE_240,9)   when V30='1' else conv_std_logic_vector(VDISP_SIZE_224,9);
+VDISP_SIZE  <= conv_std_logic_vector(VDISP_SIZE_240,9)   when V30='1'  else conv_std_logic_vector(VDISP_SIZE_224,9);
+VDISP_SIZEi <= conv_std_logic_vector(VDISP_SIZE_240,9)   when V30i='1' else conv_std_logic_vector(VDISP_SIZE_224,9);
 
-VTOTAL      <= conv_std_logic_vector(VTOTAL_PAL,9)       when PAL='1' else conv_std_logic_vector(VTOTAL_NTSC,9);
-VSYNC_START <= conv_std_logic_vector(VSYNC_START_PAL,9)  when PAL='1' else conv_std_logic_vector(VSYNC_START_NTSC,9);
+VTOTAL      <= conv_std_logic_vector(VTOTAL_PAL,9)       when PAL='1'  else conv_std_logic_vector(VTOTAL_NTSC,9);
+VSYNC_START <= conv_std_logic_vector(VSYNC_START_PAL,9)  when PAL='1'  else conv_std_logic_vector(VSYNC_START_NTSC,9);
 VSYNC_SZ    <= conv_std_logic_vector(VSYNC_SIZE,9);
 
-VSYNC_STARTi<= conv_std_logic_vector(VSYNC_START_320i,9) when H40='1' else conv_std_logic_vector(VSYNC_START_256i,9);
+VSYNC_STARTi<= conv_std_logic_vector(VSYNC_START_320i,9) when H40='1'  else conv_std_logic_vector(VSYNC_START_256i,9);
 
-HBLANK_DMA1 <= conv_std_logic_vector(HBLANK_DMA1_320,9)  when H40='1' else conv_std_logic_vector(HBLANK_DMA1_256,9);
-HBLANK_DMA2 <= conv_std_logic_vector(HBLANK_DMA2_320,9)  when H40='1' else conv_std_logic_vector(HBLANK_DMA2_256,9);
-HBLANK_DMA3 <= conv_std_logic_vector(HBLANK_DMA3_320,9)  when H40='1' else conv_std_logic_vector(HBLANK_DMA3_256,9);
-HBLANK_DMA4 <= conv_std_logic_vector(HBLANK_DMA4_320,9)  when H40='1' else conv_std_logic_vector(HBLANK_DMA4_256,9);
+HBLANK_DMA1 <= conv_std_logic_vector(HBLANK_DMA1_320,9)  when H40='1'  else conv_std_logic_vector(HBLANK_DMA1_256,9);
+HBLANK_DMA2 <= conv_std_logic_vector(HBLANK_DMA2_320,9)  when H40='1'  else conv_std_logic_vector(HBLANK_DMA2_256,9);
+HBLANK_DMA3 <= conv_std_logic_vector(HBLANK_DMA3_320,9)  when H40='1'  else conv_std_logic_vector(HBLANK_DMA3_256,9);
+HBLANK_DMA4 <= conv_std_logic_vector(HBLANK_DMA4_320,9)  when H40='1'  else conv_std_logic_vector(HBLANK_DMA4_256,9);
 
 
 TG68_HINT_FF <= IE1 and TG68_HINT_PENDING;
@@ -1455,6 +1457,7 @@ process( RST_N, CLK )
 	variable hcnt,vcnt   : std_logic_vector(8 downto 0);
 	variable old_INTACK  : std_logic;
 	variable V30prev     : std_logic;
+	variable hint_en     : std_logic;
 begin
 	if RST_N = '0' then
 		ODD <= '0';
@@ -1474,6 +1477,7 @@ begin
 		SPE_ACTIVE <= '0';
 
 		V30prev := '1';
+		hint_en := '0';
 
 	elsif rising_edge(CLK) then
 
@@ -1554,27 +1558,32 @@ begin
 
 			V30prev := V30prev and V30i;
 
-			if H_CNT = HDISP_START + HDISP_SIZE - 1 then
+			if H_CNT = HDISP_START+HDISP_SIZE-1 then
 				V_CNT <= V_CNT + 1;
-				if V_CNT >= VTOTAL + ODD - 1 then
+				if V_CNT >= VTOTAL-1 then
 					V_CNT <= (others => '0');
 					V30 <= V30prev;
 					V30prev := '1';
 				end if;
 
-				if V_CNT = VDISP_START-1 then
+				if V_CNT = VDISP_START-1 and hint_en = '0' then
+					hint_en := '1';
 					if HIT = 0 then
 						TG68_HINT_PENDING <= '1';
 						HINT_COUNT <= (others => '0');
 					else
 						HINT_COUNT <= HIT - 1;
 					end if;
-				elsif V_CNT >= VDISP_START and V_CNT < VDISP_END-1 then
-					if HINT_COUNT = 0 then
-						TG68_HINT_PENDING <= '1';
-						HINT_COUNT <= HIT;
+				elsif hint_en = '1' then
+					if V_CNT = VDISP_START+VDISP_SIZEi-1 then
+						hint_en := '0';
 					else
-						HINT_COUNT <= HINT_COUNT - 1;
+						if HINT_COUNT = 0 then
+							TG68_HINT_PENDING <= '1';
+							HINT_COUNT <= HIT;
+						else
+							HINT_COUNT <= HINT_COUNT - 1;
+						end if;
 					end if;
 				end if;
 
@@ -1586,7 +1595,7 @@ begin
 					IN_VBL <= '0';
 				end if;
 
-				if V_CNT = VDISP_END - 1 then
+				if V_CNT = VDISP_END-1 then
 					IN_VBL <= '1';
 					IN_VBL_F <= '1';
 					ODD <= not ODD and LSM(0);
