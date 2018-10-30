@@ -130,7 +130,7 @@ localparam CONF_STR = {
 	"-;",
 	"R0,Reset;",
 	"J1,A,B,C,Start,Mode,X,Y,Z;",
-	"V,v1.51.",`BUILD_DATE
+	"V,v1.55.",`BUILD_DATE
 };
 
 
