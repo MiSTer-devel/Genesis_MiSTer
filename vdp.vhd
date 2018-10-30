@@ -640,7 +640,10 @@ HSCB  <= REG(13)(5 downto 0);
 ADDR_STEP <= REG(15);
 
 HSIZE <= REG(16)(1 downto 0);
-VSIZE <= REG(16)(5 downto 4);
+VSIZE <= "01" when HSIZE = 1 and REG(16)(5 downto 4) > 1
+    else "00" when HSIZE > 1
+    else REG(16)(5 downto 4);
+
 INVSZ <= '1' when HSIZE = 2 or VSIZE = 2 else '0';
 
 WHP   <= REG(17)(4 downto 0);
