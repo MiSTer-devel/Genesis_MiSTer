@@ -1566,14 +1566,9 @@ begin
 					V30prev := '1';
 				end if;
 
-				if V_CNT = VDISP_START-1 and hint_en = '0' then
+				if V_CNT = VDISP_START-2 and hint_en = '0' then
+					HINT_COUNT <= HIT;
 					hint_en := '1';
-					if HIT = 0 then
-						TG68_HINT_PENDING <= '1';
-						HINT_COUNT <= (others => '0');
-					else
-						HINT_COUNT <= HIT - 1;
-					end if;
 				elsif hint_en = '1' then
 					if V_CNT = VDISP_START+VDISP_SIZEi-1 then
 						hint_en := '0';
