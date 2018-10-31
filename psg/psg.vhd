@@ -14,7 +14,7 @@ entity psg is
 		reset	: in  STD_LOGIC;
 		WR_n	: in  STD_LOGIC;
 		D_in	: in  STD_LOGIC_VECTOR(7 downto 0);
-		output: out STD_LOGIC_VECTOR(5 downto 0)
+		snd   : out STD_LOGIC_VECTOR(5 downto 0)
 	);
 end entity;
 
@@ -131,7 +131,7 @@ begin
 		end if;
 	end process;
 	
-	output <= std_logic_vector(
+	snd <= std_logic_vector(
 		  unsigned("00"&output0)
 		+ unsigned("00"&output1)
 		+ unsigned("00"&output2)
