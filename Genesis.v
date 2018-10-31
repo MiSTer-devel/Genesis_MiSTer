@@ -146,22 +146,18 @@ end
 
 wire TG68_DTACK_N =	TG68_ROM_SEL  ? TG68_ROM_DTACK_N  :
 							TG68_RAM_SEL  ? TG68_RAM_DTACK_N  :
-							TG68_ZRAM_SEL ? TG68_ZRAM_DTACK_N :
 							TG68_CTRL_SEL ? TG68_CTRL_DTACK_N :
 							TG68_IO_SEL   ? TG68_IO_DTACK_N   :
-							TG68_BAR_SEL  ? TG68_BAR_DTACK_N  :
 							TG68_VDP_SEL  ? TG68_VDP_DTACK_N  :
-							TG68_FM_SEL   ? TG68_FM_DTACK_N   :
+							TG68_ZBUS_SEL ? TG68_ZBUS_DTACK_N :
 							1'b0;
 
 wire [15:0] TG68_DI= TG68_ROM_SEL  ? TG68_ROM_D  :
 							TG68_RAM_SEL  ? TG68_RAM_D  :
-							TG68_ZRAM_SEL ? TG68_ZRAM_D :
 							TG68_CTRL_SEL ? TG68_CTRL_D :
 							TG68_IO_SEL   ? TG68_IO_D   :
-							TG68_BAR_SEL  ? TG68_BAR_D  :
 							TG68_VDP_SEL  ? TG68_VDP_D  :
-							TG68_FM_SEL   ? TG68_FM_D   :
+							TG68_ZBUS_SEL ? TG68_ZBUS_D :
 							NO_DATA;
 
 TG68KdotC_Kernel #(.TASbug(1)) CPU_68K
@@ -196,24 +192,20 @@ wire [15:0] T80_A;
 wire  [7:0] T80_DO;
 wire        T80_IO = ~T80_MREQ_N & (~T80_RD_N | ~T80_WR_N);
 
-wire T80_WAIT_N = T80_RAM_SEL  ? ~T80_RAM_DTACK_N  :
-						T80_ZRAM_SEL ? ~T80_ZRAM_DTACK_N :
-						T80_ROM_SEL  ? ~T80_ROM_DTACK_N  :
+wire T80_WAIT_N = T80_ROM_SEL  ? ~T80_ROM_DTACK_N  :
+						T80_RAM_SEL  ? ~T80_RAM_DTACK_N  :
 						T80_CTRL_SEL ? ~T80_CTRL_DTACK_N :
 						T80_IO_SEL   ? ~T80_IO_DTACK_N   :
-						T80_BAR_SEL  ? ~T80_BAR_DTACK_N  :
 						T80_VDP_SEL  ? ~T80_VDP_DTACK_N  :
-						T80_FM_SEL   ? ~T80_FM_DTACK_N   :
+						T80_ZBUS_SEL ? ~T80_ZBUS_DTACK_N :
 						1'b1;
 
-wire [7:0] T80_DI =	T80_RAM_SEL  ? T80_RAM_D  :
-							T80_ZRAM_SEL ? T80_ZRAM_D :
-							T80_ROM_SEL  ? T80_ROM_D  :
+wire [7:0] T80_DI =	T80_ROM_SEL  ? T80_ROM_D  :
+							T80_RAM_SEL  ? T80_RAM_D  :
 							T80_CTRL_SEL ? T80_CTRL_D :
 							T80_IO_SEL   ? T80_IO_D   :
-							T80_BAR_SEL  ? T80_BAR_D  :
 							T80_VDP_SEL  ? T80_VDP_D  :
-							T80_FM_SEL   ? T80_FM_D   :
+							T80_ZBUS_SEL ? T80_ZBUS_D :
 							8'hFF;
 
 T80s #(.T2Write(1)) CPU_Z80
@@ -292,129 +284,6 @@ always @(posedge MCLK) begin
 				T80_CTRL_D <= NO_DATA[7:0];
 				if ({BAR[15], T80_A[14:8]} == 8'h11 && !T80_A[0]) T80_CTRL_D[0] <= T80_BUSAK_N;
 			end
-		end
-	end
-end
-
-
-// BANK ADDRESS REGISTER
-// Z80: 6000-60FF
-// 68000: A06000-A060FF
-
-reg [23:15] BAR;
-reg         TG68_BAR_DTACK_N;
-reg         T80_BAR_DTACK_N;
-
-wire        TG68_BAR_SEL = TG68_A[23:8] == 16'hA060 && TG68_IO;
-wire        T80_BAR_SEL  = T80_A[15:8] == 8'h60 && T80_IO;
-wire [15:0] TG68_BAR_D   = 16'hFFFF;
-wire  [7:0] T80_BAR_D    = 8'hFF;
-
-always @(posedge MCLK) begin
-	if (~RESET_N) begin
-		TG68_BAR_DTACK_N <= 1;
-		T80_BAR_DTACK_N  <= 1;
-		BAR <= 0;
-	end
-	else begin
-		if (~TG68_BAR_SEL) TG68_BAR_DTACK_N <= 1;
-		if (~T80_BAR_SEL)  T80_BAR_DTACK_N  <= 1;
-
-		if (TG68_BAR_SEL & TG68_BAR_DTACK_N) begin
-			if(~TG68_RNW & ~TG68_UDS_N) BAR <= {TG68_DO[8], BAR[23:16]};
-			TG68_BAR_DTACK_N <= 1'b0;
-		end
-		else if (T80_BAR_SEL & T80_BAR_DTACK_N) begin
-			if (~T80_WR_N) BAR <= {T80_DO[0], BAR[23:16]};
-			T80_BAR_DTACK_N <= 0;
-		end
-	end
-end
-
-
-//--------------------------------------------------------------
-// YM2612
-//--------------------------------------------------------------
-// Z80:   4000-4003 (4000-5FFF)
-// 68000: A04000-A04003 (A04000-A05FFF)
-
-reg   [1:0] FM_A;
-reg         FM_RNW;
-reg   [7:0] FM_DI;
-wire  [7:0] FM_DO;
-reg         TG68_FM_DTACK_N;
-reg         T80_FM_DTACK_N;
-wire [11:0] FM_right;
-wire [11:0] FM_left;
-
-
-wire  [9:0] FM_FIFO_DO;
-reg         FM_FIFO_RD;
-wire        FM_FIFO_EMPTY;
-fmfifo fifo
-(
-	.aclr(~T80_RESET_N),
-
-	.rdclk(MCLK),
-	.rdreq(FM_FIFO_RD),
-	.rdempty(FM_FIFO_EMPTY),
-	.q(FM_FIFO_DO),
-
-	.wrclk(MCLK),
-	.wrreq(~FM_RNW),
-	.data({FM_A, FM_DI})
-);
-
-always @(posedge MCLK) FM_FIFO_RD <= ~(FM_DO[7] | FM_FIFO_EMPTY | FM_FIFO_RD);
-
-jt12 fm
-(
-	.rst(~RESET_N), //not T80_RESET_N,
-	.clk(MCLK),
-	.cen(TG68_CLKEN),
-
-	.limiter_en(1),
-	.cs_n(0),
-	.addr(FM_FIFO_DO[9:8]),
-	.wr_n(FM_FIFO_RD),
-	.din(FM_FIFO_DO[7:0]),
-	.dout(FM_DO),
-
-	.snd_left(FM_left),
-	.snd_right(FM_right)
-);
-
-assign DAC_LDATA = ({FM_left[11],  FM_left})  + ({PSG_SND, 3'b000});
-assign DAC_RDATA = ({FM_right[11], FM_right}) + ({PSG_SND, 3'b000});
-
-wire        TG68_FM_SEL = TG68_A[23:13] == {8'hA0, 3'b010} && TG68_IO;
-wire        T80_FM_SEL = T80_A[15:13] == 3'b010 && T80_IO;
-wire [15:0] TG68_FM_D = {FM_DO, FM_DO};
-wire  [7:0] T80_FM_D = FM_DO;
-
-always @(posedge MCLK) begin
-	if (~RESET_N) begin
-		TG68_FM_DTACK_N <= 1;
-		T80_FM_DTACK_N  <= 1;
-		FM_RNW <= 1;
-	end
-	else begin
-		if (~TG68_FM_SEL) TG68_FM_DTACK_N <= 1;
-		if (~T80_FM_SEL)  T80_FM_DTACK_N  <= 1;
-
-		FM_RNW <= 1;
-		if (TG68_FM_SEL & TG68_FM_DTACK_N) begin
-			FM_A[1] <= TG68_A[1];
-			FM_RNW <= TG68_RNW;
-			FM_A[0] <= ~TG68_LDS_N;
-			FM_DI <= (~TG68_LDS_N) ? TG68_DO[7:0] : TG68_DO[15:8];
-			TG68_FM_DTACK_N <= 0;
-		end
-		else if (T80_FM_SEL & T80_FM_DTACK_N) begin
-			FM_A <= T80_A[1:0];
-			FM_RNW <= T80_WR_N;
-			FM_DI <= T80_DO;
-			T80_FM_DTACK_N <= 0;
 		end
 	end
 end
@@ -932,83 +801,151 @@ end
 
 
 //-----------------------------------------------------------------------
-// Z80 RAM Handling
+// ZBUS Handling
 //-----------------------------------------------------------------------
-reg  [12:0] zram_a;
-reg   [7:0] zram_d;
-wire  [7:0] zram_q;
-reg         zram_we;
+// 68000: A00000-A0FFFF
 
+reg [15:0] ZBUS_A;
+reg        ZBUS_WE;
+reg  [7:0] ZBUS_D;
+wire [7:0] ZBUS_Q = ZRAM_SEL ? ZRAM_Q : FM_SEL ? FM_DO : 8'hFF;
+
+reg [15:0] TG68_ZBUS_D;
+reg  [7:0] T80_ZBUS_D;
+reg        TG68_ZBUS_DTACK_N;
+reg        T80_ZBUS_DTACK_N;
+wire       TG68_ZBUS_SEL = TG68_A[23:16] == 8'hA0 && TG68_IO && (~T80_BUSAK_N | ~T80_RESET_N);
+wire       T80_ZBUS_SEL  = ~T80_A[15] && T80_IO;
+
+// RAM 0000-1FFF (2000-3FFF)
+wire ZRAM_SEL = !ZBUS_A[15:14];
+
+wire  [7:0] ZRAM_Q;
 dpram #(13) ramZ80
 (
 	.clock(MCLK),
-	.address_a(zram_a),
-	.data_a(zram_d),
-	.wren_a(zram_we),
-	.q_a(zram_q)
+	.address_a(ZBUS_A[12:0]),
+	.data_a(ZBUS_D),
+	.wren_a(ZBUS_WE & ZRAM_SEL),
+	.q_a(ZRAM_Q)
 );
 
-reg [15:0] TG68_ZRAM_D;
-reg        TG68_ZRAM_DTACK_N;
-reg  [7:0] T80_ZRAM_D;
-reg        T80_ZRAM_DTACK_N;
-
-wire TG68_ZRAM_SEL = TG68_A[23:14] == {8'hA0, 2'b00} && TG68_IO && (~T80_BUSAK_N | ~T80_RESET_N);
-wire T80_ZRAM_SEL  = !T80_A[15:14] && T80_IO;
-
 always @(posedge MCLK) begin
-	reg [1:0] ZRC;
-	reg       ZRCP;
+	reg [1:0] state;
+	reg       wt;
 
-	localparam	ZRC_IDLE = 0,
-					ZRC_ACC1 = 1,
-					ZRC_ACC2 = 2;
+	localparam	IDLE  = 0,
+					READ6 = 1,
+					READ8 = 2;
 
-	zram_we <= 0;
+	ZBUS_WE <= 0;
+	wt <= 0;
 
 	if (~RESET_N) begin
-		TG68_ZRAM_DTACK_N <= 1;
-		T80_ZRAM_DTACK_N  <= 1;
-		ZRC <= ZRC_IDLE;
+		TG68_ZBUS_DTACK_N <= 1;
+		T80_ZBUS_DTACK_N  <= 1;
+		state <= IDLE;
 	end
 	else begin
-		if (~TG68_ZRAM_SEL) TG68_ZRAM_DTACK_N <= 1;
-		if (~T80_ZRAM_SEL)  T80_ZRAM_DTACK_N  <= 1;
+		if (~TG68_ZBUS_SEL) TG68_ZBUS_DTACK_N <= 1;
+		if (~T80_ZBUS_SEL)  T80_ZBUS_DTACK_N  <= 1;
 
-		case (ZRC)
-		ZRC_IDLE:
-			if (TG68_ZRAM_SEL & TG68_ZRAM_DTACK_N) begin
-				zram_a <= {TG68_A[12:1], TG68_UDS_N};
-				zram_d <= (~TG68_UDS_N) ? TG68_DO[15:8] : TG68_DO[7:0];
-				zram_we <= ~TG68_RNW;
-				ZRCP <= 0;
-				ZRC <= ZRC_ACC1;
+		case (state)
+		IDLE:
+			if (TG68_ZBUS_SEL & TG68_ZBUS_DTACK_N) begin
+				ZBUS_A <= {1'b0, TG68_A[14:1], TG68_UDS_N};
+				ZBUS_D <= (~TG68_UDS_N) ? TG68_DO[15:8] : TG68_DO[7:0];
+				ZBUS_WE <= ~TG68_RNW;
+				wt <= 1;
+				state <= READ6;
 			end
-			else if (T80_ZRAM_SEL & T80_ZRAM_DTACK_N) begin
-				zram_a <= T80_A[12:0];
-				zram_d <= T80_DO;
-				zram_we <= ~T80_WR_N;
-				ZRCP <= 1;
-				ZRC <= ZRC_ACC1;
+			else if (T80_ZBUS_SEL & T80_ZBUS_DTACK_N) begin
+				ZBUS_A <= T80_A;
+				ZBUS_D <= T80_DO;
+				ZBUS_WE <= ~T80_WR_N;
+				wt <= 1;
+				state <= READ8 ;
 			end
 
-		ZRC_ACC1: ZRC <= ZRC_ACC2;
+		READ6:
+			if (~wt) begin
+				TG68_ZBUS_D <= {ZBUS_Q, ZBUS_Q};
+				TG68_ZBUS_DTACK_N <= 0;
+				state <= IDLE;
+			end
 
-		ZRC_ACC2:
-			begin
-				if (!ZRCP) begin
-					TG68_ZRAM_D <= {zram_q, zram_q};
-					TG68_ZRAM_DTACK_N <= 0;
-				end
-				else begin
-					T80_ZRAM_D <= zram_q;
-					T80_ZRAM_DTACK_N <= 0;
-				end
-				ZRC <= ZRC_IDLE;
+		READ8:
+			if (~wt) begin
+				T80_ZBUS_D <= ZBUS_Q;
+				T80_ZBUS_DTACK_N <= 0;
+				state <= IDLE;
 			end
 		endcase
 	end
 end
+
+//-----------------------------------------------------------------------
+// Z80 BANK REGISTER
+//-----------------------------------------------------------------------
+// 6000-60FF
+
+wire BANK_SEL = ZBUS_A[15:8] == 8'h60;
+reg [23:15] BAR;
+
+always @(posedge MCLK) begin
+	if (~RESET_N) BAR <= 0;
+	else if (BANK_SEL & ZBUS_WE) BAR <= {ZBUS_D[0], BAR[23:16]};
+end
+
+//--------------------------------------------------------------
+// YM2612
+//--------------------------------------------------------------
+// 4000-4003 (4000-5FFF)
+
+wire        FM_SEL = ZBUS_A[15:13] == 3'b010;
+wire  [7:0] FM_DO;
+wire [11:0] FM_right;
+wire [11:0] FM_left;
+
+wire  [9:0] FM_FIFO_DO;
+reg         FM_FIFO_RD;
+wire        FM_FIFO_EMPTY;
+fmfifo fifo
+(
+	.aclr(~T80_RESET_N),
+
+	.rdclk(MCLK),
+	.rdreq(FM_FIFO_RD),
+	.rdempty(FM_FIFO_EMPTY),
+	.q(FM_FIFO_DO),
+
+	.wrclk(MCLK),
+	.wrreq(FM_SEL & ZBUS_WE),
+	.data({ZBUS_A[1:0], ZBUS_D})
+);
+
+always @(posedge MCLK) FM_FIFO_RD <= ~(FM_DO[7] | FM_FIFO_EMPTY | FM_FIFO_RD);
+
+jt12 fm
+(
+	.rst(~RESET_N), //~T80_RESET_N,
+	.clk(MCLK),
+	.cen(TG68_CLKEN),
+
+	.limiter_en(1),
+	.cs_n(0),
+	.addr(FM_FIFO_DO[9:8]),
+	.wr_n(FM_FIFO_RD),
+	.din(FM_FIFO_DO[7:0]),
+	.dout(FM_DO),
+
+	.snd_left(FM_left),
+	.snd_right(FM_right)
+);
+
+assign DAC_LDATA = ({FM_left[11],  FM_left})  + ({PSG_SND, 3'b000});
+assign DAC_RDATA = ({FM_right[11], FM_right}) + ({PSG_SND, 3'b000});
+
 
 //-----------------------------------------------------------------------
 // BUS NOISE GENERATOR
