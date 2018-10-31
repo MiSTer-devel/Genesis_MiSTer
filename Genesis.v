@@ -73,21 +73,18 @@ module Genesis
 // CLOCK GENERATION
 //--------------------------------------------------------------
 reg TG68_CLKEN;
-reg T80_CLKENp;
-reg T80_CLKENn;
+reg T80_CLKEN;
 
 always @(negedge MCLK) begin
 	reg [3:0] VCLKCNT = 0;
 	reg [3:0] ZCLKCNT = 0;
 
+	T80_CLKEN <= 0;
 	ZCLKCNT <= ZCLKCNT + 1'b1;
-	if (ZCLKCNT == 14) ZCLKCNT <= 0;
-
-	T80_CLKENp <= 0;
-	if (ZCLKCNT == 0) T80_CLKENp <= 1;
-
-	T80_CLKENn <= 0;
-	if (ZCLKCNT == 7) T80_CLKENn <= 1;
+	if (ZCLKCNT == 14) begin
+		ZCLKCNT <= 0;
+		T80_CLKEN <= 1;
+	end
 
 	TG68_CLKEN <= 0;
 	VCLKCNT <= VCLKCNT + 1'b1;
@@ -126,12 +123,12 @@ always @(posedge MCLK) begin
 		if (TG68_ENA_DIV == 3 && !TG68_DTACK_N) begin
 			TG68_ENA_DIV <= TG68_ENA_DIV + 1'b1;
 			TG68_AS_N <= 1;
-		end 
+		end
 
 		// keep counter at 0 in non-bus cycles.
 		if (TG68_STATE == 1) TG68_ENA_DIV <= 0;
 	end
-end 
+end
 
 wire TG68_ENA    = (TG68_CLKEN && (TG68_STATE == 1 || (TG68_ENA_DIV == 3 && !TG68_DTACK_N)));
 wire TG68_INTACK = !TG68_AS_N & &TG68_FC;
@@ -141,8 +138,8 @@ always @(posedge MCLK) begin
 		if (TG68_VINT) TG68_IPL_N <= 3'b001;
 		else if (TG68_HINT) TG68_IPL_N <= 3'b011;
 		else TG68_IPL_N <= 3'b111;
-	end 
-end 
+	end
+end
 
 wire TG68_DTACK_N =	TG68_ROM_SEL  ? TG68_ROM_DTACK_N  :
 							TG68_RAM_SEL  ? TG68_RAM_DTACK_N  :
@@ -204,7 +201,7 @@ wire T80_WAIT_N = T80_RAM_SEL  ? ~T80_RAM_DTACK_N  :
 						T80_VDP_SEL  ? ~T80_VDP_DTACK_N  :
 						T80_FM_SEL   ? ~T80_FM_DTACK_N   :
 						1'b1;
-   
+
 wire [7:0] T80_DI =	T80_RAM_SEL  ? T80_RAM_D  :
 							T80_ZRAM_SEL ? T80_ZRAM_D :
 							T80_ROM_SEL  ? T80_ROM_D  :
@@ -215,14 +212,13 @@ wire [7:0] T80_DI =	T80_RAM_SEL  ? T80_RAM_D  :
 							T80_FM_SEL   ? T80_FM_D   :
 							8'hFF;
 
-T80pa CPU_Z80
+T80s CPU_Z80
 (
 	.reset_n(T80_RESET_N),
 	.clk(MCLK),
-	.cen_p(T80_CLKENp),
-	.cen_n(T80_CLKENn),
+	.cen(T80_CLKEN),
 	.wait_n(T80_WAIT_N),
-	.int_n((~T80_VINT)),
+	.int_n(~T80_VINT),
 	.busrq_n(T80_BUSRQ_N),
 	.m1_n(T80_M1_N),
 	.mreq_n(T80_MREQ_N),
@@ -268,7 +264,7 @@ always @(posedge MCLK) begin
 				end
 				else if (TG68_A[15:8] == 8'h12) begin
 					if (~TG68_UDS_N) T80_RESET_N <= TG68_DO[8];
-				end 
+				end
 			end
 			else begin
 				// Read
@@ -293,8 +289,8 @@ always @(posedge MCLK) begin
 				T80_CTRL_D <= NO_DATA[7:0];
 				if ({BAR[15], T80_A[14:8]} == 8'h11 && !T80_A[0]) T80_CTRL_D[0] <= T80_BUSAK_N;
 			end
-		end 
-	end 
+		end
+	end
 end
 
 
@@ -328,8 +324,8 @@ always @(posedge MCLK) begin
 		else if (T80_BAR_SEL & T80_BAR_DTACK_N) begin
 			if (~T80_WR_N) BAR <= {T80_DO[0], BAR[23:16]};
 			T80_BAR_DTACK_N <= 0;
-		end 
-	end 
+		end
+	end
 end
 
 
@@ -416,7 +412,7 @@ always @(posedge MCLK) begin
 			FM_RNW <= T80_WR_N;
 			FM_DI <= T80_DO;
 			T80_FM_DTACK_N <= 0;
-		end 
+		end
 	end
 end
 
@@ -456,12 +452,12 @@ wire TG68_VDP_SEL = (TG68_A[23:21] == 3'b110 && !TG68_A[18:16] && !TG68_A[7:5] &
 wire T80_VDP_SEL  = (T80_A[15:5] == {8'h7F, 3'b000} && !T80_MREQ_N && (!T80_RD_N || !T80_WR_N))
                  || (T80_A[15] && BAR[23:21] == 3'b110 && !BAR[18:16] && !TG68_A[7:5] && !T80_MREQ_N && (!T80_RD_N || !T80_WR_N));	// 68000 Address space
 
-wire VBUS_DTACK_N = 	DMA_ROM_SEL ? DMA_ROM_DTACK_N : 
-							DMA_RAM_SEL ? DMA_RAM_DTACK_N : 
+wire VBUS_DTACK_N = 	DMA_ROM_SEL ? DMA_ROM_DTACK_N :
+							DMA_RAM_SEL ? DMA_RAM_DTACK_N :
 							1'b0;
 
-wire [15:0] VBUS_DATA = DMA_ROM_SEL ? DMA_ROM_D : 
-								DMA_RAM_SEL ? DMA_RAM_D : 
+wire [15:0] VBUS_DATA = DMA_ROM_SEL ? DMA_ROM_D :
+								DMA_RAM_SEL ? DMA_RAM_D :
 								16'hFFFF;
 
 wire        vram_req;
@@ -544,7 +540,7 @@ psg psg
 (
 	.reset(~RESET_N),
 	.clk(MCLK),
-	.clken(T80_CLKENp),
+	.clken(T80_CLKEN),
 
 	.wr_n(VDP_RNW | ~VDP_SEL | ~VDP_A[4] | VDP_A[3]),
 	.d_in(VDP_DI[15:8]),
@@ -554,10 +550,10 @@ psg psg
 always @(posedge MCLK) begin
 	reg [1:0] VDPC;
 
-	localparam 	VDPC_IDLE = 0,
+	localparam 	VDPC_IDLE     = 0,
 					VDPC_TG68_ACC = 1,
-					VDPC_T80_ACC = 2,
-					VDPC_DESEL = 3;
+					VDPC_T80_ACC  = 2,
+					VDPC_DESEL    = 3;
 
 	if (~RESET_N) begin
 		TG68_VDP_DTACK_N <= 1;
@@ -584,7 +580,7 @@ always @(posedge MCLK) begin
 					VDP_RNW <= T80_WR_N;
 					VDP_DI <= {T80_DO, T80_DO};
 					VDPC <= VDPC_T80_ACC;
-				end 
+				end
 
 			VDPC_TG68_ACC:
 				if (~VDP_DTACK_N) begin
@@ -592,7 +588,7 @@ always @(posedge MCLK) begin
 					TG68_VDP_D <= VDP_DO;
 					TG68_VDP_DTACK_N <= 0;
 					VDPC <= VDPC_DESEL;
-				end 
+				end
 
 			VDPC_T80_ACC:
 				if (~VDP_DTACK_N) begin
@@ -600,17 +596,17 @@ always @(posedge MCLK) begin
 					T80_VDP_D <= (~T80_A[0]) ? VDP_DO[15:8] : T80_VDP_D <= VDP_DO[7:0];
 					T80_VDP_DTACK_N <= 0;
 					VDPC <= VDPC_DESEL;
-				end 
-			
+				end
+
 			VDPC_DESEL:
 				if (VDP_DTACK_N) begin
 					VDP_RNW <= 1;
 					VDPC <= VDPC_IDLE;
-				end 
+				end
 		endcase
-	end 
+	end
 end
-   
+
 //--------------------------------------------------------------
 // I/O
 //--------------------------------------------------------------
@@ -677,10 +673,10 @@ wire T80_IO_SEL  = (T80_A[15] && {BAR, T80_A[14:5]} == {16'hA100, 3'b000} && !T8
 always @(posedge MCLK) begin
 	reg [1:0] IOC;
 
-	localparam 	IOC_IDLE = 0,
+	localparam 	IOC_IDLE     = 0,
 					IOC_TG68_ACC = 1,
-					IOC_T80_ACC = 2,
-					IOC_DESEL = 3;
+					IOC_T80_ACC  = 2,
+					IOC_DESEL    = 3;
 
 	if (~TG68_IO_SEL) TG68_IO_DTACK_N <= 1;
 	if (~T80_IO_SEL)  T80_IO_DTACK_N  <= 1;
@@ -701,7 +697,7 @@ always @(posedge MCLK) begin
 			IO_DI <= T80_DO;
 			IOC <= IOC_T80_ACC;
 		end
-	
+
 	IOC_TG68_ACC:
 		if (~IO_DTACK_N) begin
 			IO_SEL <= 0;
@@ -709,7 +705,7 @@ always @(posedge MCLK) begin
 			TG68_IO_DTACK_N <= 0;
 			IOC <= IOC_DESEL;
 		end
-	
+
 	IOC_T80_ACC:
 		if (~IO_DTACK_N) begin
 			IO_SEL <= 0;
@@ -786,7 +782,7 @@ always @(posedge MCLK) begin
 				TG68_ROM_D <= ROM_DATA;
 				TG68_ROM_DTACK_N <= 0;
 				ROMC <= ROMC_IDLE;
-			end 
+			end
 
 		ROMC_T80_RD:
 			if (ROM_REQ == ROM_ACK) begin
@@ -803,8 +799,8 @@ always @(posedge MCLK) begin
 			end
 		endcase
 	end
-end 
-   
+end
+
 
 //-----------------------------------------------------------------------
 // 68K RAM Handling
@@ -854,8 +850,8 @@ always @(posedge MCLK) begin
 
 	localparam 	RAMC_IDLE = 0,
 					RAMC_TG68 = 1,
-					RAMC_DMA = 2,
-					RAMC_T80 = 3;
+					RAMC_DMA  = 2,
+					RAMC_T80  = 3;
 
 	if (~RESET_N) begin
 		TG68_RAM_DTACK_N <= 1;
@@ -903,8 +899,8 @@ always @(posedge MCLK) begin
 				TG68_RAM_D <= ram68k_q;
 				TG68_RAM_DTACK_N <= 0;
 				RAMC <= RAMC_IDLE;
-			end 
-		
+			end
+
 		RAMC_T80:
 			if (ram68k_req == ram68k_ack) begin
 				T80_RAM_D <= (T80_A[0]) ? ram68k_q[7:0] : ram68k_q[15:8];
@@ -920,7 +916,7 @@ always @(posedge MCLK) begin
 			end
 		endcase
 	end
-end 
+end
 
 
 //-----------------------------------------------------------------------
@@ -951,7 +947,7 @@ reg        T80_ZRAM_DTACK_N;
 always @(posedge MCLK) begin
 	reg [1:0] ZRC;
 	reg       ZRCP;
-	
+
 	localparam	ZRC_IDLE = 0,
 					ZRC_ACC1 = 1,
 					ZRC_ACC2 = 2;
@@ -1002,9 +998,9 @@ always @(posedge MCLK) begin
 				ZRC <= ZRC_IDLE;
 			end
 		endcase
-	end 
+	end
 end
-   
+
 //-----------------------------------------------------------------------
 // BUS NOISE GENERATOR
 //-----------------------------------------------------------------------
@@ -1015,7 +1011,7 @@ always @(posedge MCLK) begin
 	if (TG68_CLKEN) begin
 		lfsr = {(lfsr[0] ^ lfsr[2] ^ !lfsr), lfsr[16:1]};
 		NO_DATA <= {NO_DATA[14:0], lfsr[0]};
-	end 
+	end
 end
-   
+
 endmodule
