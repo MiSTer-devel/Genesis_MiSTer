@@ -366,7 +366,6 @@ set_global_assignment -name QIP_FILE sys/sys_q13.qip
 set_global_assignment -name QIP_FILE TG68K/TG68K.qip
 set_global_assignment -name QIP_FILE T80/t80.qip
 set_global_assignment -name QIP_FILE jt12/jt12.qip
-set_global_assignment -name VHDL_FILE fmfifo.vhd
 set_global_assignment -name VHDL_FILE psg/psg_tone.vhd
 set_global_assignment -name VHDL_FILE psg/psg_noise.vhd
 set_global_assignment -name VHDL_FILE psg/psg.vhd

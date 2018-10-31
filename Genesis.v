@@ -832,14 +832,14 @@ dpram #(13) ramZ80
 
 always @(posedge MCLK) begin
 	reg [1:0] state;
-	reg       wt;
+	reg       src;
+	reg       we;
 
-	localparam	IDLE  = 0,
-					READ6 = 1,
-					READ8 = 2;
+	localparam	IDLE = 0,
+					TEST = 1,
+					READ = 2;
 
 	ZBUS_WE <= 0;
-	wt <= 0;
 
 	if (~RESET_N) begin
 		TG68_ZBUS_DTACK_N <= 1;
@@ -855,29 +855,34 @@ always @(posedge MCLK) begin
 			if (TG68_ZBUS_SEL & TG68_ZBUS_DTACK_N) begin
 				ZBUS_A <= {1'b0, TG68_A[14:1], TG68_UDS_N};
 				ZBUS_D <= (~TG68_UDS_N) ? TG68_DO[15:8] : TG68_DO[7:0];
-				ZBUS_WE <= ~TG68_RNW;
-				wt <= 1;
-				state <= READ6;
+				we <= ~TG68_RNW;
+				src <= 0;
+				state <= TEST;
 			end
 			else if (T80_ZBUS_SEL & T80_ZBUS_DTACK_N) begin
 				ZBUS_A <= T80_A;
 				ZBUS_D <= T80_DO;
-				ZBUS_WE <= ~T80_WR_N;
-				wt <= 1;
-				state <= READ8 ;
+				we <= ~T80_WR_N;
+				src <= 1;
+				state <= TEST;
 			end
 
-		READ6:
-			if (~wt) begin
-				TG68_ZBUS_D <= {ZBUS_Q, ZBUS_Q};
-				TG68_ZBUS_DTACK_N <= 0;
-				state <= IDLE;
+		TEST:
+			if (~(FM_SEL & we & FM_DO[7])) begin
+				ZBUS_WE <= we;
+				state <= READ;
 			end
 
-		READ8:
-			if (~wt) begin
-				T80_ZBUS_D <= ZBUS_Q;
-				T80_ZBUS_DTACK_N <= 0;
+		READ:
+			begin
+				if (~src) begin
+					TG68_ZBUS_D <= {ZBUS_Q, ZBUS_Q};
+					TG68_ZBUS_DTACK_N <= 0;
+				end
+				else begin
+					T80_ZBUS_D <= ZBUS_Q;
+					T80_ZBUS_DTACK_N <= 0;
+				end
 				state <= IDLE;
 			end
 		endcase
@@ -907,25 +912,6 @@ wire  [7:0] FM_DO;
 wire [11:0] FM_right;
 wire [11:0] FM_left;
 
-wire  [9:0] FM_FIFO_DO;
-reg         FM_FIFO_RD;
-wire        FM_FIFO_EMPTY;
-fmfifo fifo
-(
-	.aclr(~T80_RESET_N),
-
-	.rdclk(MCLK),
-	.rdreq(FM_FIFO_RD),
-	.rdempty(FM_FIFO_EMPTY),
-	.q(FM_FIFO_DO),
-
-	.wrclk(MCLK),
-	.wrreq(FM_SEL & ZBUS_WE),
-	.data({ZBUS_A[1:0], ZBUS_D})
-);
-
-always @(posedge MCLK) FM_FIFO_RD <= ~(FM_DO[7] | FM_FIFO_EMPTY | FM_FIFO_RD);
-
 jt12 fm
 (
 	.rst(~RESET_N), //~T80_RESET_N,
@@ -934,9 +920,9 @@ jt12 fm
 
 	.limiter_en(1),
 	.cs_n(0),
-	.addr(FM_FIFO_DO[9:8]),
-	.wr_n(FM_FIFO_RD),
-	.din(FM_FIFO_DO[7:0]),
+	.addr(ZBUS_A[1:0]),
+	.wr_n(~(FM_SEL & ZBUS_WE)),
+	.din(ZBUS_D),
 	.dout(FM_DO),
 
 	.snd_left(FM_left),
