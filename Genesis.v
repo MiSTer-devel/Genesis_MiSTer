@@ -217,7 +217,9 @@ T80s #(.T2Write(1)) CPU_Z80
 wire TG68_CTRL_SEL = TG68_A[23:12] == 12'hA11 && TG68_A[7:1] == 0;
 wire T80_CTRL_SEL  = T80_A[15] && ({BAR[23:15], T80_A[14:12]} == 12'hA11) && T80_A[7:0] == 0;
 
-wire        CTRL_F  = (MBUS_A[11:8] == 1) ? T80_BUSAK_N : (MBUS_A[11:8] == 2) ? T80_RESET_N : NO_DATA[8];
+wire        ZBUSACK_N = T80_RESET_N ? T80_BUSAK_N : T80_BUSRQ_N;
+
+wire        CTRL_F  = (MBUS_A[11:8] == 1) ? ZBUSACK_N : (MBUS_A[11:8] == 2) ? T80_RESET_N : NO_DATA[8];
 wire [15:0] CTRL_DO = {NO_DATA[15:9], CTRL_F, NO_DATA[7:0]};
 reg         CTRL_WE;
 always @(posedge MCLK) begin
@@ -668,7 +670,7 @@ reg [15:0] TG68_ZBUS_D;
 reg  [7:0] T80_ZBUS_D;
 reg        TG68_ZBUS_DTACK_N;
 reg        T80_ZBUS_DTACK_N;
-wire       TG68_ZBUS_SEL = TG68_A[23:16] == 8'hA0 && TG68_IO && (~T80_BUSAK_N | ~T80_RESET_N);
+wire       TG68_ZBUS_SEL = TG68_A[23:16] == 8'hA0 && TG68_IO;
 wire       T80_ZBUS_SEL  = ~T80_A[15] && T80_IO;
 
 // RAM 0000-1FFF (2000-3FFF)
@@ -709,7 +711,7 @@ always @(posedge MCLK) begin
 			if (TG68_ZBUS_SEL & TG68_ZBUS_DTACK_N) begin
 				ZBUS_A <= {TG68_A[14:1], TG68_UDS_N};
 				ZBUS_D <= (~TG68_UDS_N) ? TG68_DO[15:8] : TG68_DO[7:0];
-				we <= ~TG68_RNW;
+				we <= ~TG68_RNW & ~T80_BUSAK_N;
 				src <= 0;
 				zstate <= ZBUS_TEST;
 			end
@@ -730,7 +732,7 @@ always @(posedge MCLK) begin
 		ZBUS_READ:
 			begin
 				if (~src) begin
-					TG68_ZBUS_D <= {ZBUS_Q, ZBUS_Q};
+					TG68_ZBUS_D <= T80_BUSAK_N ? 16'hFFFF : {ZBUS_Q, ZBUS_Q};
 					TG68_ZBUS_DTACK_N <= 0;
 				end
 				else begin
