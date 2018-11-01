@@ -69,6 +69,7 @@ entity vdp is
 		VBUS_DATA		: in  std_logic_vector(15 downto 0);
 		VBUS_SEL			: out std_logic;
 		VBUS_DTACK_N	: in  std_logic;
+		VBUS_BUSY      : out std_logic;
 
 		PAL				: in  std_logic;
 		FIELD      		: out std_logic;
@@ -1758,6 +1759,8 @@ begin
 		SOVR_CLR <= '0';
 		SCOL_CLR <= '0';
 
+		DBG <= (others => '0');
+
 	elsif rising_edge(CLK) then
 		SOVR_CLR <= '0';
 		SCOL_CLR <= '0';
@@ -1791,7 +1794,7 @@ begin
 
 						-- In case of DMA VBUS request, hold the TG68 with DTACK_N
 						-- it should avoid the use of a CLKEN signal
-						if ADDR_SET_ACK = '0' or DMA_VBUS = '1' then
+						if ADDR_SET_ACK = '0' then
 							ADDR_SET_REQ <= '1';
 						else
 							ADDR_SET_REQ <= '0';
@@ -1884,6 +1887,7 @@ end process;
 ----------------------------------------------------------------
 VBUS_ADDR <= FF_VBUS_ADDR;
 VBUS_SEL <= FF_VBUS_SEL;
+VBUS_BUSY <= DMA_VBUS;
 
 process( RST_N, CLK )
 begin
