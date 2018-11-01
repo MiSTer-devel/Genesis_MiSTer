@@ -214,8 +214,8 @@ T80s #(.T2Write(1)) CPU_Z80
 // CONTROL AREA
 // $A11100 ZBUS request
 // $A11200 Reset the Z80
-wire TG68_CTRL_SEL = (TG68_A[23:12] == 12'hA11) && TG68_IO;
-wire T80_CTRL_SEL  = T80_A[15] && ({BAR[23:15], T80_A[14:12]} == 12'hA11) && T80_IO;
+wire TG68_CTRL_SEL = TG68_A[23:12] == 12'hA11;
+wire T80_CTRL_SEL  = T80_A[15] && ({BAR[23:15], T80_A[14:12]} == 12'hA11);
 
 wire        CTRL_F  = (MBUS_A[11:8] == 1) ? T80_BUSAK_N : (MBUS_A[11:8] == 2) ? T80_RESET_N : NO_DATA[8];
 wire [15:0] CTRL_DO = {NO_DATA[15:9], CTRL_F, NO_DATA[7:0]};
@@ -227,10 +227,10 @@ always @(posedge MCLK) begin
 	end
 	else if(CTRL_WE) begin
 		if (MBUS_A[11:8] == 1) begin
-			T80_BUSRQ_N <= ~MBUS_D[8];
+			T80_BUSRQ_N <= ~MBUS_DO[8];
 		end
 		else if (MBUS_A[11:8] == 2) begin
-			T80_RESET_N <= MBUS_D[8];
+			T80_RESET_N <= MBUS_DO[8];
 		end
 	end
 end
@@ -245,16 +245,14 @@ end
 // 68000:
 // 7F = 01111111 000
 // FF = 11111111 000
-wire TG68_VDP_SEL = (TG68_A[23:21] == 3'b110 && !TG68_A[18:16] && !TG68_A[7:5] && TG68_IO)
-                 || (TG68_A[23:16] == 8'hA0 && TG68_A[14:5] == {7'b1111111, 3'b000} && TG68_IO);	// Z80 Address space
+wire TG68_VDP_SEL = (TG68_A[23:21] == 3'b110 && !TG68_A[18:16] && !TG68_A[7:5])
+                 || (TG68_A[23:16] == 8'hA0 && TG68_A[14:5] == {7'b1111111, 3'b000});   // Z80 Address space
 
-wire T80_VDP_SEL  = (T80_A[15:5] == {8'h7F, 3'b000} && T80_IO)
-                 || (T80_A[15] && BAR[23:21] == 3'b110 && !BAR[18:16] && !TG68_A[7:5] && T80_IO);	// 68000 Address space
+wire T80_VDP_SEL  = (T80_A[15:5] == {8'h7F, 3'b000})
+                 || (T80_A[15] && BAR[23:21] == 3'b110 && !BAR[18:16] && !TG68_A[7:5]); // 68000 Address space
 
 reg         VDP_SEL;
-reg   [4:1] VDP_A;
 reg         VDP_RNW;
-reg  [15:0] VDP_DI;
 wire [15:0] VDP_DO;
 wire        VDP_DTACK_N;
 
@@ -265,9 +263,6 @@ wire        VBUS_BUSY;
 wire        TG68_HINT;
 wire        TG68_VINT;
 wire        T80_VINT;
-
-wire        VBUS_DTACK_N = VDP_MBUS_SEL ? VDP_MBUS_DTACK_N : 1'b0;
-wire [15:0] VBUS_DATA    = VDP_MBUS_SEL ? VDP_MBUS_D       : 16'hFFFF;
 
 wire        vram_req;
 wire        vram_we_u;
@@ -303,9 +298,9 @@ vdp vdp
 	.clk(MCLK),
 
 	.sel(VDP_SEL),
-	.a(VDP_A),
+	.a(MBUS_A[4:1]),
 	.rnw(VDP_RNW),
-	.di(VDP_DI),
+	.di(MBUS_DO),
 	.do(VDP_DO),
 	.dtack_n(VDP_DTACK_N),
 
@@ -325,9 +320,9 @@ vdp vdp
 	.t80_intack(~T80_M1_N & ~T80_IORQ_N),
 
 	.vbus_addr(VBUS_ADDR),
-	.vbus_data(VBUS_DATA),
+	.vbus_data(VDP_MBUS_D),
 	.vbus_sel(VBUS_SEL),
-	.vbus_dtack_n(VBUS_DTACK_N),
+	.vbus_dtack_n(VDP_MBUS_DTACK_N),
 	.vbus_busy(VBUS_BUSY),
 
 	.field(FIELD),
@@ -352,8 +347,8 @@ psg psg
 	.clk(MCLK),
 	.clken(T80_CLKEN),
 
-	.wr_n(VDP_RNW | ~VDP_SEL | ~VDP_A[4] | VDP_A[3]),
-	.d_in(VDP_DI[15:8]),
+	.wr_n(VDP_RNW | ~VDP_SEL | ~MBUS_A[4] | MBUS_A[3]),
+	.d_in(MBUS_DO[15:8]),
 	.snd(PSG_SND)
 );
 
@@ -361,13 +356,11 @@ psg psg
 //--------------------------------------------------------------
 // I/O
 //--------------------------------------------------------------
-wire TG68_IO_SEL = TG68_A[23:5] == {16'hA100, 3'b000} && TG68_IO;
-wire T80_IO_SEL  = T80_A[15] && {BAR, T80_A[14:5]} == {16'hA100, 3'b000} && T80_IO;
+wire TG68_IO_SEL = TG68_A[23:5] == {16'hA100, 3'b000};
+wire T80_IO_SEL  = T80_A[15] && {BAR, T80_A[14:5]} == {16'hA100, 3'b000};
 
 reg        IO_SEL;
-reg  [4:1] IO_A;
 reg        IO_RNW;
-reg  [7:0] IO_DI;
 wire [7:0] IO_DO;
 wire       IO_DTACK_N;
 
@@ -405,9 +398,9 @@ gen_io io
 	.p2_z(~JOY_2[11]),
 
 	.sel(IO_SEL),
-	.a(IO_A),
+	.a(MBUS_A[4:1]),
 	.rnw(IO_RNW),
-	.di(IO_DI),
+	.di(MBUS_DO[7:0]),
 	.do(IO_DO),
 	.dtack_n(IO_DTACK_N),
 
@@ -415,30 +408,32 @@ gen_io io
 	.export(EXPORT)
 );
 
+
 //-----------------------------------------------------------------------
-// ROM Handling
+// ROM
 //-----------------------------------------------------------------------
 assign MAPPER_A  = TG68_A[3:1];
 assign MAPPER_WE = TG68_IO && ~TG68_RNW && TG68_A[23:4] == 20'hA130F;
 assign MAPPER_D  = TG68_DO[7:0];
 
-wire TG68_ROM_SEL = ~TG68_A[23] & TG68_IO & TG68_RNW;
-wire T80_ROM_SEL  = ~BAR[23] & T80_A[15] & T80_IO & ~T80_RD_N;
-wire VDP_ROM_SEL  = ~VBUS_ADDR[23] & VBUS_SEL;
+wire TG68_ROM_SEL = ~TG68_A[23] & TG68_RNW;
+wire T80_ROM_SEL  = ~BAR[23] & T80_A[15] & ~T80_RD_N;
+wire VDP_ROM_SEL  = ~VBUS_ADDR[23];
+
 
 //-----------------------------------------------------------------------
-// 68K RAM Handling
+// 68K RAM
 //-----------------------------------------------------------------------
-wire TG68_RAM_SEL = &TG68_A[23:21] & TG68_IO;
-wire T80_RAM_SEL  = &BAR[23:21] & T80_A[15] && T80_IO;
-wire VDP_RAM_SEL  = &VBUS_ADDR[23:21] & VBUS_SEL;
+wire TG68_RAM_SEL = &TG68_A[23:21];
+wire T80_RAM_SEL  = &BAR[23:21] & T80_A[15];
+wire VDP_RAM_SEL  = &VBUS_ADDR[23:21];
 
 reg ram68k_we_u;
 dpram #(15) ram68k_u
 (
 	.clock(MCLK),
 	.address_a(MBUS_A[15:1]),
-	.data_a(MBUS_D[15:8]),
+	.data_a(MBUS_DO[15:8]),
 	.wren_a(ram68k_we_u),
 	.q_a(ram68k_q[15:8])
 );
@@ -448,18 +443,19 @@ dpram #(15) ram68k_l
 (
 	.clock(MCLK),
 	.address_a(MBUS_A[15:1]),
-	.data_a(MBUS_D[7:0]),
+	.data_a(MBUS_DO[7:0]),
 	.wren_a(ram68k_we_l),
 	.q_a(ram68k_q[7:0])
 );
 wire [15:0] ram68k_q;
 
+
 //-----------------------------------------------------------------------
 // MBUS Handling
 //-----------------------------------------------------------------------
-wire TG68_MBUS_SEL = TG68_RAM_SEL | TG68_ROM_SEL | TG68_IO_SEL | TG68_VDP_SEL | TG68_CTRL_SEL;
-wire T80_MBUS_SEL  = T80_RAM_SEL  | T80_ROM_SEL  | T80_IO_SEL  | T80_VDP_SEL  | T80_CTRL_SEL;
-wire VDP_MBUS_SEL  = VDP_RAM_SEL  | VDP_ROM_SEL;
+wire TG68_MBUS_SEL = TG68_IO  & (TG68_RAM_SEL | TG68_ROM_SEL | TG68_IO_SEL | TG68_VDP_SEL | TG68_CTRL_SEL);
+wire T80_MBUS_SEL  = T80_IO   & (T80_RAM_SEL  | T80_ROM_SEL  | T80_IO_SEL  | T80_VDP_SEL  | T80_CTRL_SEL);
+wire VDP_MBUS_SEL  = VBUS_SEL & (VDP_RAM_SEL  | VDP_ROM_SEL);
 
 reg TG68_MBUS_DTACK_N;
 reg T80_MBUS_DTACK_N;
@@ -469,8 +465,8 @@ reg [15:0] TG68_MBUS_D;
 reg  [7:0] T80_MBUS_D;
 reg [15:0] VDP_MBUS_D;
 
-reg [23:1] MBUS_A;
-reg [15:0] MBUS_D;
+reg [22:1] MBUS_A;
+reg [15:0] MBUS_DO;
 
 always @(posedge MCLK) begin
 	reg  [3:0] mstate;
@@ -521,8 +517,8 @@ always @(posedge MCLK) begin
 		MBUS_IDLE:
 			if(TG68_MBUS_SEL & TG68_MBUS_DTACK_N & ~VBUS_BUSY) begin
 				src <= SRC_TG68;
-				MBUS_A <= TG68_A[23:1];
-				MBUS_D <= TG68_DO;
+				MBUS_A <= TG68_A[22:1];
+				MBUS_DO <= TG68_DO;
 				uds_n <= TG68_UDS_N;
 				lds_n <= TG68_LDS_N;
 				we <= ~TG68_RNW;
@@ -534,8 +530,8 @@ always @(posedge MCLK) begin
 			end
 			else if(T80_MBUS_SEL & T80_MBUS_DTACK_N & ~VBUS_BUSY) begin
 				src <= SRC_T80;
-				MBUS_A <= {BAR[23:15], T80_A[14:1]};
-				MBUS_D <= {T80_DO,T80_DO};
+				MBUS_A <= {BAR[22:15], T80_A[14:1]};
+				MBUS_DO <= {T80_DO,T80_DO};
 				uds_n <= T80_A[0];
 				lds_n <= ~T80_A[0];
 				we <= ~T80_WR_N;
@@ -547,8 +543,8 @@ always @(posedge MCLK) begin
 			end
 			else if(VDP_MBUS_SEL & VDP_MBUS_DTACK_N) begin
 				src <= SRC_VDP;
-				MBUS_A <= VBUS_ADDR[23:1];
-				MBUS_D <= 0;
+				MBUS_A <= VBUS_ADDR[22:1];
+				MBUS_DO <= 0;
 				uds_n <= 0;
 				lds_n <= 0;
 				we <= 0;
@@ -572,7 +568,7 @@ always @(posedge MCLK) begin
 		MBUS_ROM_ACC:
 			begin
 				ROM_REQ <= ~ROM_ACK;
-				ROM_ADDR <= MBUS_A[22:1];
+				ROM_ADDR <= MBUS_A;
 				mstate <= MBUS_ROM_READ;
 			end
 
@@ -586,8 +582,6 @@ always @(posedge MCLK) begin
 			begin
 				VDP_SEL <= 1;
 				VDP_RNW <= ~we;
-				VDP_A <= MBUS_A[4:1];
-				VDP_DI <= MBUS_D;
 				mstate <= MBUS_VDP_READ;
 			end
 
@@ -608,8 +602,6 @@ always @(posedge MCLK) begin
 			begin
 				IO_SEL <= 1;
 				IO_RNW <= ~we;
-				IO_A <= MBUS_A[4:1];
-				IO_DI <= MBUS_D[7:0];
 				mstate <= MBUS_IO_READ;
 			end
 
@@ -659,6 +651,7 @@ always @(posedge MCLK) begin
 		endcase;
 	end
 end
+
 
 //-----------------------------------------------------------------------
 // ZBUS Handling
@@ -749,6 +742,7 @@ always @(posedge MCLK) begin
 	end
 end
 
+
 //-----------------------------------------------------------------------
 // Z80 BANK REGISTER
 //-----------------------------------------------------------------------
@@ -761,6 +755,7 @@ always @(posedge MCLK) begin
 	if (~RESET_N) BAR <= 0;
 	else if (BANK_SEL & ZBUS_WE) BAR <= {ZBUS_D[0], BAR[23:16]};
 end
+
 
 //--------------------------------------------------------------
 // YM2612
