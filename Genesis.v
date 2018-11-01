@@ -656,9 +656,10 @@ end
 //-----------------------------------------------------------------------
 // ZBUS Handling
 //-----------------------------------------------------------------------
-// 68000: A00000-A0FFFF
+// Z80:   0000-7FFF
+// 68000: A00000-A07FFF (A08000-A0FFFF)
 
-reg [15:0] ZBUS_A;
+reg [14:0] ZBUS_A;
 reg        ZBUS_WE;
 reg  [7:0] ZBUS_D;
 wire [7:0] ZBUS_Q = ZRAM_SEL ? ZRAM_Q : FM_SEL ? FM_DO : 8'hFF;
@@ -671,7 +672,7 @@ wire       TG68_ZBUS_SEL = TG68_A[23:16] == 8'hA0 && TG68_IO && (~T80_BUSAK_N | 
 wire       T80_ZBUS_SEL  = ~T80_A[15] && T80_IO;
 
 // RAM 0000-1FFF (2000-3FFF)
-wire ZRAM_SEL = !ZBUS_A[15:14];
+wire ZRAM_SEL = ~ZBUS_A[14];
 
 wire  [7:0] ZRAM_Q;
 dpram #(13) ramZ80
@@ -706,14 +707,14 @@ always @(posedge MCLK) begin
 		case (zstate)
 		ZBUS_IDLE:
 			if (TG68_ZBUS_SEL & TG68_ZBUS_DTACK_N) begin
-				ZBUS_A <= {1'b0, TG68_A[14:1], TG68_UDS_N};
+				ZBUS_A <= {TG68_A[14:1], TG68_UDS_N};
 				ZBUS_D <= (~TG68_UDS_N) ? TG68_DO[15:8] : TG68_DO[7:0];
 				we <= ~TG68_RNW;
 				src <= 0;
 				zstate <= ZBUS_TEST;
 			end
 			else if (T80_ZBUS_SEL & T80_ZBUS_DTACK_N) begin
-				ZBUS_A <= T80_A;
+				ZBUS_A <= T80_A[14:0];
 				ZBUS_D <= T80_DO;
 				we <= ~T80_WR_N;
 				src <= 1;
@@ -748,7 +749,7 @@ end
 //-----------------------------------------------------------------------
 // 6000-60FF
 
-wire BANK_SEL = ZBUS_A[15:8] == 8'h60;
+wire BANK_SEL = ZBUS_A[14:8] == 7'h60;
 reg [23:15] BAR;
 
 always @(posedge MCLK) begin
@@ -762,7 +763,7 @@ end
 //--------------------------------------------------------------
 // 4000-4003 (4000-5FFF)
 
-wire        FM_SEL = ZBUS_A[15:13] == 3'b010;
+wire        FM_SEL = ZBUS_A[14:13] == 2'b10;
 wire  [7:0] FM_DO;
 wire [11:0] FM_right;
 wire [11:0] FM_left;
