@@ -214,8 +214,8 @@ T80s #(.T2Write(1)) CPU_Z80
 // CONTROL AREA
 // $A11100 ZBUS request
 // $A11200 Reset the Z80
-wire TG68_CTRL_SEL = TG68_A[23:12] == 12'hA11;
-wire T80_CTRL_SEL  = T80_A[15] && ({BAR[23:15], T80_A[14:12]} == 12'hA11);
+wire TG68_CTRL_SEL = TG68_A[23:12] == 12'hA11 && TG68_A[7:1] == 0;
+wire T80_CTRL_SEL  = T80_A[15] && ({BAR[23:15], T80_A[14:12]} == 12'hA11) && T80_A[7:0] == 0;
 
 wire        CTRL_F  = (MBUS_A[11:8] == 1) ? T80_BUSAK_N : (MBUS_A[11:8] == 2) ? T80_RESET_N : NO_DATA[8];
 wire [15:0] CTRL_DO = {NO_DATA[15:9], CTRL_F, NO_DATA[7:0]};
