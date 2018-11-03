@@ -588,15 +588,15 @@ port map(
 	q_b			=> OBJ_COLINFO_Q_B
 );
 
-cache_y_u : entity work.dpram generic map(7,8)
+cache_y_u : entity work.dpram generic map(7,2)
 port map(
 	clock			=> CLK,
 	address_a	=> CACHE_ADDR(8 downto 2),
-	data_a		=> CACHE_D(15 downto 8),
+	data_a		=> CACHE_D(9 downto 8),
 	wren_a		=> CACHE_WE_U and not CACHE_ADDR(0),
 
 	address_b	=> OBJ_CACHE_ADDR_RD,
-	q_b			=> OBJ_CACHE_Y_Q(15 downto 8)
+	q_b			=> OBJ_CACHE_Y_Q(9 downto 8)
 );
 
 cache_y_l : entity work.dpram generic map(7,8)
@@ -610,26 +610,26 @@ port map(
 	q_b			=> OBJ_CACHE_Y_Q(7 downto 0)
 );
 
-cache_sz_u : entity work.dpram generic map(7,8)
+cache_sz_u : entity work.dpram generic map(7,4)
 port map(
 	clock			=> CLK,
 	address_a	=> CACHE_ADDR(8 downto 2),
-	data_a		=> CACHE_D(15 downto 8),
+	data_a		=> CACHE_D(11 downto 8),
 	wren_a		=> CACHE_WE_U and CACHE_ADDR(0),
 
 	address_b	=> OBJ_CACHE_ADDR_RD,
-	q_b			=> OBJ_CACHE_SL_Q(15 downto 8)
+	q_b			=> OBJ_CACHE_SL_Q(11 downto 8)
 );
 
-cache_sz_l : entity work.dpram generic map(7,8)
+cache_sz_l : entity work.dpram generic map(7,7)
 port map(
 	clock			=> CLK,
 	address_a	=> CACHE_ADDR(8 downto 2),
-	data_a		=> CACHE_D(7 downto 0),
+	data_a		=> CACHE_D(6 downto 0),
 	wren_a		=> CACHE_WE_L and CACHE_ADDR(0),
 
 	address_b	=> OBJ_CACHE_ADDR_RD,
-	q_b			=> OBJ_CACHE_SL_Q(7 downto 0)
+	q_b			=> OBJ_CACHE_SL_Q(6 downto 0)
 );
 
 obj_visinfo : entity work.dpram generic map(5,7)
