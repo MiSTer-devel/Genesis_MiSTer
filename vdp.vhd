@@ -479,7 +479,6 @@ type sp1c_t is (
 	SP1C_DONE
 );
 signal SP1C	: SP1C_t;
-signal SP1_STOP		: std_logic;
 signal SP1_EN			: std_logic;
 
 signal OBJ_NB			: std_logic_vector(4 downto 0);
@@ -522,7 +521,6 @@ type sp3c_t is (
 	SP3C_DONE
 );
 signal SP3C		: SP3C_t;
-
 signal SP3_VRAM_ADDR	: std_logic_vector(14 downto 0);
 signal SP3_VRAM_DO	: std_logic_vector(15 downto 0);
 signal SP3_VRAM_DO_REG	: std_logic_vector(15 downto 0);
@@ -1249,11 +1247,12 @@ process( RST_N, CLK )
 	variable OBJ_Y_OFS	: std_logic_vector(8 downto 0);
 	variable OBJ_VS		: std_logic_vector(1 downto 0);
 	variable OBJ_LINK		: std_logic_vector(6 downto 0);
+	variable STOP			: std_logic;
 begin
 	if RST_N = '0' then
 		SP1C <= SP1C_DONE;
 		SP1_SOVR_SET <= '0';
-		SP1_STOP <= '0';
+		STOP := '0';
 
 	elsif rising_edge(CLK) then
 
@@ -1265,12 +1264,12 @@ begin
 				OBJ_TOT := (others => '0');
 				OBJ_NEXT := (others => '0');
 				OBJ_NB <= (others => '0');
-				SP1_STOP <= '0';
+				STOP := '0';
 				SP1C <= SP1C_Y_RD;
 
 			when SP1C_Y_RD =>
 				if DE='0' then
-					SP1_STOP <= '1';
+					STOP := '1';
 				end if;
 				if SP1_EN = '1' then --check one sprite/pixel, this matches the original HW behavior
 					OBJ_CACHE_ADDR_RD_SP1 <= OBJ_NEXT;
@@ -1326,7 +1325,7 @@ begin
 					SP1C <= SP1C_CLR1;
 					SP1_SOVR_SET <= '1';
 				-- check a total sprites
-				elsif OBJ_TOT = OBJ_MAX or OBJ_LINK >= OBJ_MAX or OBJ_LINK = 0 or SP1_STOP = '1' then
+				elsif OBJ_TOT = OBJ_MAX or OBJ_LINK >= OBJ_MAX or OBJ_LINK = 0 or STOP = '1' then
 					SP1C <= SP1C_CLR1;
 				else
 					SP1C <= SP1C_Y_RD;
@@ -1926,9 +1925,9 @@ end process;
 -- PIXEL COUNTER AND OUTPUT
 -- ALSO CLEARS THE SPRITE COLINFO BUFFER RIGHT AFTER RENDERING
 process( RST_N, CLK )
-	variable col  : std_logic_vector(5 downto 0);
+	variable col  : std_logic_vector(6 downto 0);
 	variable cold : std_logic_vector(5 downto 0);
-	variable sh   : std_logic_vector(2 downto 0);
+	variable sh   : std_logic_vector(1 downto 0);
 begin
 	if rising_edge(CLK) then
 		OBJ_COLINFO_WE_B <= '0';
@@ -1938,40 +1937,38 @@ begin
 			COLINFO_ADDR_B <= H_CNT - HDISP_START;
 
 		when "0010" =>
-			sh := "10" & (BGA_COLINFO_Q_B(6) or BGB_COLINFO_Q_B(6) or not SHI);
-			if SHI = '1' and OBJ_COLINFO_Q_B(3 downto 0) /= "0000" and
-			   OBJ_COLINFO_Q_B(6) >= (BGA_COLINFO_Q_B(6) or BGB_COLINFO_Q_B(6))
-			then
-				if OBJ_COLINFO_Q_B(5 downto 0) = 62 then
-					sh := sh + 1;
-					sh(2) := '0';
-				elsif OBJ_COLINFO_Q_B(5 downto 0) = 63 then
-					sh := "000";
-				elsif OBJ_COLINFO_Q_B(3 downto 0) = 14 then
-					sh(0) := '1';
+			col := '0'&BGCOL;
+			sh := "01";
+			if DE = '1' then
+				if (BGB_COLINFO_Q_B(3 downto 0) /= 0) then
+					col := BGB_COLINFO_Q_B;
+				end if;
+				if (BGA_COLINFO_Q_B(3 downto 0) /= 0) and BGA_COLINFO_Q_B(6) >= col(6) then
+					col := BGA_COLINFO_Q_B;
+				end if;
+				if SHI = '1' then
+					sh(0) := BGB_COLINFO_Q_B(6) or BGA_COLINFO_Q_B(6);
+					if OBJ_COLINFO_Q_B(3 downto 0) /= 0 and OBJ_COLINFO_Q_B(6) >= col(6) then
+						if OBJ_COLINFO_Q_B(5 downto 0) = 62 then
+							sh := sh + 1;
+						elsif OBJ_COLINFO_Q_B(5 downto 0) = 63 then
+							sh(0) := '0';
+						else 
+							col := OBJ_COLINFO_Q_B;
+							if OBJ_COLINFO_Q_B(3 downto 0) = 14 then
+								sh(0) := '1';
+							else
+								sh(0) := sh(0) or OBJ_COLINFO_Q_B(6);
+							end if;
+						end if;
+					end if;
 				else
-					sh(0) := sh(0) or OBJ_COLINFO_Q_B(6);
+					if (OBJ_COLINFO_Q_B(3 downto 0) /= 0) and OBJ_COLINFO_Q_B(6) >= col(6) then
+						col := OBJ_COLINFO_Q_B;
+					end if;
 				end if;
 			end if;
-
-			if DE = '0' then
-				col := BGCOL;
-			elsif OBJ_COLINFO_Q_B(3 downto 0) /= "0000" and OBJ_COLINFO_Q_B(6) = '1' and sh(2) = '1' then
-				col := OBJ_COLINFO_Q_B(5 downto 0);
-			elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" and BGA_COLINFO_Q_B(6) = '1' then
-				col := BGA_COLINFO_Q_B(5 downto 0);
-			elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" and BGB_COLINFO_Q_B(6) = '1' then
-				col := BGB_COLINFO_Q_B(5 downto 0);
-			elsif OBJ_COLINFO_Q_B(3 downto 0) /= "0000" and sh(2) = '1' then
-				col := OBJ_COLINFO_Q_B(5 downto 0);
-			elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" then
-				col := BGA_COLINFO_Q_B(5 downto 0);
-			elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" then
-				col := BGB_COLINFO_Q_B(5 downto 0);
-			else
-				col := BGCOL;
-			end if;
-
+ 
 			case DBG(8 downto 7) is
 				when "00" => cold := BGCOL;
 				when "01" => cold := OBJ_COLINFO_Q_B(5 downto 0);
@@ -1980,12 +1977,12 @@ begin
 			end case;
 
 			if DBG(6) = '1' then
-				col := cold;
+				col(5 downto 0) := cold;
 			elsif DBG(8 downto 7) /= "00" then
 				col := col and cold;
 			end if;
 
-			COLOR_NUM <= col;
+			COLOR_NUM <= col(5 downto 0);
 
 		when "0100" =>
 			HBL <= IN_HBL;
@@ -1996,20 +1993,18 @@ begin
 				R <= (others => '0');
 				G <= (others => '0');
 				B <= (others => '0');
+			elsif sh(1) = '1' then
+				B <= '0' & COLOR(8 downto 6) + 7;
+				G <= '0' & COLOR(5 downto 3) + 7;
+				R <= '0' & COLOR(2 downto 0) + 7;
+			elsif sh(0) = '1' then
+				B <= COLOR(8 downto 6) & '0';
+				G <= COLOR(5 downto 3) & '0';
+				R <= COLOR(2 downto 0) & '0';
 			else
-				if sh(1 downto 0) = 0 then
-					B <= '0' & COLOR(8 downto 6);
-					G <= '0' & COLOR(5 downto 3);
-					R <= '0' & COLOR(2 downto 0);
-				elsif sh(1 downto 0) = 1 then
-					B <= COLOR(8 downto 6) & '0';
-					G <= COLOR(5 downto 3) & '0';
-					R <= COLOR(2 downto 0) & '0';
-				else
-					B <= '0' & COLOR(8 downto 6) + 7;
-					G <= '0' & COLOR(5 downto 3) + 7;
-					R <= '0' & COLOR(2 downto 0) + 7;
-				end if;
+				B <= '0' & COLOR(8 downto 6);
+				G <= '0' & COLOR(5 downto 3);
+				R <= '0' & COLOR(2 downto 0);
 			end if;
 
 		when others => null;
