@@ -95,6 +95,9 @@ always @(negedge MCLK) begin
 	end
 end
 
+reg [15:1] ram_rst_a;
+always @(posedge MCLK) ram_rst_a <= ram_rst_a + ~RESET_N;
+
 
 //--------------------------------------------------------------
 // CPU 68000
@@ -279,7 +282,10 @@ dpram #(15) vram_l
 	.address_a(vram_a),
 	.data_a(vram_d[7:0]),
 	.wren_a(vram_we_l & (vram_ack ^ vram_req)),
-	.q_a(vram_q[7:0])
+	.q_a(vram_q[7:0]),
+
+	.address_b(ram_rst_a),
+	.wren_b(~RESET_N)
 );
 
 dpram #(15) vram_u
@@ -288,7 +294,10 @@ dpram #(15) vram_u
 	.address_a(vram_a),
 	.data_a(vram_d[15:8]),
 	.wren_a(vram_we_u & (vram_ack ^ vram_req)),
-	.q_a(vram_q[15:8])
+	.q_a(vram_q[15:8]),
+
+	.address_b(ram_rst_a),
+	.wren_b(~RESET_N)
 );
 
 reg vram_ack;
@@ -437,7 +446,10 @@ dpram #(15) ram68k_u
 	.address_a(MBUS_A[15:1]),
 	.data_a(MBUS_DO[15:8]),
 	.wren_a(ram68k_we_u),
-	.q_a(ram68k_q[15:8])
+	.q_a(ram68k_q[15:8]),
+
+	.address_b(ram_rst_a),
+	.wren_b(~RESET_N)
 );
 
 reg ram68k_we_l;
@@ -447,7 +459,10 @@ dpram #(15) ram68k_l
 	.address_a(MBUS_A[15:1]),
 	.data_a(MBUS_DO[7:0]),
 	.wren_a(ram68k_we_l),
-	.q_a(ram68k_q[7:0])
+	.q_a(ram68k_q[7:0]),
+
+	.address_b(ram_rst_a),
+	.wren_b(~RESET_N)
 );
 wire [15:0] ram68k_q;
 
