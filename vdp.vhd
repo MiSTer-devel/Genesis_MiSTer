@@ -424,6 +424,7 @@ signal CACHE_ADDR		: std_logic_vector(8 downto 0);
 signal CACHE_WE_L		: std_logic;
 signal CACHE_WE_U		: std_logic;
 
+signal CACHE_D			: std_logic_vector(15 downto 0);
 signal CACHE_Y			: std_logic_vector(15 downto 0);
 signal CACHE_SZ_LINK	: std_logic_vector(15 downto 0);
 
@@ -591,7 +592,7 @@ cache_y_u : entity work.dpram generic map(7,8)
 port map(
 	clock			=> CLK,
 	address_a	=> CACHE_ADDR(8 downto 2),
-	data_a		=> DMA_VRAM_DI(15 downto 8),
+	data_a		=> CACHE_D(15 downto 8),
 	wren_a		=> CACHE_WE_U and not CACHE_ADDR(0),
 
 	address_b	=> OBJ_CACHE_ADDR_RD,
@@ -602,7 +603,7 @@ cache_y_l : entity work.dpram generic map(7,8)
 port map(
 	clock			=> CLK,
 	address_a	=> CACHE_ADDR(8 downto 2),
-	data_a		=> DMA_VRAM_DI(7 downto 0),
+	data_a		=> CACHE_D(7 downto 0),
 	wren_a		=> CACHE_WE_L and not CACHE_ADDR(0),
 
 	address_b	=> OBJ_CACHE_ADDR_RD,
@@ -613,7 +614,7 @@ cache_sz_u : entity work.dpram generic map(7,8)
 port map(
 	clock			=> CLK,
 	address_a	=> CACHE_ADDR(8 downto 2),
-	data_a		=> DMA_VRAM_DI(15 downto 8),
+	data_a		=> CACHE_D(15 downto 8),
 	wren_a		=> CACHE_WE_U and CACHE_ADDR(0),
 
 	address_b	=> OBJ_CACHE_ADDR_RD,
@@ -624,7 +625,7 @@ cache_sz_l : entity work.dpram generic map(7,8)
 port map(
 	clock			=> CLK,
 	address_a	=> CACHE_ADDR(8 downto 2),
-	data_a		=> DMA_VRAM_DI(7 downto 0),
+	data_a		=> CACHE_D(7 downto 0),
 	wren_a		=> CACHE_WE_L and CACHE_ADDR(0),
 
 	address_b	=> OBJ_CACHE_ADDR_RD,
@@ -1216,18 +1217,24 @@ process(CLK)
 	variable addr : std_logic_vector(15 downto 0);
 begin
 	if rising_edge(CLK) then
+		if RST_N = '0' then
+			CACHE_D <= (others => '0');
+			CACHE_WE_U <= '1';
+			CACHE_WE_L <= '1';
+			CACHE_ADDR <= CACHE_ADDR + 1;
+		else
+			addr := DMA_VRAM_ADDR - (SATB & "00000000");
 
-		addr := DMA_VRAM_ADDR - (SATB & "00000000");
-
-		CACHE_WE_U <= '0';
-		CACHE_WE_L <= '0';
-		if old_dma_sel = '0' and DMA_SEL = '1' and DMA_VRAM_RNW = '0' and addr(1) = '0' and addr(15 downto 9) = 0 then
-			CACHE_ADDR <= addr(8 downto 0);
-			CACHE_WE_U <= not DMA_VRAM_UDS_N;
-			CACHE_WE_L <= not DMA_VRAM_LDS_N;
+			CACHE_WE_U <= '0';
+			CACHE_WE_L <= '0';
+			if old_dma_sel = '0' and DMA_SEL = '1' and DMA_VRAM_RNW = '0' and addr(1) = '0' and addr(15 downto 9) = 0 then
+				CACHE_D <= DMA_VRAM_DI;
+				CACHE_ADDR <= addr(8 downto 0);
+				CACHE_WE_U <= not DMA_VRAM_UDS_N;
+				CACHE_WE_L <= not DMA_VRAM_LDS_N;
+			end if;
+			old_dma_sel := DMA_SEL;
 		end if;
-
-		old_dma_sel := DMA_SEL;
 	end if;
 end process;
 
