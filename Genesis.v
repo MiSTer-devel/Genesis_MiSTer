@@ -182,10 +182,10 @@ wire        T80_MREQ_N;
 wire        T80_IORQ_N;
 wire        T80_RD_N;
 wire        T80_WR_N;
-wire        T80_BUSAK_N;
 wire [15:0] T80_A;
 wire  [7:0] T80_DO;
 wire        T80_IO = ~T80_MREQ_N & (~T80_RD_N | ~T80_WR_N);
+reg         T80_ENA;
 
 wire T80_WAIT_N = T80_MBUS_SEL ? ~T80_MBUS_DTACK_N :
 						T80_ZBUS_SEL ? ~T80_ZBUS_DTACK_N :
@@ -199,16 +199,14 @@ T80s #(.T2Write(1)) CPU_Z80
 (
 	.reset_n(T80_RESET_N),
 	.clk(MCLK),
-	.cen(T80_CLKEN),
+	.cen(T80_CLKEN & T80_BUSRQ_N),
 	.wait_n(T80_WAIT_N),
 	.int_n(~T80_VINT),
-	.busrq_n(T80_BUSRQ_N),
 	.m1_n(T80_M1_N),
 	.mreq_n(T80_MREQ_N),
 	.iorq_n(T80_IORQ_N),
 	.rd_n(T80_RD_N),
 	.wr_n(T80_WR_N),
-	.busak_n(T80_BUSAK_N),
 	.a(T80_A),
 	.di(T80_DI),
 	.do(T80_DO)
@@ -220,9 +218,9 @@ T80s #(.T2Write(1)) CPU_Z80
 wire TG68_CTRL_SEL = TG68_A[23:12] == 12'hA11 && TG68_A[7:1] == 0;
 wire T80_CTRL_SEL  = T80_A[15] && ({BAR[23:15], T80_A[14:12]} == 12'hA11) && T80_A[7:0] == 0;
 
-wire        ZBUSACK_N = T80_RESET_N ? T80_BUSAK_N : T80_BUSRQ_N;
+wire        ZBUS_ACC = ~T80_BUSRQ_N & T80_RESET_N;
 
-wire        CTRL_F  = (MBUS_A[11:8] == 1) ? ZBUSACK_N : (MBUS_A[11:8] == 2) ? T80_RESET_N : NO_DATA[8];
+wire        CTRL_F  = (MBUS_A[11:8] == 1) ? T80_BUSRQ_N : (MBUS_A[11:8] == 2) ? T80_RESET_N : NO_DATA[8];
 wire [15:0] CTRL_DO = {NO_DATA[15:9], CTRL_F, NO_DATA[7:0]};
 reg         CTRL_WE;
 always @(posedge MCLK) begin
@@ -726,7 +724,7 @@ always @(posedge MCLK) begin
 			if (TG68_ZBUS_SEL & TG68_ZBUS_DTACK_N) begin
 				ZBUS_A <= {TG68_A[14:1], TG68_UDS_N};
 				ZBUS_D <= (~TG68_UDS_N) ? TG68_DO[15:8] : TG68_DO[7:0];
-				we <= ~TG68_RNW & ~T80_BUSAK_N;
+				we <= ~TG68_RNW & ZBUS_ACC;
 				src <= 0;
 				zstate <= ZBUS_TEST;
 			end
@@ -739,7 +737,8 @@ always @(posedge MCLK) begin
 			end
 
 		ZBUS_TEST:
-			if (~(FM_SEL & we & FM_DO[7])) begin
+			if (~(FM_SEL & we & FM_DO[7]))
+			begin
 				ZBUS_WE <= we;
 				zstate <= ZBUS_READ;
 			end
@@ -747,7 +746,7 @@ always @(posedge MCLK) begin
 		ZBUS_READ:
 			begin
 				if (~src) begin
-					TG68_ZBUS_D <= T80_BUSAK_N ? 16'hFFFF : {ZBUS_Q, ZBUS_Q};
+					TG68_ZBUS_D <= ZBUS_ACC ? {ZBUS_Q, ZBUS_Q} : 16'hFFFF;
 					TG68_ZBUS_DTACK_N <= 0;
 				end
 				else begin
