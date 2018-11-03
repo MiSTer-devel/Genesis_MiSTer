@@ -968,7 +968,7 @@ begin
 						BGBC <= BGC_VSRAM_RD;
 					end if;
 				end if;
-				BGB_X := (BGB_X + 1) and (HSIZE & "11111111");
+				BGB_X := (BGB_X + 1) and HMASK;
 				BGB_SEL <= '0';
 			end if;
 			VSRAM_NUMB <= BGB_POS(8 downto 4);
@@ -1186,7 +1186,7 @@ begin
 					end if;
 					BGA_POS := BGA_POS + 1;
 				end if;
-				BGA_X := (BGA_X + 1) and (HSIZE & "11111111");
+				BGA_X := (BGA_X + 1) and HMASK;
 				BGA_SEL <= '0';
 			end if;
 			VSRAM_NUMA <= BGA_POS(8 downto 4);
