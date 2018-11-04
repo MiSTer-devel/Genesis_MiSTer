@@ -64,7 +64,7 @@ module Genesis
 	output            MAPPER_WE,
 	output      [7:0] MAPPER_D,
 
-	input       [4:0] ROMSZ,
+	input      [24:1] ROMSZ,
 	output reg [22:1] ROM_ADDR,
 	input      [15:0] ROM_DATA,
 	output reg        ROM_REQ,
@@ -428,17 +428,14 @@ assign MAPPER_A  = TG68_A[3:1];
 assign MAPPER_WE = TG68_IO && ~TG68_RNW && TG68_A[23:4] == 20'hA130F;
 assign MAPPER_D  = TG68_DO[7:0];
 
-wire TG68_ROM_SEL = ~TG68_A[23] & TG68_RNW;
-wire T80_ROM_SEL  = ~BAR[23] & T80_A[15] & ~T80_RD_N;
+wire TG68_ROM_SEL = ~TG68_A[23];
+wire T80_ROM_SEL  = ~BAR[23] & T80_A[15];
 wire VDP_ROM_SEL  = ~VBUS_ADDR[23];
 
 
 //-----------------------------------------------------------------------
 // 64KB SRAM
 //-----------------------------------------------------------------------
-wire TG68_SRAM_SEL = (TG68_A[23:21] == 1) & !ROMSZ[4:1];
-wire T80_SRAM_SEL  = (BAR[23:21] == 1) & T80_A[15] & !ROMSZ[4:1];
-
 reg sram_we_u;
 dpram #(15) sram_u
 (
@@ -505,8 +502,8 @@ wire [15:0] ram68k_q;
 //-----------------------------------------------------------------------
 // MBUS Handling
 //-----------------------------------------------------------------------
-wire TG68_MBUS_SEL = TG68_IO  & (TG68_RAM_SEL | TG68_ROM_SEL | TG68_IO_SEL | TG68_VDP_SEL | TG68_CTRL_SEL | TG68_SRAM_SEL);
-wire T80_MBUS_SEL  = T80_IO   & (T80_RAM_SEL  | T80_ROM_SEL  | T80_IO_SEL  | T80_VDP_SEL  | T80_CTRL_SEL  | T80_SRAM_SEL);
+wire TG68_MBUS_SEL = TG68_IO  & (TG68_RAM_SEL | TG68_ROM_SEL | TG68_IO_SEL | TG68_VDP_SEL | TG68_CTRL_SEL);
+wire T80_MBUS_SEL  = T80_IO   & (T80_RAM_SEL  | T80_ROM_SEL  | T80_IO_SEL  | T80_VDP_SEL  | T80_CTRL_SEL);
 wire VDP_MBUS_SEL  = VBUS_SEL & (VDP_RAM_SEL  | VDP_ROM_SEL);
 
 reg TG68_MBUS_DTACK_N;
@@ -544,9 +541,8 @@ always @(posedge MCLK) begin
 					MBUS_IO_READ  = 9,
 					MBUS_IO_WAIT  = 10,
 					MBUS_CTRL_ACC = 11,
-					MBUS_SRAM_ACC = 12,
-					MBUS_SRAM_READ= 13,
-					MBUS_FINISH   = 14;
+					MBUS_SRAM_READ= 12,
+					MBUS_FINISH   = 13;
 
 	ram68k_we_u <= 0;
 	ram68k_we_l <= 0;
@@ -583,7 +579,6 @@ always @(posedge MCLK) begin
 				if(TG68_VDP_SEL)  mstate <= MBUS_VDP_ACC;
 				if(TG68_IO_SEL)   mstate <= MBUS_IO_ACC;
 				if(TG68_CTRL_SEL) mstate <= MBUS_CTRL_ACC;
-				if(TG68_SRAM_SEL) mstate <= MBUS_SRAM_ACC;
 			end
 			else if(T80_MBUS_SEL & T80_MBUS_DTACK_N & ~VBUS_BUSY) begin
 				src <= SRC_T80;
@@ -597,7 +592,6 @@ always @(posedge MCLK) begin
 				if(T80_VDP_SEL)  mstate <= MBUS_VDP_ACC;
 				if(T80_IO_SEL)   mstate <= MBUS_IO_ACC;
 				if(T80_CTRL_SEL) mstate <= MBUS_CTRL_ACC;
-				if(T80_SRAM_SEL) mstate <= MBUS_SRAM_ACC;
 			end
 			else if(VDP_MBUS_SEL & VDP_MBUS_DTACK_N) begin
 				src <= SRC_VDP;
@@ -623,21 +617,13 @@ always @(posedge MCLK) begin
 				mstate <= MBUS_FINISH;
 			end
 
-		MBUS_SRAM_ACC:
-			begin
+		MBUS_ROM_ACC:
+			if (MBUS_A >= ROMSZ) begin
 				sram_we_u <= we & ~uds_n;
 				sram_we_l <= we & ~lds_n;
 				mstate <= MBUS_SRAM_READ;
 			end
-
-		MBUS_SRAM_READ:
-			begin
-				data <= sram_q;
-				mstate <= MBUS_FINISH;
-			end
-
-		MBUS_ROM_ACC:
-			begin
+			else begin
 				ROM_REQ <= ~ROM_ACK;
 				ROM_ADDR <= MBUS_A;
 				mstate <= MBUS_ROM_READ;
@@ -646,6 +632,12 @@ always @(posedge MCLK) begin
 		MBUS_ROM_READ:
 			if (ROM_REQ == ROM_ACK) begin
 				data <= ROM_DATA;
+				mstate <= MBUS_FINISH;
+			end
+
+		MBUS_SRAM_READ:
+			begin
+				data <= sram_q;
 				mstate <= MBUS_FINISH;
 			end
 

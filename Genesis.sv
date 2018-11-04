@@ -228,7 +228,7 @@ Genesis Genesis
 	.MAPPER_WE(mapper_we),
 	.MAPPER_D(mapper_d),
 
-	.ROMSZ(ioctl_addr[24:20]-1'd1),
+	.ROMSZ(ioctl_addr[24:1]),
 	.ROM_ADDR(rom_addr),
 	.ROM_DATA(rom_data),
 	.ROM_REQ(rom_rd),
