@@ -199,9 +199,10 @@ wire [12:0] audio_l, audio_r;
 
 Genesis Genesis
 (
-	.RESET_N(~(reset|ioctl_download)),
+	.RESET_N(~reset),
 	.MCLK(clk_sys),
 
+	.LOADING(ioctl_download),
 	.EXPORT(|status[7:6]),
 	.PAL(status[7]),
 
@@ -227,6 +228,7 @@ Genesis Genesis
 	.MAPPER_WE(mapper_we),
 	.MAPPER_D(mapper_d),
 
+	.ROMSZ(ioctl_addr[24:20]-1'd1),
 	.ROM_ADDR(rom_addr),
 	.ROM_DATA(rom_data),
 	.ROM_REQ(rom_rd),

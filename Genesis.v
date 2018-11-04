@@ -41,6 +41,7 @@ module Genesis
 	output     [12:0] DAC_LDATA,
 	output     [12:0] DAC_RDATA,
 
+	input             LOADING,
 	input             PAL,
 	input             EXPORT,
 	output      [3:0] RED,
@@ -63,12 +64,14 @@ module Genesis
 	output            MAPPER_WE,
 	output      [7:0] MAPPER_D,
 
+	input       [4:0] ROMSZ,
 	output reg [22:1] ROM_ADDR,
 	input      [15:0] ROM_DATA,
 	output reg        ROM_REQ,
 	input             ROM_ACK
 );
 
+wire reset = ~RESET_N | LOADING;
 
 //--------------------------------------------------------------
 // CLOCK ENABLERS
@@ -96,7 +99,7 @@ always @(negedge MCLK) begin
 end
 
 reg [15:1] ram_rst_a;
-always @(posedge MCLK) ram_rst_a <= ram_rst_a + ~RESET_N;
+always @(posedge MCLK) ram_rst_a <= ram_rst_a + LOADING;
 
 
 //--------------------------------------------------------------
@@ -158,7 +161,7 @@ wire [15:0] TG68_DI= TG68_MBUS_SEL ? TG68_MBUS_D :
 TG68KdotC_Kernel #(.TASbug(1)) CPU_68K
 (
 	.clk(MCLK),
-	.nreset(RESET_N),
+	.nreset(~reset),
 	.clkena_in(TG68_ENA),
 	.data_in(TG68_DI),
 	.ipl(TG68_IPL_N),
@@ -224,7 +227,7 @@ wire        CTRL_F  = (MBUS_A[11:8] == 1) ? T80_BUSRQ_N : (MBUS_A[11:8] == 2) ? 
 wire [15:0] CTRL_DO = {NO_DATA[15:9], CTRL_F, NO_DATA[7:0]};
 reg         CTRL_WE;
 always @(posedge MCLK) begin
-	if (~RESET_N) begin
+	if (reset) begin
 		T80_BUSRQ_N <= 1;
 		T80_RESET_N <= 0;
 	end
@@ -283,7 +286,7 @@ dpram #(15) vram_l
 	.q_a(vram_q[7:0]),
 
 	.address_b(ram_rst_a),
-	.wren_b(~RESET_N)
+	.wren_b(LOADING)
 );
 
 dpram #(15) vram_u
@@ -295,7 +298,7 @@ dpram #(15) vram_u
 	.q_a(vram_q[15:8]),
 
 	.address_b(ram_rst_a),
-	.wren_b(~RESET_N)
+	.wren_b(LOADING)
 );
 
 reg vram_ack;
@@ -303,7 +306,7 @@ always @(posedge MCLK) vram_ack <= vram_req;
 
 vdp vdp
 (
-	.rst_n(RESET_N),
+	.rst_n(~reset),
 	.clk(MCLK),
 
 	.sel(VDP_SEL),
@@ -352,7 +355,7 @@ vdp vdp
 wire [5:0] PSG_SND;
 psg psg
 (
-	.reset(~RESET_N),
+	.reset(reset),
 	.clk(MCLK),
 	.clken(T80_CLKEN),
 
@@ -375,7 +378,7 @@ wire       IO_DTACK_N;
 
 gen_io io
 (
-	.rst_n(RESET_N),
+	.rst_n(~reset),
 	.clk(MCLK & TG68_CLKEN),
 
 	.j3but(J3BUT),
@@ -431,6 +434,40 @@ wire VDP_ROM_SEL  = ~VBUS_ADDR[23];
 
 
 //-----------------------------------------------------------------------
+// 64KB SRAM
+//-----------------------------------------------------------------------
+wire TG68_SRAM_SEL = (TG68_A[23:21] == 1) & !ROMSZ[4:1];
+wire T80_SRAM_SEL  = (BAR[23:21] == 1) & T80_A[15] & !ROMSZ[4:1];
+
+reg sram_we_u;
+dpram #(15) sram_u
+(
+	.clock(MCLK),
+	.address_a(MBUS_A[15:1]),
+	.data_a(MBUS_DO[15:8]),
+	.wren_a(sram_we_u),
+	.q_a(sram_q[15:8]),
+
+	.address_b(ram_rst_a),
+	.wren_b(LOADING)
+);
+
+reg sram_we_l;
+dpram #(15) sram_l
+(
+	.clock(MCLK),
+	.address_a(MBUS_A[15:1]),
+	.data_a(MBUS_DO[7:0]),
+	.wren_a(sram_we_l),
+	.q_a(sram_q[7:0]),
+
+	.address_b(ram_rst_a),
+	.wren_b(LOADING)
+);
+wire [15:0] sram_q;
+
+
+//-----------------------------------------------------------------------
 // 68K RAM
 //-----------------------------------------------------------------------
 wire TG68_RAM_SEL = &TG68_A[23:21];
@@ -447,7 +484,7 @@ dpram #(15) ram68k_u
 	.q_a(ram68k_q[15:8]),
 
 	.address_b(ram_rst_a),
-	.wren_b(~RESET_N)
+	.wren_b(LOADING)
 );
 
 reg ram68k_we_l;
@@ -460,7 +497,7 @@ dpram #(15) ram68k_l
 	.q_a(ram68k_q[7:0]),
 
 	.address_b(ram_rst_a),
-	.wren_b(~RESET_N)
+	.wren_b(LOADING)
 );
 wire [15:0] ram68k_q;
 
@@ -468,8 +505,8 @@ wire [15:0] ram68k_q;
 //-----------------------------------------------------------------------
 // MBUS Handling
 //-----------------------------------------------------------------------
-wire TG68_MBUS_SEL = TG68_IO  & (TG68_RAM_SEL | TG68_ROM_SEL | TG68_IO_SEL | TG68_VDP_SEL | TG68_CTRL_SEL);
-wire T80_MBUS_SEL  = T80_IO   & (T80_RAM_SEL  | T80_ROM_SEL  | T80_IO_SEL  | T80_VDP_SEL  | T80_CTRL_SEL);
+wire TG68_MBUS_SEL = TG68_IO  & (TG68_RAM_SEL | TG68_ROM_SEL | TG68_IO_SEL | TG68_VDP_SEL | TG68_CTRL_SEL | TG68_SRAM_SEL);
+wire T80_MBUS_SEL  = T80_IO   & (T80_RAM_SEL  | T80_ROM_SEL  | T80_IO_SEL  | T80_VDP_SEL  | T80_CTRL_SEL  | T80_SRAM_SEL);
 wire VDP_MBUS_SEL  = VBUS_SEL & (VDP_RAM_SEL  | VDP_ROM_SEL);
 
 reg TG68_MBUS_DTACK_N;
@@ -507,13 +544,17 @@ always @(posedge MCLK) begin
 					MBUS_IO_READ  = 9,
 					MBUS_IO_WAIT  = 10,
 					MBUS_CTRL_ACC = 11,
-					MBUS_FINISH   = 12;
+					MBUS_SRAM_ACC = 12,
+					MBUS_SRAM_READ= 13,
+					MBUS_FINISH   = 14;
 
 	ram68k_we_u <= 0;
 	ram68k_we_l <= 0;
+	sram_we_u <= 0;
+	sram_we_l <= 0;
 	CTRL_WE <= 0;
 
-	if (~RESET_N) begin
+	if (reset) begin
 		TG68_MBUS_DTACK_N <= 1;
 		T80_MBUS_DTACK_N  <= 1;
 		VDP_MBUS_DTACK_N  <= 1;
@@ -542,6 +583,7 @@ always @(posedge MCLK) begin
 				if(TG68_VDP_SEL)  mstate <= MBUS_VDP_ACC;
 				if(TG68_IO_SEL)   mstate <= MBUS_IO_ACC;
 				if(TG68_CTRL_SEL) mstate <= MBUS_CTRL_ACC;
+				if(TG68_SRAM_SEL) mstate <= MBUS_SRAM_ACC;
 			end
 			else if(T80_MBUS_SEL & T80_MBUS_DTACK_N & ~VBUS_BUSY) begin
 				src <= SRC_T80;
@@ -555,6 +597,7 @@ always @(posedge MCLK) begin
 				if(T80_VDP_SEL)  mstate <= MBUS_VDP_ACC;
 				if(T80_IO_SEL)   mstate <= MBUS_IO_ACC;
 				if(T80_CTRL_SEL) mstate <= MBUS_CTRL_ACC;
+				if(T80_SRAM_SEL) mstate <= MBUS_SRAM_ACC;
 			end
 			else if(VDP_MBUS_SEL & VDP_MBUS_DTACK_N) begin
 				src <= SRC_VDP;
@@ -577,6 +620,19 @@ always @(posedge MCLK) begin
 		MBUS_RAM_READ:
 			begin
 				data <= ram68k_q;
+				mstate <= MBUS_FINISH;
+			end
+
+		MBUS_SRAM_ACC:
+			begin
+				sram_we_u <= we & ~uds_n;
+				sram_we_l <= we & ~lds_n;
+				mstate <= MBUS_SRAM_READ;
+			end
+
+		MBUS_SRAM_READ:
+			begin
+				data <= sram_q;
 				mstate <= MBUS_FINISH;
 			end
 
@@ -710,7 +766,7 @@ always @(posedge MCLK) begin
 
 	ZBUS_WE <= 0;
 
-	if (~RESET_N) begin
+	if (reset) begin
 		TG68_ZBUS_DTACK_N <= 1;
 		T80_ZBUS_DTACK_N  <= 1;
 		zstate <= ZBUS_IDLE;
@@ -769,7 +825,7 @@ wire BANK_SEL = ZBUS_A[14:8] == 7'h60;
 reg [23:15] BAR;
 
 always @(posedge MCLK) begin
-	if (~RESET_N) BAR <= 0;
+	if (reset) BAR <= 0;
 	else if (BANK_SEL & ZBUS_WE) BAR <= {ZBUS_D[0], BAR[23:16]};
 end
 
@@ -786,7 +842,7 @@ wire [11:0] FM_left;
 
 jt12 fm
 (
-	.rst(~RESET_N), //~T80_RESET_N,
+	.rst(reset), //~T80_RESET_N,
 	.clk(MCLK),
 	.cen(TG68_CLKEN),
 
