@@ -64,7 +64,7 @@ end
 ////////////////////////////////////////////////////////////////////
 /////////////////////	Config Data LUT   //////////////////////////
 
-wire [15:0] init_data[58] = 
+wire [15:0] init_data[60] = 
 '{
 	16'h9803,					// ADI required Write.
 
@@ -142,9 +142,9 @@ wire [15:0] init_data[58] =
 	16'hAA00,					// ADI required Write.
 	16'hAB40,					// ADI required Write.
 	
-	{8'hAF, 6'b0001_01,~dvi_mode,1'b0},	// [7]=0 HDCP Disabled.
+	{8'hAF, 6'b0000_01,~dvi_mode,1'b0},	// [7]=0 HDCP Disabled.
 									// [6:5] must be b00!
-									// [4]=1 Current frame IS HDCP encrypted!??? (HDCP disabled anyway?)
+									// [4]=0 Current frame is unencrypted
 									// [3:2] must be b01!
 									//	[1]=1 HDMI Mode.
 									// [0] must be b0!
@@ -185,7 +185,7 @@ wire [15:0] init_data[58] =
 	{8'h15, audio_96k, 7'b010_0000},	// I2S Sampling Rate [7:4]. b0000 = (44.1KHz). b0010 = 48KHz.
 									// Input ID [3:1] b000 (0) = 24-bit RGB 444 or YCrCb 444 with Separate Syncs.
 
-	// Audio Clock Config
+									// Audio Clock Config
 	16'h0100,					//  
 	audio_96k ? 16'h0230 : 16'h0218,	// Set N Value 12288/6144
 	16'h0300,					//
@@ -193,6 +193,15 @@ wire [15:0] init_data[58] =
 	16'h0701,					//
 	16'h0822,					// Set CTS Value 74250
 	16'h090A,					//
+
+									// Audio sample packets config
+	{8'h12, 8'b001_000_00},	// 0x12[7] - 0 = Audio sample words are LPCM, 1 = Other purposes. Must be 0 for HDMI
+									// 0x12[6] - Consumer use bit. 0 = LPCM, 1 = OTHER
+									// 0x12[5] - Copyright bit. 0 = Copyright protected, 1 = Unprotected
+									// 0x12[4:2] - Additional audio info
+									// 0x12[1:0] - Audio clock accuracy
+	{8'h44, 8'b0010_0000},	// 0x44[5] - Audio sample packet enable
+									// End of Audio sample packets config
 
 	16'hFFFF 				   // END
 };
