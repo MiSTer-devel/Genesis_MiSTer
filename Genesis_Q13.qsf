@@ -24,7 +24,6 @@
 # -------------------------------------------------------------------------- #
 
 set_global_assignment -name VERILOG_MACRO "LITE=1"
-#set_global_assignment -name VERILOG_MACRO "HDMI_LITE=1"
 
 set_global_assignment -name FAMILY "Cyclone V"
 set_global_assignment -name DEVICE 5CSEBA6U23I7

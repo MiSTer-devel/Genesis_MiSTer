@@ -426,71 +426,6 @@ vip_config vip_config
 
 `ifdef LITE
 
-wire [11:0] x;
-wire [11:0] y;
-
-sync_vg #(.X_BITS(12), .Y_BITS(12)) sync_vg
-(
-	.clk(iHdmiClk),
-	.reset(reset),
-	.v_total(HEIGHT+VFP+VBP+VS),
-	.v_fp(VFP),
-	.v_bp(VBP),
-	.v_sync(VS),
-	.h_total(WIDTH+HFP+HBP+HS),
-	.h_fp(HFP),
-	.h_bp(HBP),
-	.h_sync(HS),
-	.hv_offset(0),
-	.vde_out(vde),
-	.hde_out(hde),
-	.vs_out(vs_hdmi),
-	.v_count_out(),
-	.h_count_out(),
-	.x_out(x),
-	.y_out(y),
-	.hs_out(hs_hdmi)
-);
-
-wire vde, hde;
-wire vs_hdmi;
-wire hs_hdmi;
-
-`ifndef HDMI_LITE
-
-pattern_vg
-#(
-	.B(8), // Bits per channel
-	.X_BITS(12),
-	.Y_BITS(12),
-	.FRACTIONAL_BITS(12) // Number of fractional bits for ramp pattern
-)
-pattern_vg
-(
-	.reset(reset),
-	.clk_in(iHdmiClk),
-	.x(x),
-	.y(y),
-	.vn_in(vs_hdmi),
-	.hn_in(hs_hdmi),
-	.dn_in(vde & hde),
-	.r_in(0),
-	.g_in(0),
-	.b_in(0),
-	.vn_out(HDMI_TX_VS),
-	.hn_out(HDMI_TX_HS),
-	.den_out(hdmi_de),
-	.r_out(hdmi_data[23:16]),
-	.g_out(hdmi_data[15:8]),
-	.b_out(hdmi_data[7:0]),
-	.total_active_pix(WIDTH),
-	.total_active_lines(HEIGHT),
-	.pattern(4),
-	.ramp_step(20'h0333)
-);
-
-`endif
-
 wire reset;
 sysmem_lite sysmem
 (
@@ -527,10 +462,8 @@ sysmem_lite sysmem
 	.ram2_read(0),
 	.ram2_writedata(0),
 	.ram2_byteenable(0),
-	.ram2_write(0)
+	.ram2_write(0),
 
-`ifdef HDMI_LITE
-	,
 	// HDMI frame buffer
 	.vbuf_clk(clk_ctl),
 	.vbuf_address(vbuf_address),
@@ -555,45 +488,65 @@ wire [127:0] vbuf_writedata;
 wire  [15:0] vbuf_byteenable;
 wire         vbuf_write;
 
-assign HDMI_TX_VS = vs_hdmi;
-assign HDMI_TX_HS = hs_hdmi;
-
-hdmi_lite hdmi_lite
+ascal 
+#(
+	.RAMBASE(32'h20000000),
+	//.RO(0),
+	//.FORMAT(0),
+	.N_DW(128),
+	.N_AW(28),
+	.IHRES(4096)
+	//.N_BURST(256)
+)
+ascal
 (
-	.reset(reset),
-
-	.clk_video(clk_vid),
-	.ce_pixel(ce_pix),
-	.video_vs(vs),
-	.video_de(de),
-	.video_d({r_out,g_out,b_out}),
-
-	.clk_hdmi(HDMI_TX_CLK),
-	.hdmi_hde(hde),
-	.hdmi_vde(vde),
-	.hdmi_d(hdmi_data),
-	.hdmi_de(hdmi_de),
-
-	.screen_w(WIDTH),
-	.screen_h(HEIGHT),
-	.quadbuf(1),
-	.scale_x(0),
-	.scale_y(0),
-	.scale_auto(1),
-
-	.clk_vbuf(clk_ctl),
-	.vbuf_address(vbuf_address),
-	.vbuf_burstcount(vbuf_burstcount),
-	.vbuf_waitrequest(vbuf_waitrequest),
-	.vbuf_writedata(vbuf_writedata),
-	.vbuf_byteenable(vbuf_byteenable),
-	.vbuf_write(vbuf_write),
-	.vbuf_readdata(vbuf_readdata),
-	.vbuf_readdatavalid(vbuf_readdatavalid),
-	.vbuf_read(vbuf_read)
-
-`endif
-
+	.i_r  (r_out),
+	.i_g  (g_out),
+	.i_b  (b_out),
+	.i_hs (hs_emu),
+	.i_vs (vs_emu),
+	.i_fl (f1),
+	.i_de (de),
+	.i_ce (ce_pix),
+	.i_clk(clk_vid),
+	.o_r   (hdmi_data[23:16]),
+	.o_g   (hdmi_data[15:8]),
+	.o_b   (hdmi_data[7:0]),
+	.o_hs  (HDMI_TX_HS),
+	.o_vs  (HDMI_TX_VS),
+	.o_de  (hdmi_de),
+	.o_ce  (1'b1),
+	.o_clk(HDMI_TX_CLK),
+	.iauto(1'b1),
+	.himin(0),
+	.himax(0),
+	.vimin(0),
+	.vimax(0),
+	.run    (1'b1),
+	.mode   (5),
+	.htotal (WIDTH+HFP+HBP+HS),
+	.hsstart(WIDTH + HFP),
+	.hsend  (WIDTH + HFP + HS),
+	.hdisp  (WIDTH),
+	.hmin   (0),
+	.hmax   (WIDTH),
+	.vtotal (HEIGHT+VFP+VBP+VS),
+	.vsstart(HEIGHT + VFP),
+	.vsend  (HEIGHT + VFP + VS),
+	.vdisp  (HEIGHT),
+	.vmin   (0),
+	.vmax   (HEIGHT),
+	.avl_clk          (clk_ctl),
+	.avl_waitrequest  (vbuf_waitrequest),
+	.avl_readdata     (vbuf_readdata),
+	.avl_readdatavalid(vbuf_readdatavalid),
+	.avl_burstcount   (vbuf_burstcount),
+	.avl_writedata    (vbuf_writedata),
+	.avl_address      (vbuf_address),
+	.avl_write        (vbuf_write),
+	.avl_read         (vbuf_read),
+	.avl_byteenable   (vbuf_byteenable),
+	.reset_na (~reset_req)
 );
 
 `endif
