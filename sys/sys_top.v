@@ -524,7 +524,7 @@ ascal
 	.vimin(0),
 	.vimax(0),
 	.run    (1'b1),
-	.mode   (5),
+	.mode   (sconf),
 	.htotal (WIDTH+HFP+HBP+HS),
 	.hsstart(WIDTH + HFP),
 	.hsend  (WIDTH + HFP + HS),
@@ -864,6 +864,7 @@ wire  [1:0] audio_mix;
 wire  [7:0] r_out, g_out, b_out;
 wire        vs, hs, de, f1;
 wire  [1:0] scanlines;
+wire  [3:0] sconf;
 wire        clk_sys, clk_vid, ce_pix;
 
 wire        ram_clk;
@@ -909,6 +910,7 @@ emu emu
 
 	.VIDEO_ARX(ARX),
 	.VIDEO_ARY(ARY),
+	.sconf(sconf),
 
 	.AUDIO_L(audio_ls),
 	.AUDIO_R(audio_rs),

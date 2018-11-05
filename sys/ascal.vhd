@@ -385,29 +385,33 @@ ARCHITECTURE rtl OF ascal IS
   
   -----------------------------------------------------------------------------
   -- Ghogan
-  --  <0.5 : x*x*x*4
-  --  >0.5 : 1-(1-x)*(1-x)*(1-x)*4
+  -- Shift Bilinear weights away from the center (towards 0 or 1) to
+  -- make scaling sharper
   FUNCTION gho_calc(frac : unsigned(11 DOWNTO 0)) RETURN unsigned IS
-    VARIABLE u : signed(7 DOWNTO 0);
-    VARIABLE v : signed(23 DOWNTO 0);
   BEGIN
-    IF frac(11)='0' THEN
-      u:=signed(frac(11 DOWNTO 4));
-    ELSE
-      u:=signed("10000000"-frac(11 DOWNTO 4));
-    END IF;
-    
-    v:=u*u*u;
-    IF frac(11)='0' THEN
-      RETURN unsigned(v(21 DOWNTO 14));
-    ELSE
-      RETURN unsigned("10000000" - v(21 DOWNTO 14));
-    END IF;
+     case frac(11 DOWNTO 8) is  --We don't need so many bits
+      when "0000" => Return "00000000";
+      when "0001" => Return "00000001";
+      when "0010" => Return "00000010";
+      when "0011" => Return "00000110";
+      when "0100" => Return "00010000";
+      when "0101" => Return "00100000";
+      when "0110" => Return "00110110";
+      when "0111" => Return "01010101";
+      when "1000" => Return "10000000";
+      when "1001" => Return "10101010";
+      when "1010" => Return "11001010";
+      when "1011" => Return "11100000";
+      when "1100" => Return "11110000";
+      when "1101" => Return "11111010" ;
+      when "1110" => Return "11111110";
+      when "1111" => Return "11111111";
+    end case;
   END FUNCTION;
-  
+ 
   SIGNAL o_h_gho_pix,o_v_gho_pix : type_pix;
   SIGNAL o_h_gho_frac,o_v_gho_frac : unsigned(7 DOWNTO 0);
-  
+
   -----------------------------------------------------------------------------
   -- Bicubic
   TYPE type_bic_abcd IS RECORD
