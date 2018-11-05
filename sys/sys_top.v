@@ -213,6 +213,9 @@ reg        coef_wr = 0;
 reg        vip_newcfg = 0;
 `endif
 
+wire  [7:0] ARX, ARY;
+reg  [11:0] VSET = 0;
+
 always@(posedge clk_sys) begin
 	reg  [7:0] cmd;
 	reg        has_cmd;
@@ -273,8 +276,8 @@ always@(posedge clk_sys) begin
 			end
 			if(cmd == 'h25) {led_overtake, led_state} <= io_din;
 			if(cmd == 'h26) vol_att <= io_din[4:0];
-`ifndef LITE
 			if(cmd == 'h27) VSET    <= io_din[11:0];
+`ifndef LITE
 			if(cmd == 'h2A) {coef_wr,coef_addr,coef_data} <= {1'b1,io_din};
 `endif
 		end
@@ -387,8 +390,6 @@ wire        ctl_write;
 wire [31:0] ctl_writedata;
 wire        ctl_waitrequest;
 wire        ctl_reset;
-wire  [7:0] ARX, ARY;
-reg  [11:0] VSET = 0;
 
 vip_config vip_config
 (
@@ -528,14 +529,14 @@ ascal
 	.hsstart(WIDTH + HFP),
 	.hsend  (WIDTH + HFP + HS),
 	.hdisp  (WIDTH),
-	.hmin   (0),
-	.hmax   (WIDTH),
+	.hmin   (hmin),
+	.hmax   (hmax),
 	.vtotal (HEIGHT+VFP+VBP+VS),
 	.vsstart(HEIGHT + VFP),
 	.vsend  (HEIGHT + VFP + VS),
 	.vdisp  (HEIGHT),
-	.vmin   (0),
-	.vmax   (HEIGHT),
+	.vmin   (vmin),
+	.vmax   (vmax),
 	.avl_clk          (clk_ctl),
 	.avl_waitrequest  (vbuf_waitrequest),
 	.avl_readdata     (vbuf_readdata),
@@ -548,6 +549,37 @@ ascal
 	.avl_byteenable   (vbuf_byteenable),
 	.reset_na (~reset_req)
 );
+
+reg [11:0] hmin;
+reg [11:0] hmax;
+reg [11:0] vmin;
+reg [11:0] vmax;
+
+always @(posedge clk_vid) begin
+	reg [31:0] wcalc;
+	reg [31:0] hcalc;
+	reg  [2:0] state;
+	reg [11:0] videow;
+	reg [11:0] videoh;
+
+	state <= state + 1'd1;
+	case(state)
+		0: begin
+				wcalc <= VSET ? (VSET*ARX)/ARY : (HEIGHT*ARX)/ARY;
+				hcalc <= (WIDTH*ARY)/ARX;
+			end
+		6: begin
+				videow <= (!VSET && (wcalc > WIDTH))     ? WIDTH  : wcalc[11:0];
+				videoh <= VSET ? VSET : (hcalc > HEIGHT) ? HEIGHT : hcalc[11:0];
+			end
+		7: begin
+				hmin <= (WIDTH - videow)>>1;
+				vmin <= (HEIGHT - videoh)>>1;
+				hmax <= ((WIDTH - videow)>>1) + videow;
+				vmax <= ((HEIGHT - videoh)>>1) + videoh;
+			end
+	endcase
+end
 
 `endif
 
@@ -875,10 +907,8 @@ emu emu
 	.LED_POWER(led_power),
 	.LED_DISK(led_disk),
 
-`ifndef LITE
 	.VIDEO_ARX(ARX),
 	.VIDEO_ARY(ARY),
-`endif
 
 	.AUDIO_L(audio_ls),
 	.AUDIO_R(audio_rs),

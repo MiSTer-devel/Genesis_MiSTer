@@ -208,7 +208,7 @@ ARCHITECTURE rtl OF ascal IS
   SIGNAL i_write,i_walt : std_logic;
   SIGNAL i_push : std_logic;
   SIGNAL i_hburst,i_hbcpt : natural RANGE 0 TO IHRES/N_BURST;
-  SIGNAL i_shift : unsigned(N_DW-1 DOWNTO 0);
+  SIGNAL i_shift : unsigned(N_DW-1 DOWNTO 0) := (others => '0');
   SIGNAL i_acpt : natural RANGE 0 TO 7;
   TYPE arr_dw IS  ARRAY (natural RANGE <>) OF unsigned(N_DW-1 DOWNTO 0);
   SIGNAL i_dpram,o_dpram : arr_dw(0 TO BLEN*2-1);
@@ -695,7 +695,7 @@ ARCHITECTURE rtl OF ascal IS
     RETURN r;
   END FUNCTION CS;
   FUNCTION CN(v : unsigned) RETURN unsigned IS
-    VARIABLE t : unsigned(0 TO v'length-1) :=v;
+    constant t : unsigned(0 TO v'length-1) :=v;
     VARIABLE o : unsigned(0 TO v'length/4*5-1);
   BEGIN
     FOR i IN 0 TO v'length/4-1 LOOP
