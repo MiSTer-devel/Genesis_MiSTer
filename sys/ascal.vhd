@@ -12,24 +12,20 @@
 --  - Autodetect input image size or fixed window
 --  - Progressive and interleaved frames
 --  - Interpolation
---    Upscaling   : Nearest, Bilinear, Bicubic, Lanczos
+--    Upscaling   : Nearest, Bilinear, Bicubic, Polyphase, Ghogan
 --    Downscaling : Nearest, Bilinear
 --  - Avalon bus interface with 128 or 64 bits DATA
 --  - Optional triple buffering
 --  - 
 
 -- AFAIRE:
---  + Double/Triple buffering
---  - Interlaced input
 --  - Configurable colour depth
 --  - 64bits/32 bits Avalon
---  - Bicubic
 --  - Sync. pol. detect
 --  - Border colour
 --  - run/stop
 --  - better rounding (linear)
 --  - Downscaling
---  + Interleaved double buffer reads
 --  - 
 
 --------------------------------------------
@@ -55,23 +51,24 @@ USE ieee.numeric_std.ALL;
 
 -- MODE[2:0]
 -- 000 : Nearest
--- 001 : Hlinear
--- 010 : Bilinear
+-- 001 : Bilinear
+-- 010 : Ghogan
 -- 011 : Bicubic
--- 100 : Lanczos 1.
--- 101 : Lanczos 2.
--- 110 : Ghogan
--- 111 : DEMO
+-- 100 : Polyphase 1.
+-- 101 : Polyphase 2.
+-- 110 : Polyphase 3
+-- 111 : TEST
 
 -- MASK    : Enable / Disable selected interpoler (0)=Nearest (1)=Hlinear, ...
 -- RAMBASE : RAM base address for framebuffer
 -- RO      : True = Read Only. Another block updates the framebuffer
 -- INTER   : True=Autodetect interleaved video False=Force progressive scan
+-- FRAC    : Fractional bits, subpixel resolution
+-- NPOLY   : Number of polyphase filters
 -- FORMAT  :
 -- N_DW    : Avalon data bus width
 -- N_AW    : Avalon address bus width
 -- N_BURST : Burst size in bytes. Power of two.
--- IHRES   : Max. input  resolution. Must be a power of two
 -- OHRES   : Max. output resolution. Must be a power of two
 
 ENTITY ascal IS
@@ -80,8 +77,9 @@ ENTITY ascal IS
     RAMBASE : unsigned(31 DOWNTO 0);
     RO      : boolean := false;
     INTER   : boolean := true;
+    FRAC    : natural RANGE 4 TO 6 :=4;
+    NPOLY   : natural RANGE 0 TO 2 :=2;
     FORMAT  : natural RANGE 1 TO 8 :=8;
-    IHRES   : natural RANGE 1 TO 4096 :=1024;
     OHRES   : natural RANGE 1 TO 2048 :=2048;
     N_DW    : natural RANGE 32 TO 128 := 128;
     N_AW    : natural RANGE 8 TO 32 := 32;
@@ -138,6 +136,18 @@ ENTITY ascal IS
     vdisp   : IN natural RANGE 0 TO 4095;
     vmin    : IN natural RANGE 0 TO 4095;
     vmax    : IN natural RANGE 0 TO 4095;
+    
+    ------------------------------------
+    -- Polyphase filter coefficients
+    poly_clk : IN std_logic;
+    poly_dw  : IN unsigned(8 DOWNTO 0);
+    poly_a   : IN unsigned(NPOLY+FRAC+2 DOWNTO 0);
+    poly_wr  : IN std_logic;
+    -- Order :
+    --   [Filter 0] [Filter 1]
+    --   [Horizontal] [Vertical]
+    --   [0]...[2**FRAC-1]
+    --   [-1][0][1][2]
     
     ------------------------------------
     -- Avalon
@@ -203,11 +213,12 @@ ARCHITECTURE rtl OF ascal IS
   SIGNAL i_iauto : std_logic;
   SIGNAL i_ven : std_logic;
   SIGNAL i_wr : std_logic;
+  SIGNAL i_rgb : unsigned(23 DOWNTO 0);
   SIGNAL i_de_pre,i_hs_pre,i_vs_pre,i_fl_pre : std_logic;
   SIGNAL i_inter : natural RANGE 0 TO 4;
   SIGNAL i_write,i_walt : std_logic;
   SIGNAL i_push : std_logic;
-  SIGNAL i_hburst,i_hbcpt : natural RANGE 0 TO IHRES/N_BURST;
+  SIGNAL i_hburst,i_hbcpt : natural RANGE 0 TO 31;
   SIGNAL i_shift : unsigned(N_DW-1 DOWNTO 0) := (others => '0');
   SIGNAL i_acpt : natural RANGE 0 TO 7;
   TYPE arr_dw IS  ARRAY (natural RANGE <>) OF unsigned(N_DW-1 DOWNTO 0);
@@ -275,7 +286,7 @@ ARCHITECTURE rtl OF ascal IS
   TYPE type_o_state IS (sDISP,sHSYNC,sREAD,sWAITREAD);
   SIGNAL o_state : type_o_state;
   SIGNAL o_copy,o_readack,o_readack_sync,o_readack_sync2 : std_logic;
-  SIGNAL o_copy1,o_copy2,o_copy3 : std_logic;
+  SIGNAL o_copy1,o_copy2,o_copy3,o_copy4 : std_logic;
   SIGNAL o_adrs : unsigned(31 DOWNTO 0); -- Avalon address
   SIGNAL o_ad : natural RANGE 0 TO 2*BLEN-1;
   SIGNAL o_adturn : std_logic;
@@ -299,7 +310,7 @@ ARCHITECTURE rtl OF ascal IS
 
   SIGNAL o_hpos,o_hpos_next : unsigned(23 DOWNTO 0);
   SIGNAL o_vpos,o_vpos_pre,o_vini : unsigned(23 DOWNTO 0); -- [23:12].[11.0]
-  SIGNAL o_hpos1,o_hpos2,o_hpos3,o_hpos4 : unsigned(23 DOWNTO 0);
+  SIGNAL o_hpos1,o_hpos2 : unsigned(23 DOWNTO 0);
   SIGNAL xxx_vposi : natural RANGE 0 TO 4095;
   SIGNAL o_hs0,o_hs1,o_hs2,o_hs3,o_hs4,o_hs5 : std_logic;
   SIGNAL o_hsp : natural RANGE 0 TO 4;
@@ -308,22 +319,24 @@ ARCHITECTURE rtl OF ascal IS
   SIGNAL o_pe1,o_pe2,o_pe3,o_pe4,o_pe5,o_pe0 : std_logic;
   SIGNAL o_read : std_logic;
   SIGNAL o_readlev,o_copylev : natural RANGE 0 TO 2;
-  SIGNAL o_hburst,o_hbcpt : natural RANGE 0 TO IHRES/N_BURST;
+  SIGNAL o_hburst,o_hbcpt : natural RANGE 0 TO 31;
   SIGNAL o_fload : natural RANGE 0 TO 4;
   SIGNAL o_acpt : natural RANGE 0 TO 7; -- Alternance pixels FIFO
-  SIGNAL o_alt,o_altp,o_alt1,o_alt2,o_alt3 : unsigned(3 DOWNTO 0);
+  SIGNAL o_dshi : natural RANGE 0 TO 3;
+  SIGNAL o_alt,o_altp,o_alt1,o_alt2,o_alt3,o_alt4 : unsigned(3 DOWNTO 0);
   SIGNAL o_altv : unsigned(0 TO 11);
-  SIGNAL o_dcpt,o_dcpt1,o_dcpt2,o_dcpt3 : natural RANGE 0 TO OHRES-1;
+  SIGNAL o_primv : unsigned(0 TO 2);
+  SIGNAL o_dcpt,o_dcpt1,o_dcpt2,o_dcpt3,o_dcpt4 : natural RANGE 0 TO OHRES-1;
   TYPE type_pix IS RECORD
     r,g,b : unsigned(7 DOWNTO 0); -- 0.8
   END RECORD;
 
   SIGNAL o_hpixm,o_hpix0,o_hpix1,o_hpix2 : type_pix;
   SIGNAL o_hpix01,o_hpix02,o_hpix11,o_hpix12 : type_pix;
-  SIGNAL o_hpixm1,o_hpixm2,o_hpix21,o_hpix22 : type_pix;
+  SIGNAL o_hpixm1,o_hpix21 : type_pix;
   SIGNAL o_vpixm2,o_vpix02,o_vpix12,o_vpix22 : type_pix;
   SIGNAL o_vpixm3,o_vpix03,o_vpix13,o_vpix23 : type_pix;
-  SIGNAL o_vpixm4,o_vpix04,o_vpix14,o_vpix24 : type_pix;
+  SIGNAL o_vpix04,o_vpix14 : type_pix;
   
   -----------------------------------------------------------------------------
   FUNCTION altx (a : unsigned(1 DOWNTO 0)) RETURN unsigned IS
@@ -349,69 +362,67 @@ ARCHITECTURE rtl OF ascal IS
   END FUNCTION bound;
   -----------------------------------------------------------------------------
   -- Nearest
-  FUNCTION near_calc(frac : unsigned(11 DOWNTO 0);
-                     p0,p1 : type_pix) RETURN type_pix IS
-    VARIABLE x : type_pix;
+  FUNCTION near_frac(f : unsigned(11 DOWNTO 0)) RETURN unsigned IS
+    VARIABLE x : unsigned(FRAC-1 DOWNTO 0);
   BEGIN
-    IF frac(11)='0' THEN
-      RETURN p0;
-    ELSE
-      RETURN p1;
-    END IF;
-  END FUNCTION;
-  
-  SIGNAL o_h_near_pix,o_v_near_pix : type_pix;
-  -----------------------------------------------------------------------------
-  -- Bilinear
-  FUNCTION bil_calc(frac :unsigned(11 DOWNTO 4);
-                    p0,p1 : type_pix) RETURN type_pix IS
-  
-    VARIABLE u : unsigned(14 DOWNTO 0);
-    VARIABLE x : type_pix;
-  BEGIN
-    u:=p1.r *  ('0' & frac(11 DOWNTO 6)) +
-       p0.r * (('1' & "000000") - ('0' & frac(11 DOWNTO 6)));
-    x.r:=bound(u,14);
-    u:=p1.g *  ('0' & frac(11 DOWNTO 6)) +
-       p0.g * (('1' & "000000") - ('0' & frac(11 DOWNTO 6)));
-    x.g:=bound(u,14);
-    u:=p1.b *  ('0' & frac(11 DOWNTO 6)) +
-       p0.b * (('1' & "000000") - ('0' & frac(11 DOWNTO 6)));
-    x.b:=bound(u,14);
+    x:=(OTHERS =>f(11));
     RETURN x;
   END FUNCTION;
-
+  
+  SIGNAL o_h_frac,o_v_frac : unsigned(FRAC-1 DOWNTO 0);
   SIGNAL o_h_bil_pix,o_v_bil_pix : type_pix;
+  
+  -----------------------------------------------------------------------------
+  -- Bilinear + Nearest + Ghogan
+  FUNCTION bil_frac(f : unsigned(11 DOWNTO 0)) RETURN unsigned IS
+    VARIABLE x : unsigned(FRAC-1 DOWNTO 0);
+  BEGIN
+    x:=f(11 DOWNTO 12-FRAC);
+    RETURN x;
+  END FUNCTION;
+  
+  FUNCTION bil_calc(f :unsigned(FRAC-1 DOWNTO 0);
+                    p0,p1 : type_pix) RETURN type_pix IS
+  
+    VARIABLE u : unsigned(8+FRAC DOWNTO 0);
+    VARIABLE x : type_pix;
+    CONSTANT Z : unsigned(FRAC-1 DOWNTO 0):=(OTHERS =>'0');
+  BEGIN
+    u:=p1.r *  ('0' & f) +
+       p0.r * (('1' & Z) - ('0' & f));
+    x.r:=bound(u,8+FRAC);
+    u:=p1.g *  ('0' & f) +
+       p0.g * (('1' & Z) - ('0' & f));
+    x.g:=bound(u,8+FRAC);
+    u:=p1.b *  ('0' & f) +
+       p0.b * (('1' & Z) - ('0' & f));
+    x.b:=bound(u,8+FRAC);
+    RETURN x;
+  END FUNCTION;
   
   -----------------------------------------------------------------------------
   -- Ghogan
   -- Shift Bilinear weights away from the center (towards 0 or 1) to
   -- make scaling sharper
-  FUNCTION gho_calc(frac : unsigned(11 DOWNTO 0)) RETURN unsigned IS
+  FUNCTION gho_frac(f : unsigned(11 DOWNTO 0)) RETURN unsigned IS
+    VARIABLE u : signed(FRAC-1 DOWNTO 0);
+    VARIABLE v : signed(3*FRAC-1 DOWNTO 0);
   BEGIN
-     case frac(11 DOWNTO 8) is  --We don't need so many bits
-      when "0000" => Return "00000000";
-      when "0001" => Return "00000001";
-      when "0010" => Return "00000010";
-      when "0011" => Return "00000110";
-      when "0100" => Return "00010000";
-      when "0101" => Return "00100000";
-      when "0110" => Return "00110110";
-      when "0111" => Return "01010101";
-      when "1000" => Return "10000000";
-      when "1001" => Return "10101010";
-      when "1010" => Return "11001010";
-      when "1011" => Return "11100000";
-      when "1100" => Return "11110000";
-      when "1101" => Return "11111010" ;
-      when "1110" => Return "11111110";
-      when "1111" => Return "11111111";
-    end case;
+    IF f(11)='0' THEN
+      u:=signed(f(11 DOWNTO 12-FRAC));
+    ELSE
+      u:=signed(NOT f(11 DOWNTO 12-FRAC));
+    END IF;
+    
+    v:=u*u*u;
+    IF f(11)='0' THEN
+      RETURN unsigned(v(3*FRAC-3 DOWNTO 2*FRAC-2));
+    ELSE
+      RETURN unsigned(NOT v(3*FRAC-3 DOWNTO 2*FRAC-2));
+    END IF;
+  
   END FUNCTION;
- 
-  SIGNAL o_h_gho_pix,o_v_gho_pix : type_pix;
-  SIGNAL o_h_gho_frac,o_v_gho_frac : unsigned(7 DOWNTO 0);
-
+  
   -----------------------------------------------------------------------------
   -- Bicubic
   TYPE type_bic_abcd IS RECORD
@@ -453,58 +464,60 @@ ARCHITECTURE rtl OF ascal IS
                               g=>bic_coeff(pm.g,p0.g,p1.g,p2.g),
                               b=>bic_coeff(pm.b,p0.b,p1.b,p2.b));
   END FUNCTION;
-  FUNCTION bic_calc1(frac : unsigned(11 DOWNTO 4);
+  FUNCTION bic_calc1(f : unsigned(11 DOWNTO 0);
                      abcd : type_bic_pix_abcd) RETURN type_bic_tt IS
-    VARIABLE u : signed(17 DOWNTO 0);
-    VARIABLE v : signed(18 DOWNTO 0);
-    VARIABLE w : signed(16 DOWNTO 0);
+    VARIABLE u : signed(11+FRAC DOWNTO 0);
+    VARIABLE v : signed(12+FRAC DOWNTO 0);
+    VARIABLE w : signed(10+FRAC DOWNTO 0);
     VARIABLE x : type_bic_tt;
+    CONSTANT Z : signed(FRAC-1 DOWNTO 0):=(OTHERS =>'0');
   BEGIN
     -- T= X.(X.D+C)
-    u:=abcd.r.d * signed('0' & frac(11 DOWNTO 6)); -- 2.9 * 1.6 = 3.15 -> 2.15
-    v:=(u(16) & u(16) & u(16 DOWNTO 0)) + (abcd.r.c(11) & abcd.r.c & "000000"); -- 4.15
-    -- 4.6 * 1.6 = 5.12 -> 4.12
-    w:=v(18 DOWNTO 9) * signed('0' & frac(11 DOWNTO 6)); -- 5.12 -> 4.12
-    x.r:=w(15 DOWNTO 3); -- 4.9
+    u:=abcd.r.d * signed('0' & f(11 DOWNTO 12-FRAC)); -- 2.9 * 1.FRAC = 3.(9+FRAC) -> 2.(9+FRAC)
+    v:=(u(10+FRAC) & u(10+FRAC) & u(10+FRAC DOWNTO 0)) + (abcd.r.c(11) & abcd.r.c & Z); -- 4.15
+    -- 4.6 * 1.FRAC = 5.(6+FRAC) -> 4.(6+FRAC)
+    w:=v(12+FRAC DOWNTO 3+FRAC) * signed('0' & f(11 DOWNTO 12-FRAC)); -- 5.12 -> 4.12
+    x.r:=w(9+FRAC DOWNTO FRAC-3); -- 4.9
 
-    u:=abcd.g.d * signed('0' & frac(11 DOWNTO 6)); -- 2.9 * 1.6 = 3.15 -> 2.15
-    v:=(u(16) & u(16) & u(16 DOWNTO 0)) + (abcd.g.c(11) & abcd.g.c & "000000"); -- 4.15
-    -- 4.6 * 1.6 = 5.12 -> 4.12
-    w:=v(18 DOWNTO 9) * signed('0' & frac(11 DOWNTO 6)); -- 5.12 -> 4.12
-    x.g:=w(15 DOWNTO 3); -- 4.9
+    u:=abcd.g.d * signed('0' & f(11 DOWNTO 12-FRAC)); -- 2.9 * 1.FRAC = 3.(9+FRAC) -> 2.(9+FRAC)
+    v:=(u(10+FRAC) & u(10+FRAC) & u(10+FRAC DOWNTO 0)) + (abcd.g.c(11) & abcd.g.c & Z); -- 4.15
+    -- 4.6 * 1.FRAC = 5.(6+FRAC) -> 4.(6+FRAC)
+    w:=v(12+FRAC DOWNTO 3+FRAC) * signed('0' & f(11 DOWNTO 12-FRAC)); -- 5.12 -> 4.12
+    x.g:=w(9+FRAC DOWNTO FRAC-3); -- 4.9
 
-    u:=abcd.b.d * signed('0' & frac(11 DOWNTO 6)); -- 2.9 * 1.6 = 3.15 -> 2.15
-    v:=(u(16) & u(16) & u(16 DOWNTO 0)) + (abcd.b.c(11) & abcd.b.c & "000000"); -- 4.15
-    -- 4.6 * 1.6 = 5.12 -> 4.12
-    w:=v(18 DOWNTO 9) * signed('0' & frac(11 DOWNTO 6)); -- 5.12 -> 4.12
-    x.b:=w(15 DOWNTO 3); -- 4.9
+    u:=abcd.b.d * signed('0' & f(11 DOWNTO 12-FRAC)); -- 2.9 * 1.FRAC = 3.(9+FRAC) -> 2.(9+FRAC)
+    v:=(u(10+FRAC) & u(10+FRAC) & u(10+FRAC DOWNTO 0)) + (abcd.b.c(11) & abcd.b.c & Z); -- 4.15
+    -- 4.6 * 1.FRAC = 5.(6+FRAC) -> 4.(6+FRAC)
+    w:=v(12+FRAC DOWNTO 3+FRAC) * signed('0' & f(11 DOWNTO 12-FRAC)); -- 5.12 -> 4.12
+    x.b:=w(9+FRAC DOWNTO FRAC-3); -- 4.9
 
     RETURN x;
   END FUNCTION;
 
         
-  FUNCTION bic_calc2(frac :unsigned(11 DOWNTO 4);
+  FUNCTION bic_calc2(f :unsigned(11 DOWNTO 0);
                     t : type_bic_tt;
                     abcd : type_bic_pix_abcd) RETURN type_pix IS
     VARIABLE u : signed(12 DOWNTO 0); -- 4.9
-    VARIABLE v : signed(19 DOWNTO 0); -- 5.15
+    VARIABLE v : signed(13+FRAC DOWNTO 0); -- 5.(9+FRAC)
     VARIABLE x : type_pix;
+    CONSTANT Z : signed(FRAC-1 DOWNTO 0):=(OTHERS =>'0');
   BEGIN
     -- Y = A + X.(B+T)
     u:=t.r +
         (abcd.r.b(8) & abcd.r.b(8) & abcd.r.b(8) & abcd.r.b(8) & abcd.r.b);
-    v:=signed('0' & frac(11 DOWNTO 6))*u +("000" & signed(abcd.r.a) & "0000000");
-    x.r:=bound(unsigned(v),15);
+    v:=signed('0' & f(11 DOWNTO 12-FRAC))*u +("000" & signed(abcd.r.a) & '0' & Z);
+    x.r:=bound(unsigned(v),9+FRAC);
     
     u:=t.g +
         (abcd.g.b(8) & abcd.g.b(8) & abcd.g.b(8) & abcd.g.b(8) & abcd.g.b);
-    v:=signed('0' & frac(11 DOWNTO 6))*u +("000" & signed(abcd.g.a) & "0000000");
-    x.g:=bound(unsigned(v),15);
+    v:=signed('0' & f(11 DOWNTO 12-FRAC))*u +("000" & signed(abcd.g.a) & '0' & Z);
+    x.g:=bound(unsigned(v),9+FRAC);
     
     u:=t.b +
         (abcd.b.b(8) & abcd.b.b(8) & abcd.b.b(8) & abcd.b.b(8) & abcd.b.b);
-    v:=signed('0' & frac(11 DOWNTO 6))*u +("000" & signed(abcd.b.a) & "0000000");
-    x.b:=bound(unsigned(v),15);
+    v:=signed('0' & f(11 DOWNTO 12-FRAC))*u +("000" & signed(abcd.b.a) & '0' & Z);
+    x.b:=bound(unsigned(v),9+FRAC);
     RETURN x;
   END FUNCTION;            
   -----------------------------------------------------------------------------
@@ -513,95 +526,115 @@ ARCHITECTURE rtl OF ascal IS
   -- Lanczos : sinc(x)=sin(pi*x)/(pi*x)
 
   -- L(x) = sinc(x).sinc(x/a) -a < x < +a
-  -- L(x) = a.sin(pi*x).sin(pi*x/a) / pi² / x²
+  -- L(x) = a.sin(pi*x).sin(pi*x/a) / piВІ / xВІ
 
-  FUNCTION sinc(x : real) RETURN real IS
-    VARIABLE y : real;
-  BEGIN
-    y :=x * ieee.math_real.MATH_PI;
-    IF (y=0.0) THEN
-      RETURN 1.0;
-    ELSE
-      RETURN ieee.math_real.sin(y)/y;
-    END IF;
-  END FUNCTION;
+  --FUNCTION sinc(x : real) RETURN real IS
+  --  VARIABLE y : real;
+  --BEGIN
+  --  y :=x * ieee.math_real.MATH_PI;
+  --  IF (y=0.0) THEN
+  --    RETURN 1.0;
+  --  ELSE
+  --    RETURN ieee.math_real.sin(y)/y;
+  --  END IF;
+  --END FUNCTION;
   
-  FUNCTION lanczos(x : real; d : integer) RETURN real IS
-  BEGIN
-    IF (x<=real(d)) AND (x>=real(-d)) THEN
-      RETURN sinc(x) * sinc(x / real(d));
-    ELSE
-      RETURN 0.0;
-    END IF;
-  END FUNCTION lanczos;
+  --FUNCTION lanczos(x : real; d : integer) RETURN real IS
+  --BEGIN
+  --  IF (x<=real(d)) AND (x>=real(-d)) THEN
+  --    RETURN sinc(x) * sinc(x / real(d));
+  --  ELSE
+  --    RETURN 0.0;
+  --  END IF;
+  --END FUNCTION lanczos;
   
-  FUNCTION filter(i : integer; p : integer;r : integer) RETURN signed IS
-    VARIABLE v : signed(8 DOWNTO 0);
-    VARIABLE x : real;
-  BEGIN
-    x:=lanczos(real(i)/32.0-real(p),r);
-    v:=to_signed(integer(x*64.0),9);
-    RETURN v;
-  END FUNCTION filter;
+  --FUNCTION filter(i : integer; p : integer;r : integer) RETURN signed IS
+  --  VARIABLE v : signed(8 DOWNTO 0);
+  --  VARIABLE x : real;
+  --BEGIN
+  --  x:=lanczos(real(i)/32.0-real(p),r);
+  --  v:=to_signed(integer(x*64.0),9);
+  --  RETURN v;
+  --END FUNCTION filter;
   
   TYPE arr_uv36 IS ARRAY (natural RANGE <>) OF unsigned(35 DOWNTO 0);
-  FUNCTION gen_lanczos(r : integer) RETURN arr_uv36 IS
-    VARIABLE t : unsigned(31 DOWNTO 0);
-    VARIABLE m : arr_uv36(0 TO 31);
-  BEGIN
-    FOR i IN 0 TO 31 LOOP
-      m(i):=unsigned(filter(i,-1,r) & filter(i,0,r) &
-                     filter(i,1,r) & filter(i,2,r));
-    END LOOP;
-    RETURN m;
-  END FUNCTION;
+  --FUNCTION gen_lanczos(r : integer) RETURN arr_uv36 IS
+  --  VARIABLE t : unsigned(31 DOWNTO 0);
+  --  VARIABLE m : arr_uv36(0 TO 31);
+  --BEGIN
+  --  FOR i IN 0 TO 31 LOOP
+  --    m(i):=unsigned(filter(i,-1,r) & filter(i,0,r) &
+  --                   filter(i,1,r) & filter(i,2,r));
+  --  END LOOP;
+  --  RETURN m;
+  --END FUNCTION;
 
   TYPE arr_integer IS ARRAY (natural RANGE <>) OF integer;
-  --CONSTANT poly_a : arr_integer := (
-  --  -24,-20,-16,-11,-6,-1,2,5,6,6,5,4,2,1,0,0,
-  --  176,174,169,160,147,129,109,84,58,22,3,-12,-20,-25,-26,-25,
-  --  -24,-26,-26,-23,-16,-4,11,32,58,96,119,140,154,165,172,175,
-  --  0,0,1,2,3,4,6,7,6,4,1,-4,-8,-13,-18,-22);
+  CONSTANT POLY16_A : arr_integer := (
+    -24,-20,-16,-11,-6,-1,2,5,6,6,5,4,2,1,0,0,
+    176,174,169,160,147,129,109,84,58,22,3,-12,-20,-25,-26,-25,
+    -24,-26,-26,-23,-16,-4,11,32,58,96,119,140,154,165,172,175,
+    0,0,1,2,3,4,6,7,6,4,1,-4,-8,-13,-18,-22);
   
-  --CONSTANT poly_b : arr_integer := (
-  --  0,-4,-8,-10,-11,-11,-10,-9,-8,-6,-4,-3,-2,-1,0,0,
-  --  127,126,124,119,111,103,93,82,72,56,45,35,25,17,9,3,
-  --  0,6,13,20,30,40,50,61,72,88,98,107,115,121,125,127,
-  --  0,0,-1,-1,-2,-4,-5,-6,-8,-10,-11,-11,-10,-9,-6,-2);
+  CONSTANT POLY16_B : arr_integer := (
+    0,-4,-8,-10,-11,-11,-10,-9,-8,-6,-4,-3,-2,-1,0,0,
+    127,126,124,119,111,103,93,82,72,56,45,35,25,17,9,3,
+    0,6,13,20,30,40,50,61,72,88,98,107,115,121,125,127,
+    0,0,-1,-1,-2,-4,-5,-6,-8,-10,-11,-11,-10,-9,-6,-2);
 
-  CONSTANT poly_a : arr_integer := (
+  CONSTANT POLY32_A : arr_integer := (
     -24,-22,-20,-18,-16,-13,-11,-8,-6,-3,-1,0,2,3,5,5,6,6,6,5,5,4,4,3,2,1,1,0,0,0,0,0,
     176,175,174,172,169,164,160,153,147,138,129,119,109,96,84,71,58,40,22,12,3,-4,-12,-16,-20,-22,-25,-25,-26,-25,-25,-25,
     -24,-25,-26,-26,-26,-24,-23,-19,-16,-10,-4,4,11,22,32,45,58,77,96,108,119,129,140,147,154,159,165,168,172,173,175,175,
     0,0,0,0,1,1,2,2,3,3,4,5,6,7,7,7,6,5,4,3,1,-1,-4,-6,-8,-10,-13,-15,-18,-20,-22,-22);
   
-  CONSTANT poly_b : arr_integer := (
+  CONSTANT POLY32_B : arr_integer := (
     0,-2,-4,-6,-8,-9,-10,-10,-11,-11,-11,-10,-10,-9,-9,-8,-8,-7,-6,-5,-4,-3,-3,-2,-2,-1,-1,0,0,0,0,0,
     128,127,126,125,124,121,119,115,111,107,103,98,93,87,82,77,72,64,56,50,45,40,35,30,25,21,17,13,9,6,3,3,
     0,3,6,9,13,17,20,25,30,35,40,45,50,55,61,66,72,80,88,93,98,102,107,111,115,118,121,123,125,126,127,127,
     0,0,0,0,-1,-1,-1,-2,-2,-3,-4,-5,-5,-5,-6,-7,-8,-9,-10,-10,-11,-11,-11,-11,-10,-10,-9,-8,-6,-4,-2,-2);
   
-  FUNCTION gen_poly(p : arr_integer) RETURN arr_uv36 IS
-    VARIABLE m : arr_uv36(0 TO 31);
+  FUNCTION gen_poly(n : natural) RETURN arr_uv36 IS
+    VARIABLE p16 : arr_integer(0 TO 4*16-1);
+    VARIABLE p32 : arr_integer(0 TO 4*32-1);
+    VARIABLE m : arr_uv36(0 TO 2**FRAC-1) :=(OTHERS =>x"000000000");
   BEGIN
-    --FOR i IN 0 TO 15 LOOP
-    --  m(2*i):=unsigned(to_signed(p(i)/2,8) & to_signed(p(i+16)/2,8) &
-    --                   to_signed(p(i+32)/2,8) & to_signed(p(i+48)/2,8));
-    --  m(2*i+1):=m(2*i);
-    --END LOOP;
-    FOR i IN 0 TO 31 LOOP
-      m(i):=unsigned(to_signed(p(i),9) & to_signed(p(i+32),9) &
-                     to_signed(p(i+64),9) & to_signed(p(i+96),9));
-    END LOOP;
+    IF FRAC=4 THEN
+      IF n=0 THEN p16:=POLY16_A; ELSE p16:=POLY16_B; END IF;
+      FOR i IN 0 TO 15 LOOP
+        m(i):=unsigned(to_signed(p16(i),9) & to_signed(p16(i+16),9) &
+                       to_signed(p16(i+32),9) & to_signed(p16(i+48),9));
+      END LOOP;
+    ELSIF FRAC=5 THEN
+      IF n=0 THEN p32:=POLY32_A; ELSE p32:=POLY32_B; END IF;
+      FOR i IN 0 TO 31 LOOP
+        m(i):=unsigned(to_signed(p32(i),9) & to_signed(p32(i+32),9) &
+                       to_signed(p32(i+64),9) & to_signed(p32(i+96),9));
+      END LOOP;
+    END IF;
     RETURN m;
   END FUNCTION;
+
+  FUNCTION init_poly RETURN arr_uv36 IS
+    VARIABLE p : arr_uv36(0 TO 2**(FRAC+NPOLY)-1);
+  BEGIN
+    FOR i IN 0 TO 2**NPOLY-1 LOOP
+      p(i*2**FRAC TO (i+1)*2**FRAC-1):=gen_poly(i MOD 2);
+    END LOOP;
+    RETURN p;
+  END;
   
-  SIGNAL o_h_poly : arr_uv36(0 TO 63):=gen_poly(poly_b) & gen_poly(poly_a) ;
-  SIGNAL o_v_poly : arr_uv36(0 TO 63):=gen_poly(poly_b) & gen_poly(poly_a) ;
+  SIGNAL o_h_poly : arr_uv36(0 TO 2**(FRAC+NPOLY)-1):=init_poly;
+  SIGNAL o_v_poly : arr_uv36(0 TO 2**(FRAC+NPOLY)-1):=init_poly;
+  ATTRIBUTE ramstyle OF o_h_poly : SIGNAL IS "no_rw_check";
+  ATTRIBUTE ramstyle OF o_v_poly : SIGNAL IS "no_rw_check";
   SIGNAL o_h_poly_a,o_v_poly_a : integer RANGE 0 TO 63;
   SIGNAL o_h_poly_dr,o_v_poly_dr : unsigned(35 DOWNTO 0);
   SIGNAL o_h_poly_pix,o_v_poly_pix : type_pix;
-
+  SIGNAL poly_h_wr,poly_v_wr : std_logic;
+  SIGNAL poly_tdw : unsigned(35 DOWNTO 0);
+  SIGNAL poly_a2 : unsigned(FRAC+NPOLY-1 DOWNTO 0);
+  
   TYPE type_poly_t IS RECORD
     r0,r1,b0,b1,g0,g1 : signed(17 DOWNTO 0);
   END RECORD;
@@ -670,11 +703,11 @@ ARCHITECTURE rtl OF ascal IS
       WHEN 'E' => RETURN "01110";
       WHEN 'F' => RETURN "01111";
       WHEN ' ' => RETURN "10000";
-                  WHEN '=' => RETURN "10001";
+      WHEN '=' => RETURN "10001";
       WHEN '+' => RETURN "10010";
       WHEN '-' => RETURN "10011";
       WHEN '<' => RETURN "10100";
-                  WHEN '>' => RETURN "10101";
+      WHEN '>' => RETURN "10101";
       WHEN '^' => RETURN "10110";
       WHEN 'v' => RETURN "10111";
       WHEN '(' => RETURN "11000";
@@ -699,9 +732,10 @@ ARCHITECTURE rtl OF ascal IS
     RETURN r;
   END FUNCTION CS;
   FUNCTION CN(v : unsigned) RETURN unsigned IS
-    constant t : unsigned(0 TO v'length-1) :=v;
+    VARIABLE t : unsigned(0 TO v'length-1);
     VARIABLE o : unsigned(0 TO v'length/4*5-1);
   BEGIN
+    t:=v;
     FOR i IN 0 TO v'length/4-1 LOOP
       o(i*5 TO i*5+4):='0' & t(i*4 TO i*4+3);
     END LOOP;
@@ -762,14 +796,14 @@ BEGIN
           i_vcpt<=i_vcpt+1;
         END IF;
        
-        i_ven<=to_std_logic(i_hcpt>=i_hmin AND i_hcpt<i_hmax AND i_hs='0' AND
-                            i_vcpt>=i_vmin AND i_vcpt<i_vmax AND i_vs='0');
+        i_ven<=to_std_logic(i_hcpt+1>=i_hmin AND i_hcpt+1<=i_hmax AND
+                            i_vcpt>=i_vmin AND i_vcpt<=i_vmax );
         
         ----------------------------------------------------
         -- Auto-sizing of the input image
         IF i_iauto='1' THEN
           IF i_de='1' AND i_de_pre='0' THEN
-            i_hmin<=i_hcpt;
+            i_hmin<=i_hcpt+1;
           END IF;
           IF i_de='0' AND i_de_pre='1' THEN
             i_hmax<=i_hcpt;
@@ -793,23 +827,33 @@ BEGIN
           i_vmax<=vimax;
         END IF;
         
+        -- VS   __/""""\_______________________
+        -- DE   _________________/"""""""\_____
+        -- VCPT   0 0 0 1 2 3 4 5 6 7 8 9 10
+        --   VMIN = 6 VMAX=9
+        
+        -- HS   __/""""\_______________________
+        -- DE   _________________/"""""""\_____
+        -- HCPT   0 0 0 1 2 3 4 5 6 7 8 9 10
+        --   HMIN = 6 HMAX=409
         i_hsize<=(4096+i_hmax-i_hmin) MOD 4096;
         i_vsize<=(4096+i_vmax-i_vmin) MOD 4096;
         
         ----------------------------------------------------
         -- Assemble pixels
 --        i_shift(23+24*(4-i_acpt) DOWNTO 24*(4-i_acpt))<= i_r & i_g & i_b;
+        i_rgb<=i_r & i_g & i_b;
         CASE i_acpt IS
           WHEN 0 =>
-            i_shift(23+24*4 DOWNTO 24*4) <= i_r & i_g & i_b;
+            i_shift(23+24*4 DOWNTO 24*4) <= i_rgb;
           WHEN 1 | 5 =>
-            i_shift(23+24*3 DOWNTO 24*3) <= i_r & i_g & i_b;
+            i_shift(23+24*3 DOWNTO 24*3) <= i_rgb;
           WHEN 2 | 6 =>
-            i_shift(23+24*2 DOWNTO 24*2) <= i_r & i_g & i_b;
+            i_shift(23+24*2 DOWNTO 24*2) <= i_rgb;
           WHEN 3 | 7 =>
-            i_shift(23+24*1 DOWNTO 24*1) <= i_r & i_g & i_b;
+            i_shift(23+24*1 DOWNTO 24*1) <= i_rgb;
           WHEN 4 =>
-            i_shift(23+24*0 DOWNTO 24*0) <= i_r & i_g & i_b;
+            i_shift(23+24*0 DOWNTO 24*0) <= i_rgb;
         END CASE;
         IF i_ven='1' THEN
           IF i_acpt=4 THEN
@@ -847,7 +891,7 @@ BEGIN
         i_wr<='1';
         i_wad_pre<=(i_wad_pre+1) MOD (BLEN*2);
         IF (i_wad MOD BLEN=BLEN-1) OR i_hs='1' THEN
-          i_hbcpt<=(i_hbcpt+1) MOD (IHRES/N_BURST);
+          i_hbcpt<=(i_hbcpt+1) MOD 32;
           i_write<=NOT i_write;
           IF i_wad/BLEN=0 THEN
             i_walt<='0';
@@ -1049,10 +1093,6 @@ BEGIN
       
   o_dr<=o_dpram(o_ad) WHEN rising_edge(o_clk);
 
-  -- Polyphase ROMs
-  o_h_poly_dr<=o_h_poly(o_h_poly_a) WHEN rising_edge(o_clk);
-  o_v_poly_dr<=o_v_poly(o_v_poly_a) WHEN rising_edge(o_clk);
-  
   -----------------------------------------------------------------------------
   -- Dividers
   o_ihsize<=i_hsize WHEN rising_edge(o_clk); -- <ASYNC>
@@ -1067,12 +1107,14 @@ BEGIN
   Dividers:PROCESS (o_clk,o_reset_na) IS
   BEGIN
     IF o_reset_na='0' THEN
+      o_hdelta<=x"001000";
+      o_vdelta<=x"001000";
       
     ELSIF rising_edge(o_clk) THEN
-      o_hdivi<=to_unsigned(o_hmax - o_hmin,12);
-      o_vdivi<=to_unsigned(o_vmax - o_vmin,12);
-      o_hdivr<=to_unsigned(o_ihsize * 4096,36);
-      o_vdivr<=to_unsigned(o_ivsize * 4096,36);
+      o_hdivi<=to_unsigned(o_hmax - o_hmin - 1,12);
+      o_vdivi<=to_unsigned(o_vmax - o_vmin - 1,12);
+      o_hdivr<=to_unsigned((o_ihsize-1) * 4096,36);
+      o_vdivr<=to_unsigned((o_ivsize-1) * 4096,36);
 
       --------------------------------------------
       IF o_divstart='1' THEN
@@ -1114,8 +1156,8 @@ BEGIN
     VARIABLE mul_v : unsigned(47 DOWNTO 0);
     VARIABLE lev_inc_v,lev_dec_v : std_logic;
     VARIABLE alt_v : std_logic;
-    VARIABLE pos_v : unsigned(23 DOWNTO 0);
     VARIABLE debug_read_dec,debug_read_inc : std_logic;
+    VARIABLE prim_v : std_logic;
   BEGIN
     IF o_reset_na='0' THEN
       o_copy<='0';
@@ -1190,16 +1232,13 @@ BEGIN
             o_hsp<=o_hsp-1;
           END IF;
           IF o_vsp='1' THEN
-            o_fload<=3; -- Force load 3 lines at top of screen
+            o_fload<=2; -- Force load 3 lines at top of screen
             o_vsp<='0';
           END IF;
           
           --------------------------------------------------
         WHEN sHSYNC =>
           o_vpos_pre<=o_vpos;
-          o_hpos<=x"000000";
-          o_hpos_next<=o_hdelta;
-          o_dcpt<=0;
           o_hbcpt<=0; -- Clear burst counter on line
           IF o_vpos(12)/=o_vpos_pre(12) OR o_fload>0 THEN
             o_state<=sREAD;
@@ -1215,42 +1254,34 @@ BEGIN
             debug_read_inc:='1';
             o_state <=sWAITREAD;
           END IF;
-          
-          IF o_fload=3 THEN
-            o_adrs<=to_unsigned((to_integer(
-              o_vpos(23 DOWNTO 12)) * o_hburst + o_hbcpt) * N_BURST,32);
+          IF o_hbcpt=0 THEN
+            prim_v:='1';
+          ELSE
+            prim_v:='0';
+          END IF;
+          IF o_fload=2 THEN
+            o_adrs<=to_unsigned((o_hbcpt) * N_BURST,32);
             -- Update all lines on top border.
             o_altp<="1111";
             
-          ELSIF o_fload=2 THEN
-            o_adrs<=to_unsigned((to_integer(
-              o_vpos(23 DOWNTO 12)+1) * o_hburst + o_hbcpt) * N_BURST,32);
-            o_altp<=altx(o_vpos(13 DOWNTO 12) + 1);
-            
           ELSIF o_fload=1 THEN
-            o_adrs<=to_unsigned((to_integer(
-              o_vpos(23 DOWNTO 12)+2) * o_hburst + o_hbcpt) * N_BURST,32);
-            o_altp<=altx(o_vpos(13 DOWNTO 12) + 2);
+            o_adrs<=to_unsigned((o_hburst + o_hbcpt) * N_BURST,32);
+            o_altp<="0100";
             
           ELSE
             o_adrs<=to_unsigned((to_integer(
-              o_vpos(23 DOWNTO 12)+3) * o_hburst + o_hbcpt) * N_BURST,32);
+              o_vpos(23 DOWNTO 12)+2) * o_hburst + o_hbcpt) * N_BURST,32);
             o_altp<=altx(o_vpos(13 DOWNTO 12) + 3);
           END IF;
           
         WHEN sWAITREAD =>
           IF o_readack='1' THEN
             o_hbcpt<=o_hbcpt+1;
-            IF o_fload>=2 AND o_hbcpt=o_hburst-1 THEN
+            IF o_fload>=1 AND o_hbcpt=o_hburst-1 THEN
               o_fload<=o_fload-1;
               o_hbcpt<=0;
-              o_hpos<=x"000000";
-              o_hpos_next<=o_hdelta;
               o_state<=sREAD;
-            ELSIF o_fload=1 AND o_hbcpt=o_hburst-1 THEN
-              o_fload<=o_fload-1;
-              o_state<=sDISP;
-            ELSIF o_hbcpt<o_hburst-1 THEN -- <Essai sans le -1>
+            ELSIF o_hbcpt<o_hburst-1 THEN
               -- If more lines to load, or not finshed line, read more
               o_state<=sREAD;
             ELSE
@@ -1279,28 +1310,29 @@ BEGIN
         o_acpt<=0;
         o_adturn<='0';
         o_dr2<=o_dr;
-        IF o_vsp='1' THEN
+        IF o_primv(0)='1' THEN
+          -- First memcopy of a horizontal line, carriage return !
           o_hpos<=x"000000";
           o_hpos_next<=o_hdelta;
+          o_dcpt<=0;
+          o_dshi<=2;
         END IF;
       ELSE
-        o_dcpt<=(o_dcpt+1) MOD OHRES;
-        --pos_v:=o_hpos+o_hdelta;
-        o_hpos_next<=o_hpos_next+o_hdelta;
-        o_hpos<=o_hpos_next;
+        IF o_dshi=0 THEN
+          o_dcpt<=(o_dcpt+1) MOD OHRES;
+          o_hpos_next<=o_hpos_next+o_hdelta;
+          o_hpos<=o_hpos_next;
+        ELSE
+          -- dshi : Force shift first four pixels
+          o_dshi<=o_dshi-1;
+        END IF;
         
         -- Pixels -1 / 0 / 1 / 2
-        
-        IF o_hpos(12)/=o_hpos_next(12) OR o_dcpt<3 THEN
-        --IF o_hpos(12)/=pos_v(12) OR o_dcpt<3 THEN
+        IF o_hpos(12)/=o_hpos_next(12) OR o_dshi>0 THEN
           o_hpixm<=o_hpix0;
           o_hpix0<=o_hpix1;
           o_hpix1<=o_hpix2;
           
-          --o_hpix2<=(
-          --  r=>o_dr2(23+24*(4-o_acpt) DOWNTO 16+24*(4-o_acpt)),
-          --  g=>o_dr2(15+24*(4-o_acpt) DOWNTO  8+24*(4-o_acpt)),
-          --  b=>o_dr2( 7+24*(4-o_acpt) DOWNTO    24*(4-o_acpt)));
           CASE o_acpt IS
             WHEN 0 =>
               o_hpix2<=(r=>o_dr2(23+24*4 DOWNTO 16+24*4),
@@ -1343,17 +1375,30 @@ BEGIN
       
       ------------------------------------------------------
       -- READLEV : Number of ongoing Avalon Reads
-      -- COPYLEV : Number of ongoing copies to line buffers
       IF lev_dec_v='1'  AND lev_inc_v='0' THEN
         o_readlev<=o_readlev-1;
       ELSIF lev_dec_v='0' AND lev_inc_v='1' THEN
         o_readlev<=o_readlev+1;
       END IF;
       
+      -- COPYLEV : Number of ongoing copies to line buffers
       IF lev_dec_v='1'  AND o_readack='0' THEN
         o_copylev<=o_copylev-1;
       ELSIF lev_dec_v='0' AND o_readack='1' THEN
         o_copylev<=o_copylev+1;
+      END IF;
+
+      -- FIFO that stores when a READ command is the first of a line
+      IF lev_dec_v='1' THEN
+        o_primv(0 TO 1)<=o_primv(1 TO 2);
+      END IF;
+      IF lev_inc_v='1' THEN
+        IF o_readlev=0 OR (o_readlev=1 AND lev_dec_v='1') THEN
+          o_primv(0)<=prim_v;
+        ELSIF o_readlev=1 AND lev_dec_v='0' THEN
+          o_primv(1)<=prim_v;
+        END IF;
+        o_primv(2)<=prim_v;
       END IF;
       
       ------------------------------------------------------
@@ -1376,35 +1421,66 @@ BEGIN
   
   o_alt<=o_altv(0 TO 3);
 
-  o_h_poly_a<=to_integer(o_modex(0) & o_hpos(11 DOWNTO 7));
-  o_v_poly_a<=to_integer(o_modex(0) & o_vpos(11 DOWNTO 7));
+  o_h_poly_a<=to_integer(o_modex(0) & o_hpos(11 DOWNTO 12-FRAC));
+  o_v_poly_a<=to_integer(o_modex(0) & o_vpos(11 DOWNTO 12-FRAC));
 
+  -----------------------------------------------------------------------------
+  -- Polyphase ROMs
+  o_h_poly_dr<=o_h_poly(o_h_poly_a) WHEN rising_edge(o_clk);
+  o_v_poly_dr<=o_v_poly(o_v_poly_a) WHEN rising_edge(o_clk);
+  
+  Polikarpov:PROCESS(poly_clk) IS
+  BEGIN
+    IF rising_edge(poly_clk) THEN
+      IF poly_wr='1' THEN
+        poly_tdw(8+9*(3-to_integer(poly_a(1 DOWNTO 0))) DOWNTO
+                 9*(3-to_integer(poly_a(1 DOWNTO 0))))<=poly_dw;
+      END IF;
+      
+      poly_h_wr<=poly_wr AND NOT poly_a(FRAC+2);
+      poly_v_wr<=poly_wr AND poly_a(FRAC+2);
+      poly_a2<=poly_a(NPOLY+FRAC+2 DOWNTO FRAC+3) & poly_a(FRAC+1 DOWNTO 2);
+      
+      IF poly_h_wr='1' THEN
+        o_h_poly(to_integer(poly_a2))<=poly_tdw;
+      END IF;
+      IF poly_v_wr='1' THEN
+        o_v_poly(to_integer(poly_a2))<=poly_tdw;
+      END IF;
+    END IF;
+  END PROCESS Polikarpov;
+  
   -----------------------------------------------------------------------------
   -- Horizontal Scaler
   HSCAL:PROCESS(o_clk) IS
   BEGIN
     IF rising_edge(o_clk) THEN
       -- Pipeline signals
-      o_hpos1<=o_hpos; o_hpos2<=o_hpos1; --o_hpos3<=o_hpos2;
-      o_alt1 <=o_alt;  o_alt2 <=o_alt1;  o_alt3 <=o_alt2;
-      o_copy1<=o_copy; o_copy2<=o_copy1; o_copy3<=o_copy2;
-      o_dcpt1<=o_dcpt; o_dcpt2<=o_dcpt1; o_dcpt3<=o_dcpt2;
+      o_hpos1<=o_hpos; o_hpos2<=o_hpos1;
+      o_alt1 <=o_alt;  o_alt2 <=o_alt1;  o_alt3 <=o_alt2;  o_alt4 <=o_alt3;
+      o_copy1<=o_copy; o_copy2<=o_copy1; o_copy3<=o_copy2; o_copy4<=o_copy3;
+      o_dcpt1<=o_dcpt; o_dcpt2<=o_dcpt1; o_dcpt3<=o_dcpt2; o_dcpt4<=o_dcpt3;
 
-      o_hpixm1<=o_hpixm; --o_hpixm2<=o_hpixm1;
+      o_hpixm1<=o_hpixm;
       o_hpix01<=o_hpix0; o_hpix02<=o_hpix01;
       o_hpix11<=o_hpix1; o_hpix12<=o_hpix11;
-      o_hpix21<=o_hpix2; --o_hpix22<=o_hpix21;
+      o_hpix21<=o_hpix2;
       
-      -- NEAREST -----------------------------------------
-      -- C3 : Nearest
-      o_h_near_pix<=near_calc(o_hpos2(11 DOWNTO 0),o_hpix02,o_hpix12);
+      -- NEAREST / BILINEAR / GHOGAN ---------------------
+      -- C2 : Select
+      CASE o_modex(1 DOWNTO 0) IS
+        WHEN "00" => -- Nearest
+          o_h_frac<=near_frac(o_hpos1(11 DOWNTO 0));
+        WHEN "01" => -- Bilinear
+          o_h_frac<=bil_frac(o_hpos1(11 DOWNTO 0));
+        WHEN "10" => -- Ghogan
+          o_h_frac<=gho_frac(o_hpos1(11 DOWNTO 0));
+        WHEN OTHERS =>
+          o_h_frac<=near_frac(o_hpos1(11 DOWNTO 0));
+      END CASE;
       
-      -- C3 : Bilinear
-      o_h_bil_pix<=bil_calc(o_hpos2(11 DOWNTO 4),o_hpix02,o_hpix12);
-
-      -- C3 : Ghogan
-      o_h_gho_frac<=gho_calc(o_hpos1(11 DOWNTO 0));
-      o_h_gho_pix <=bil_calc(o_h_gho_frac,o_hpix02,o_hpix12);
+      -- C3 : Nearest / Bilinear / Ghogan
+      o_h_bil_pix<=bil_calc(o_h_frac,o_hpix02,o_hpix12);
       
       -- BICUBIC -----------------------------------------
       -- C1 : Bicubic coefficients A,B,C,D
@@ -1412,11 +1488,11 @@ BEGIN
       
       -- C2 : Bicubic calc T = X.(X.D + C)
       o_h_bic_abcd2<=o_h_bic_abcd1;
-      o_h_bic_tt2<=bic_calc1(o_hpos1(11 DOWNTO 4),o_h_bic_abcd1);
+      o_h_bic_tt2<=bic_calc1(o_hpos1(11 DOWNTO 0),o_h_bic_abcd1);
       
       -- C3 : Bicubic final Y = A + X.(B + T)
-      o_h_bic_pix<=bic_calc2(o_hpos2(11 DOWNTO 4),o_h_bic_tt2,o_h_bic_abcd2);
-
+      o_h_bic_pix<=bic_calc2(o_hpos2(11 DOWNTO 0),o_h_bic_tt2,o_h_bic_abcd2);
+      
       -- LANCZOS POLYPHASE -------------------------------
       -- C1 : Read memory
       
@@ -1427,39 +1503,23 @@ BEGIN
       o_h_poly_pix<=poly_calc2(o_h_poly_t);
       
       -- C4 : Select interpoler --------------------------
-      o_wadl<=o_dcpt3;
-      o_wr(0)<=o_alt3(0) AND o_copy3;
-      o_wr(1)<=o_alt3(1) AND o_copy3;
-      o_wr(2)<=o_alt3(2) AND o_copy3;
-      o_wr(3)<=o_alt3(3) AND o_copy3;
+      o_wadl<=o_dcpt4;
+      o_wr(0)<=o_alt4(0) AND o_copy4;
+      o_wr(1)<=o_alt4(1) AND o_copy4;
+      o_wr(2)<=o_alt4(2) AND o_copy4;
+      o_wr(3)<=o_alt4(3) AND o_copy4;
       
       CASE o_modex(2 DOWNTO 0) IS
-        WHEN "000" => -- Nearest
-          o_ldw<=o_h_near_pix.r & o_h_near_pix.g & o_h_near_pix.b;
-          
-        WHEN "001" => -- HLinear
-          o_ldw<=o_h_bil_pix.r & o_h_bil_pix.g & o_h_bil_pix.b;
-          
-        WHEN "010" => -- Bilinear
+        WHEN "000" | "001" | "010" => -- Nearest | Bilinear | Ghogan
           o_ldw<=o_h_bil_pix.r & o_h_bil_pix.g & o_h_bil_pix.b;
           
         WHEN "011" => -- BiCubic
           o_ldw<=o_h_bic_pix.r & o_h_bic_pix.g & o_h_bic_pix.b;
           
-        WHEN "100" => -- Lanczos 1
+        WHEN OTHERS => -- PolyPhase
           o_ldw<=o_h_poly_pix.r & o_h_poly_pix.g & o_h_poly_pix.b;
-          
-        WHEN "101" => -- Lanczos 2
-          o_ldw<=o_h_poly_pix.r & o_h_poly_pix.g & o_h_poly_pix.b;
-          
-        WHEN "110" => -- Ghogan
-          o_ldw<=o_h_gho_pix.r & o_h_gho_pix.g & o_h_gho_pix.b;
-          
-        WHEN OTHERS => -- DEMO
-          o_ldw<=o_h_near_pix.r & o_h_near_pix.g & o_h_near_pix.b;
           
       END CASE;
-      
       ----------------------------------------------------
     END IF;
   END PROCESS HSCAL;
@@ -1533,7 +1593,8 @@ BEGIN
   -----------------------------------------------------------------------------
   -- Vertical Scaler
   VSCAL:PROCESS(o_clk) IS
-    VARIABLE pixm_v,pix0_v,pix1_v,pix2_v : type_pix;
+    VARIABLE pixm_v ,pix0_v ,pix1_v ,pix2_v  : type_pix;
+    VARIABLE pixtm_v,pixt0_v,pixt1_v,pixt2_v : type_pix;
   BEGIN
     IF rising_edge(o_clk) THEN
       IF o_ce='1' THEN
@@ -1558,44 +1619,61 @@ BEGIN
                  g=>o_ldr2(15 DOWNTO 8),b=>o_ldr2(7 DOWNTO 0));
         
         CASE o_vpos(13 DOWNTO 12) IS
-          WHEN "00" =>  
-            o_vpixm2<=pixm_v;
-            o_vpix02<=pix0_v;
-            o_vpix12<=pix1_v;
-            o_vpix22<=pix2_v;
+          WHEN "00" =>
+            pixtm_v:=pixm_v;
+            pixt0_v:=pix0_v;
+            pixt1_v:=pix1_v;
+            pixt2_v:=pix2_v;
           WHEN "01" =>
-            o_vpixm2<=pix0_v;
-            o_vpix02<=pix1_v;
-            o_vpix12<=pix2_v;
-            o_vpix22<=pixm_v;
+            pixtm_v:=pix0_v;
+            pixt0_v:=pix1_v;
+            pixt1_v:=pix2_v;
+            pixt2_v:=pixm_v;
           WHEN "10" =>
-            o_vpixm2<=pix1_v;
-            o_vpix02<=pix2_v;
-            o_vpix12<=pixm_v;
-            o_vpix22<=pix0_v;
+            pixtm_v:=pix1_v;
+            pixt0_v:=pix2_v;
+            pixt1_v:=pixm_v;
+            pixt2_v:=pix0_v;
           WHEN OTHERS =>
-            o_vpixm2<=pix2_v;
-            o_vpix02<=pixm_v;
-            o_vpix12<=pix0_v;
-            o_vpix22<=pix1_v;
+            pixtm_v:=pix2_v;
+            pixt0_v:=pixm_v;
+            pixt1_v:=pix0_v;
+            pixt2_v:=pix1_v;
         END CASE;
-        
+
+        -- Bottom edge
+        --IF to_integer(o_vpos(23 DOWNTO 12))>=o_ivsize-2 THEN
+        --  pixt2_v:=pixt1_v;
+        --ELSIF to_integer(o_vpos(23 DOWNTO 12))>=o_ivsize-3 THEN
+        --  pixt1_v:=pixt0_v;
+        --  pixt2_v:=pixt0_v;
+        --END IF;
+        o_vpixm2<=pixtm_v;
+        o_vpix02<=pixt0_v;
+        o_vpix12<=pixt1_v;
+        o_vpix22<=pixt2_v;
+          
         -- CYCLE 3 -----------------------------------------
-        o_vpixm3<=o_vpixm2;  --o_vpixm4<=o_vpixm3;
+        o_vpixm3<=o_vpixm2;
         o_vpix03<=o_vpix02;  o_vpix04<=o_vpix03;
         o_vpix13<=o_vpix12;  o_vpix14<=o_vpix13;
-        o_vpix23<=o_vpix22;  --o_vpix24<=o_vpix23;
+        o_vpix23<=o_vpix22;
         
-        -- NEAREST -----------------------------------------
-        -- C5 : Nearest final
-        o_v_near_pix<=near_calc(o_vpos(11 DOWNTO 0),o_vpix04,o_vpix14);
-          
-        -- C5 : Bilinear final
-        o_v_bil_pix<=bil_calc(o_vpos(11 DOWNTO 4),o_vpix04,o_vpix14);
+        -- NEAREST / BILINEAR / GHOGAN ---------------------
+        -- C4 : Select
+        CASE o_modex(1 DOWNTO 0) IS
+          WHEN "00" => -- Nearest
+            o_v_frac<=near_frac(o_vpos(11 DOWNTO 0));
+          WHEN "01" => -- Bilinear
+            o_v_frac<=bil_frac(o_vpos(11 DOWNTO 0));
+          WHEN "10" => -- Ghogan
+            o_v_frac<=gho_frac(o_vpos(11 DOWNTO 0));
+          WHEN OTHERS =>
+            o_v_frac<=near_frac(o_vpos(11 DOWNTO 0));
+        END CASE;
         
-        -- C5 : Ghogan final
-        o_v_gho_frac<=gho_calc(o_vpos(11 DOWNTO 0));
-        o_v_gho_pix <=bil_calc(o_v_gho_frac,o_vpix04,o_vpix14);
+        -- C5 : Nearest / Bilinear / Ghogan
+        o_v_bil_pix<=bil_calc(o_v_frac,o_vpix04,o_vpix14);
         
         -- BICUBIC -----------------------------------------
         -- C3 : Bicubic coefficients A,B,C,D
@@ -1603,10 +1681,10 @@ BEGIN
         
         -- C4 : Bicubic calc T = X.(X.D + C)
         o_v_bic_abcd2<=o_v_bic_abcd1;
-        o_v_bic_tt2<=bic_calc1(o_vpos(11 DOWNTO 4),o_v_bic_abcd1);
+        o_v_bic_tt2<=bic_calc1(o_vpos(11 DOWNTO 0),o_v_bic_abcd1);
         
         -- C5 : Bicubic final Y = A + X.(B + IT)
-        o_v_bic_pix<=bic_calc2(o_vpos(11 DOWNTO 4),o_v_bic_tt2,o_v_bic_abcd2);
+        o_v_bic_pix<=bic_calc2(o_vpos(11 DOWNTO 0),o_v_bic_tt2,o_v_bic_abcd2);
         
         -- LANCZOS POLYPHASE -------------------------------
         -- C3 : Read memory
@@ -1620,12 +1698,7 @@ BEGIN
                             
         -- CYCLE 6 -----------------------------------------
         CASE o_modex(2 DOWNTO 0) IS
-          WHEN "000" | "001" => -- Nearest | HLinear
-            o_r<=o_v_near_pix.r;
-            o_g<=o_v_near_pix.g;
-            o_b<=o_v_near_pix.b;
-            
-          WHEN "010" => -- Bilinear
+          WHEN "000" | "001" | "010" => -- Nearest | Bilinear | Ghogan
             o_r<=o_v_bil_pix.r;
             o_g<=o_v_bil_pix.g;
             o_b<=o_v_bil_pix.b;
@@ -1635,25 +1708,10 @@ BEGIN
             o_g<=o_v_bic_pix.g;
             o_b<=o_v_bic_pix.b;
             
-          WHEN "100" => -- Lanczos 1
+          WHEN OTHERS => -- Polyphase
             o_r<=o_v_poly_pix.r;
             o_g<=o_v_poly_pix.g;
             o_b<=o_v_poly_pix.b;
-            
-          WHEN "101" => -- Lanczos 2
-            o_r<=o_v_poly_pix.r;
-            o_g<=o_v_poly_pix.g;
-            o_b<=o_v_poly_pix.b;
-            
-          WHEN "110" => -- Ghogan
-            o_r<=o_v_gho_pix.r;
-            o_g<=o_v_gho_pix.g;
-            o_b<=o_v_gho_pix.b;
-            
-          WHEN OTHERS =>
-            o_r<=o_v_near_pix.r;
-            o_g<=o_v_near_pix.g;
-            o_b<=o_v_near_pix.b;
             
         END CASE;
         

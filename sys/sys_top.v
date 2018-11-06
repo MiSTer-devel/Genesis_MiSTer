@@ -206,10 +206,11 @@ reg [31:0] cfg_custom_p2;
 
 reg  [4:0] vol_att = 0;
 
-`ifndef LITE
 reg  [6:0] coef_addr;
 reg  [8:0] coef_data;
 reg        coef_wr = 0;
+
+`ifndef LITE
 reg        vip_newcfg = 0;
 `endif
 
@@ -277,9 +278,7 @@ always@(posedge clk_sys) begin
 			if(cmd == 'h25) {led_overtake, led_state} <= io_din;
 			if(cmd == 'h26) vol_att <= io_din[4:0];
 			if(cmd == 'h27) VSET    <= io_din[11:0];
-`ifndef LITE
 			if(cmd == 'h2A) {coef_wr,coef_addr,coef_data} <= {1'b1,io_din};
-`endif
 		end
 	end
 end
@@ -495,8 +494,7 @@ ascal
 	//.RO(0),
 	//.FORMAT(0),
 	.N_DW(128),
-	.N_AW(28),
-	.IHRES(4096)
+	.N_AW(28)
 	//.N_BURST(256)
 )
 ascal
@@ -537,6 +535,12 @@ ascal
 	.vdisp  (HEIGHT),
 	.vmin   (vmin),
 	.vmax   (vmax),
+
+    .poly_clk(clk_sys),
+    .poly_a(coef_addr),
+    .poly_dw(coef_data),
+    .poly_wr(coef_wr),
+
 	.avl_clk          (clk_ctl),
 	.avl_waitrequest  (vbuf_waitrequest),
 	.avl_readdata     (vbuf_readdata),
@@ -575,8 +579,8 @@ always @(posedge clk_vid) begin
 		7: begin
 				hmin <= (WIDTH - videow)>>1;
 				vmin <= (HEIGHT - videoh)>>1;
-				hmax <= ((WIDTH - videow)>>1) + videow;
-				vmax <= ((HEIGHT - videoh)>>1) + videoh;
+				hmax <= ((WIDTH - videow)>>1) + videow - 1'd1;
+				vmax <= ((HEIGHT - videoh)>>1) + videoh - 1'd1;
 			end
 	endcase
 end
