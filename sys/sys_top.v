@@ -279,6 +279,9 @@ always@(posedge clk_sys) begin
 			if(cmd == 'h26) vol_att <= io_din[4:0];
 			if(cmd == 'h27) VSET    <= io_din[11:0];
 			if(cmd == 'h2A) {coef_wr,coef_addr,coef_data} <= {1'b1,io_din};
+`ifdef LITE
+			if(cmd == 'h2B) scaler_flt <= io_din[2:0];
+`endif
 		end
 	end
 end
@@ -488,41 +491,42 @@ wire [127:0] vbuf_writedata;
 wire  [15:0] vbuf_byteenable;
 wire         vbuf_write;
 
+reg    [2:0] scaler_flt;
 ascal 
 #(
 	.RAMBASE(32'h20000000),
-	//.RO(0),
-	//.FORMAT(0),
 	.N_DW(128),
-	.N_AW(28)
-	//.N_BURST(256)
+	.N_AW(28),
+	.NPOLY(1)
 )
 ascal
 (
-	.i_r  (r_out),
-	.i_g  (g_out),
-	.i_b  (b_out),
-	.i_hs (hs_emu),
-	.i_vs (vs_emu),
-	.i_fl (f1),
-	.i_de (de),
-	.i_ce (ce_pix),
-	.i_clk(clk_vid),
-	.o_r   (hdmi_data[23:16]),
-	.o_g   (hdmi_data[15:8]),
-	.o_b   (hdmi_data[7:0]),
-	.o_hs  (HDMI_TX_HS),
-	.o_vs  (HDMI_TX_VS),
-	.o_de  (hdmi_de),
-	.o_ce  (1'b1),
-	.o_clk(HDMI_TX_CLK),
-	.iauto(1'b1),
-	.himin(0),
-	.himax(0),
-	.vimin(0),
-	.vimax(0),
-	.run    (1'b1),
-	.mode   (sconf),
+	.reset_na (~reset_req),
+	.run      (1),
+
+	.i_clk  (clk_vid),
+	.i_ce   (ce_pix),
+	.i_r    (r_out),
+	.i_g    (g_out),
+	.i_b    (b_out),
+	.i_hs   (hs_emu),
+	.i_vs   (vs_emu),
+	.i_fl   (f1),
+	.i_de   (de),
+	.iauto  (1),
+	.himin  (0),
+	.himax  (0),
+	.vimin  (0),
+	.vimax  (0),
+
+	.o_clk  (HDMI_TX_CLK),
+	.o_ce   (1),
+	.o_r    (hdmi_data[23:16]),
+	.o_g    (hdmi_data[15:8]),
+	.o_b    (hdmi_data[7:0]),
+	.o_hs   (HDMI_TX_HS),
+	.o_vs   (HDMI_TX_VS),
+	.o_de   (hdmi_de),
 	.htotal (WIDTH+HFP+HBP+HS),
 	.hsstart(WIDTH + HFP),
 	.hsend  (WIDTH + HFP + HS),
@@ -536,10 +540,11 @@ ascal
 	.vmin   (vmin),
 	.vmax   (vmax),
 
-    .poly_clk(clk_sys),
-    .poly_a(coef_addr),
-    .poly_dw(coef_data),
-    .poly_wr(coef_wr),
+	.mode     ({1'b1,scaler_flt}),
+	.poly_clk (clk_sys),
+	.poly_a   (coef_addr),
+	.poly_dw  (coef_data),
+	.poly_wr  (coef_wr),
 
 	.avl_clk          (clk_ctl),
 	.avl_waitrequest  (vbuf_waitrequest),
@@ -550,8 +555,7 @@ ascal
 	.avl_address      (vbuf_address),
 	.avl_write        (vbuf_write),
 	.avl_read         (vbuf_read),
-	.avl_byteenable   (vbuf_byteenable),
-	.reset_na (~reset_req)
+	.avl_byteenable   (vbuf_byteenable)
 );
 
 reg [11:0] hmin;
@@ -577,9 +581,9 @@ always @(posedge clk_vid) begin
 				videoh <= VSET ? VSET : (hcalc > HEIGHT) ? HEIGHT : hcalc[11:0];
 			end
 		7: begin
-				hmin <= (WIDTH - videow)>>1;
-				vmin <= (HEIGHT - videoh)>>1;
-				hmax <= ((WIDTH - videow)>>1) + videow - 1'd1;
+				hmin <= ((WIDTH  - videow)>>1);
+				hmax <= ((WIDTH  - videow)>>1) + videow - 1'd1;
+				vmin <= ((HEIGHT - videoh)>>1);
 				vmax <= ((HEIGHT - videoh)>>1) + videoh - 1'd1;
 			end
 	endcase
@@ -868,7 +872,6 @@ wire  [1:0] audio_mix;
 wire  [7:0] r_out, g_out, b_out;
 wire        vs, hs, de, f1;
 wire  [1:0] scanlines;
-wire  [3:0] sconf;
 wire        clk_sys, clk_vid, ce_pix;
 
 wire        ram_clk;
@@ -914,7 +917,6 @@ emu emu
 
 	.VIDEO_ARX(ARX),
 	.VIDEO_ARY(ARY),
-	.sconf(sconf),
 
 	.AUDIO_L(audio_ls),
 	.AUDIO_R(audio_rs),

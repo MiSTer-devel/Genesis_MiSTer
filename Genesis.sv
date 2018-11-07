@@ -43,8 +43,6 @@ module emu
 	output  [7:0] VIDEO_ARX,
 	output  [7:0] VIDEO_ARY,
 
-	output  [3:0] sconf,
-
 	output  [7:0] VGA_R,
 	output  [7:0] VGA_G,
 	output  [7:0] VGA_B,
@@ -115,8 +113,6 @@ assign LED_DISK  = 0;
 assign LED_POWER = 0;
 assign LED_USER  = ioctl_download;
 
-assign sconf = status[13:10];
-
 `include "build_id.v"
 localparam CONF_STR = {
 	"Genesis;;",
@@ -128,10 +124,6 @@ localparam CONF_STR = {
 	"-;",
 	"O9,Aspect ratio,4:3,16:9;",
 	"O13,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
-`ifdef LITE
-	"OAC,Scaler,Nearest,Bilinear,Sharp Bilinear,Bicubic,Polyphase;",
-	"OD,Scaler,Direct,TripleBuffer;",
-`endif
 	"-;",
 	"O4,Swap joysticks,No,Yes;",
 	"O5,6 buttons mode,No,Yes;",
