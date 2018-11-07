@@ -129,7 +129,7 @@ localparam CONF_STR = {
 	"O9,Aspect ratio,4:3,16:9;",
 	"O13,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
 `ifdef LITE
-	"OAC,Scaler,Nearest,Bilinear,Sharp Bilinear,Bicubic,Poly 1,Poly 2,Poly 3,TEST;",
+	"OAC,Scaler,Nearest,Bilinear,Sharp Bilinear,Bicubic,Polyphase;",
 	"OD,Scaler,Direct,TripleBuffer;",
 `endif
 	"-;",
