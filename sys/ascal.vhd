@@ -222,7 +222,7 @@ ARCHITECTURE rtl OF ascal IS
   SIGNAL i_write,i_walt : std_logic;
   SIGNAL i_push : std_logic;
   SIGNAL i_hburst,i_hbcpt : natural RANGE 0 TO 31;
-  SIGNAL i_shift : unsigned(N_DW-1 DOWNTO 0);
+  SIGNAL i_shift : unsigned(N_DW-1 DOWNTO 0) := (others => '0');
   SIGNAL i_acpt : natural RANGE 0 TO 7;
   TYPE arr_dw IS  ARRAY (natural RANGE <>) OF unsigned(N_DW-1 DOWNTO 0);
   SIGNAL i_dpram,o_dpram : arr_dw(0 TO BLEN*2-1);
@@ -1137,7 +1137,7 @@ BEGIN
     ELSIF rising_edge(o_clk) THEN
       ------------------------------------------------------
       o_mode   <=mode; -- <ASYNC> ?
-      o_run    <=run; -- <ASYNC> ?
+      --o_run    <=run; -- <ASYNC> ?
       
       o_htotal <=htotal; -- <ASYNC> ?
       o_hsstart<=hsstart; -- <ASYNC> ?
@@ -1434,9 +1434,9 @@ BEGIN
     IF rising_edge(o_clk) THEN
       -- Pipeline signals
       o_hpos1<=o_hpos; o_hpos2<=o_hpos1;
-      o_alt1 <=o_alt;  o_alt2 <=o_alt1;  o_alt3 <=o_alt2;  o_alt4 <=o_alt3;
-      o_copy1<=o_copy; o_copy2<=o_copy1; o_copy3<=o_copy2; o_copy4<=o_copy3;
-      o_dcpt1<=o_dcpt; o_dcpt2<=o_dcpt1; o_dcpt3<=o_dcpt2; o_dcpt4<=o_dcpt3;
+      o_alt1 <=o_alt;  o_alt2 <=o_alt1;  o_alt3 <=o_alt2;  --o_alt4 <=o_alt3;
+      o_copy1<=o_copy; o_copy2<=o_copy1; o_copy3<=o_copy2; --o_copy4<=o_copy3;
+      o_dcpt1<=o_dcpt; o_dcpt2<=o_dcpt1; o_dcpt3<=o_dcpt2; --o_dcpt4<=o_dcpt3;
 
       o_hpixm1<=o_hpixm;
       o_hpix01<=o_hpix0; o_hpix02<=o_hpix01;
@@ -1529,7 +1529,7 @@ BEGIN
   END PROCESS OLBUF;
   
   o_radl<=(o_hcpt-o_hmin+OHRES) MOD OHRES;
-  xxx_vposi<=to_integer(o_vpos(23 DOWNTO 12)); -- Simu!
+  --xxx_vposi<=to_integer(o_vpos(23 DOWNTO 12)); -- Simu!
   
   -----------------------------------------------------------------------------
   -- Output video sweep
