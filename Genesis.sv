@@ -128,6 +128,7 @@ localparam CONF_STR = {
 	"O4,Swap joysticks,No,Yes;",
 	"O5,6 buttons mode,No,Yes;",
 	"-;",
+	"OA,VRAM access rate,Fast,Original;",
 	"R0,Reset;",
 	"J1,A,B,C,Start,Mode,X,Y,Z;",
 	"V,v1.55.",`BUILD_DATE
@@ -219,6 +220,7 @@ Genesis Genesis
 	.CE_PIX(ce_pix),
 	.FIELD(VGA_F1),
 	.INTERLACE(interlace),
+	.FAST_FIFO(~status[10]),
 
 	.J3BUT(~status[5]),
 	.JOY_1((status[4] ? joystick_1[11:0] : joystick_0[11:0])),

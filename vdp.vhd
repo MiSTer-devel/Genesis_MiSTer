@@ -70,6 +70,8 @@ entity vdp is
 		VBUS_SEL			: out std_logic;
 		VBUS_DTACK_N	: in  std_logic;
 		VBUS_BUSY      : out std_logic;
+		
+		FAST_FIFO		: in  std_logic;
 
 		PAL				: in  std_logic;
 		FIELD      		: out std_logic;
@@ -1805,20 +1807,21 @@ begin
 			end if;
 
 			-- FIFO throttle logic
-			if IN_VBL_F = '1' then
-				FIFO_EN <= '1';
-			elsif DE = '0' then
+			if IN_VBL_F = '1' or DE = '0' then
 				FIFO_EN <= not H_CNT(0);
 			elsif H_CNT >= HDISP_START and hcnt < HDISP_SIZE and hcnt(3 downto 0) = 5 then
 				FIFO_EN <= not (hcnt(5) and hcnt(4));
 			elsif H_CNT = HBLANK_DMA1 or H_CNT = HBLANK_DMA2 or H_CNT = HBLANK_DMA3 or H_CNT = HBLANK_DMA4 then
 				FIFO_EN <= '1';
 			end if;
-
+			
 			SP1_EN <= '1'; --SP1 Engine checks one sprite/pixel
 			if hcnt(3 downto 0) = 0 then
 				SP2_EN <= '1'; --Sprite mapping slots in every two cells
 			end if;
+		end if;
+		if FAST_FIFO = '1' then
+			FIFO_EN <= '1';
 		end if;
 	end if;
 end process;

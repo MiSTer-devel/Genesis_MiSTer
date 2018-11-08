@@ -35,40 +35,41 @@
 
 module Genesis
 (
-	input             RESET_N,
-	input             MCLK,
+	input         RESET_N,
+	input         MCLK,
 
-	output     [12:0] DAC_LDATA,
-	output     [12:0] DAC_RDATA,
+	output [12:0] DAC_LDATA,
+	output [12:0] DAC_RDATA,
 
-	input             LOADING,
-	input             PAL,
-	input             EXPORT,
-	output      [3:0] RED,
-	output      [3:0] GREEN,
-	output      [3:0] BLUE,
-	output            VS,
-	output            HS,
-	output            HBL,
-	output            VBL,
-	output            CE_PIX,
+	input         LOADING,
+	input         PAL,
+	input         EXPORT,
+	output  [3:0] RED,
+	output  [3:0] GREEN,
+	output  [3:0] BLUE,
+	output        VS,
+	output        HS,
+	output        HBL,
+	output        VBL,
+	output        CE_PIX,
+	input         FAST_FIFO,
 
-	output            INTERLACE,
-	output            FIELD,
+	output        INTERLACE,
+	output        FIELD,
 
-	input             J3BUT,
-	input      [11:0] JOY_1,
-	input      [11:0] JOY_2,
+	input         J3BUT,
+	input  [11:0] JOY_1,
+	input  [11:0] JOY_2,
 
-	output      [2:0] MAPPER_A,
-	output            MAPPER_WE,
-	output      [7:0] MAPPER_D,
+	output  [2:0] MAPPER_A,
+	output        MAPPER_WE,
+	output  [7:0] MAPPER_D,
 
-	input      [24:1] ROMSZ,
-	output reg [22:1] ROM_ADDR,
-	input      [15:0] ROM_DATA,
-	output reg        ROM_REQ,
-	input             ROM_ACK
+	input  [24:1] ROMSZ,
+	output [22:1] ROM_ADDR,
+	input  [15:0] ROM_DATA,
+	output reg    ROM_REQ,
+	input         ROM_ACK
 );
 
 wire reset = ~RESET_N | LOADING;
@@ -336,6 +337,8 @@ vdp vdp
 	.vbus_sel(VBUS_SEL),
 	.vbus_dtack_n(VDP_MBUS_DTACK_N),
 	.vbus_busy(VBUS_BUSY),
+	
+	.fast_fifo(FAST_FIFO),
 
 	.field(FIELD),
 	.interlace(INTERLACE),
@@ -517,6 +520,8 @@ reg [15:0] VDP_MBUS_D;
 reg [22:1] MBUS_A;
 reg [15:0] MBUS_DO;
 
+assign ROM_ADDR = MBUS_A;
+
 always @(posedge MCLK) begin
 	reg  [3:0] mstate;
 	reg  [1:0] src;
@@ -625,7 +630,6 @@ always @(posedge MCLK) begin
 			end
 			else begin
 				ROM_REQ <= ~ROM_ACK;
-				ROM_ADDR <= MBUS_A;
 				mstate <= MBUS_ROM_READ;
 			end
 
