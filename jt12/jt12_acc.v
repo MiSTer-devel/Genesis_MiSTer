@@ -24,6 +24,10 @@
 	Each channel can use the full range of the DAC as they do not
 	get summed in the real chip.
 
+	Operator data is summed up without adding extra bits. This is
+	the case of real YM3438, which was used on Megadrive 2 models.
+
+
 */
 
 
@@ -130,11 +134,12 @@ always @(posedge clk)
 		end
         if( s2_enters ) begin
         	sum_all <= 1'b0;
-			// left  <= pre_left;
-			// right <= pre_right;
-			// x2 volume
-			left <= { pre_left[10:0], 1'b0 };
-			right <= { pre_right[10:0], 1'b0 };
+        	// x1 volume
+			left  <= pre_left;
+			right <= pre_right;
+			// x2 volume: This will cause problems with some, like "Crying Asia senmei sensou", at the beginning of 1st level
+			//left  <= { pre_left [10:0], pre_left [10] };
+			//right <= { pre_right[10:0], pre_right[10] };
             `ifdef DUMPSOUND
             $strobe("%d\t%d", right, right);
             `endif
@@ -142,14 +147,15 @@ always @(posedge clk)
     end
 
 			
-reg  signed [8:0] next, opsum, prev;
-wire signed [9:0] opsum10 = next+total;
+reg signed [8:0] next, opsum, prev;
+reg	signed [9:0] opsum10;
 
 always @(*) begin
 	next = sum_en ? op_result : 9'd0;
+	opsum10 = next+total;
 	if( s3_enters )
 		opsum = (ch6op && pcm_en) ? { ~pcm[8], pcm[7:0] } : next;
-	else begin
+	else begin		
 		if( sum_en && !(ch6op && pcm_en) )
 			if( limiter_en ) begin
 				if( opsum10[9]==opsum10[8] )

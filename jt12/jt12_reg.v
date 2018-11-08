@@ -39,19 +39,17 @@ module jt12_reg(
 
 	input			up_keyon,	
 	input			up_alg,	
-	input			up_block,
 	input			up_fnumlo,
 	input			up_pms,
 	input			up_dt1,
 	input			up_tl,
 	input			up_ks_ar,
-	input			up_amen_d1r,
-	input			up_d2r,
+	input			up_amen_dr,
+	input			up_sr,
 		
-	input			up_d1l,
+	input			up_sl_rr,
 	input			up_ssgeg,
 
-	output			busy,
 	output	reg		ch6op,	// 1 when the operator belongs to CH6
 	
 	// CH3 Effect-mode operation
@@ -62,6 +60,7 @@ module jt12_reg(
 	input	[ 2:0]	block_ch3op2,
 	input	[ 2:0]	block_ch3op3,
 	input	[ 2:0]	block_ch3op1,
+	input	[ 5:0]	latch_fnum,
 	// Pipeline order
 	output	reg		zero,
 	output 			s1_enters,
@@ -84,47 +83,43 @@ module jt12_reg(
 	output reg	[2:0]	fb_II,
 	output		[2:0]	alg,
 	// Operator multiplying
-	output		[ 3:0]	mul_V,
+	output		[ 3:0]	mul_II,
 	// Operator detuning
-	output		[ 2:0]	dt1_II,
+	output		[ 2:0]	dt1_I,
 	
 	// EG
-	output		[4:0]	ar_II,	// attack  rate
-	output		[4:0]	d1r_II, // decay   rate
-	output		[4:0]	d2r_II, // sustain rate
-	output		[3:0]	rr_II,	// release rate
-	output		[3:0]	d1l,   // sustain level
-	output		[1:0]	ks_III,	   // key scale
-	output				ssg_en_II,
-	output		[2:0]	ssg_eg_II,
-	output		[6:0]	tl_VII,
+	output		[4:0]	ar_I,	// attack  rate
+	output		[4:0]	d1r_I, // decay   rate
+	output		[4:0]	d2r_I, // sustain rate
+	output		[3:0]	rr_I,	// release rate
+	output		[3:0]	sl_I,   // sustain level
+	output		[1:0]	ks_II,	   // key scale
+	output				ssg_en_I,
+	output		[2:0]	ssg_eg_I,
+	output		[6:0]	tl_IV,
 	output		[2:0]	pms_I,
-	output		[1:0]	ams_VII,
-	output				amsen_VII,
+	output		[1:0]	ams_IV,
+	output				amsen_IV,
 
 	// envelope operation
-	output			keyon_II
+	output			keyon_I
 );
 
 
-reg	 [4:0] cnt;
 reg  [1:0] next_op, cur_op;
 reg  [2:0] next_ch, cur_ch;
-reg busy_op; 
-reg up_keyon_long;
+reg	last;
 
 `ifdef SIMULATION
 // These signals need to operate during rst
 // initial state is not relevant (or critical) in real life
 // but we need a clear value during simulation
+// This does not work with NCVERILOG
 initial begin
 	cur_op = 2'd0;
 	cur_ch = 3'd0;
-	cnt		= 5'h0;
 	last	= 1'b0;
 	zero	= 1'b1;
-	busy_op	= 1'b0;
-	up_keyon_long = 1'b0;
 end
 `endif
 
@@ -175,12 +170,12 @@ jt12_sumch u_opch_V  ( .chin(req_opch_IV ), .chout(req_opch_V)   );
 
 wire update_op_I  = cur == req_opch_I;
 wire update_op_II = cur == req_opch_II;
-wire update_op_III= cur == req_opch_III;
-// wire update_op_IV = cur == opch_IV;
-wire update_op_V  = cur == req_opch_V;
+//wire update_op_III= cur == req_opch_III;
+wire update_op_IV = cur == req_opch_IV;
+//wire update_op_V  = cur == req_opch_V;
 // wire update_op_VI = cur == opch_VI;
-wire [2:0] op_plus1 = op+2'd1;
-wire update_op_VII= cur == { op_plus1[1:0], ch };
+// wire [2:0] op_plus1 = op+2'd1;
+// wire update_op_VII= cur == { op_plus1[1:0], ch };
 
 // key on/off
 wire	[3:0]	keyon_op = din[7:4];
@@ -191,8 +186,6 @@ wire	[2:0]	fb_in	= din[5:3];
 wire	[2:0]	alg_in	= din[2:0];
 wire	[2:0]	pms_in	= din[2:0];
 wire	[1:0]	ams_in	= din[5:4];
-wire	[2:0]	block_in= din[5:3];
-wire	[2:0]	fnhi_in	= din[2:0];
 wire	[7:0]	fnlo_in	= din;
 // operator data
 wire	[2:0]	dt1_in	= din[6:4];
@@ -203,44 +196,39 @@ wire	[4:0]	ar_in	= din[4:0];
 wire			amen_in	= din[7];
 wire	[4:0]	d1r_in	= din[4:0];
 wire	[4:0]	d2r_in	= din[4:0];
-wire	[3:0]	d1l_in	= din[7:4];
+wire	[3:0]	sl_in	= din[7:4];
 wire	[3:0]	rr_in	= din[3:0];
 wire	[3:0]	ssg_in	= din[3:0];
 
 wire	[3:0]	ssg;
 
-reg			last;
-
 wire	update_ch_I  = cur_ch == ch;
+wire	update_ch_IV = { ~cur_ch[2], cur_ch[1:0]} == ch;
 
 wire up_alg_ch	= up_alg	& update_ch_I;
-wire up_block_ch= up_block	& update_ch_I;
 wire up_fnumlo_ch=up_fnumlo & update_ch_I;
 wire up_pms_ch	= up_pms	& update_ch_I;
+wire up_ams_ch	= up_pms	& update_ch_IV;
 
 // DT1 & MUL
-wire up_dt1_op	= up_dt1	& update_op_II;
-wire up_mul_op	= up_dt1	& update_op_V;
+wire up_dt1_op	= up_dt1	& update_op_I;
+wire up_mul_op	= up_dt1	& update_op_II;
 // TL
-wire up_tl_op	= up_tl		& update_op_VII;
+wire up_tl_op	= up_tl		& update_op_IV;
 // KS & AR
-wire up_ks_op	= up_ks_ar	& update_op_III;
-wire up_ar_op	= up_ks_ar	& update_op_II;
+wire up_ks_op	= up_ks_ar	& update_op_II;
+wire up_ar_op	= up_ks_ar	& update_op_I;
 // AM ON, D1R
-wire up_amen_op	= up_amen_d1r	& update_op_VII;
-wire up_d1r_op	= up_amen_d1r	& update_op_II;
+wire up_amen_op	= up_amen_dr& update_op_IV;
+wire up_dr_op	= up_amen_dr& update_op_I;
 // Sustain Rate (D2R)
-wire up_d2r_op	= up_d2r	& update_op_II;
+wire up_sr_op	= up_sr	& update_op_I;
 // D1L & RR
-wire up_d1l_op	= up_d1l	& update_op_I;
-wire up_rr_op	= up_d1l	& update_op_II;
+wire up_sl_op	= up_sl_rr	& update_op_I;
+wire up_rr_op	= up_sl_rr	& update_op_I;
 // SSG
 //wire up_ssgen_op = up_ssgeg	& update_op_I;
-wire up_ssg_op	= up_ssgeg	& update_op_II;
-
-wire up = 	up_alg 	| up_block 	| up_fnumlo | up_pms |
-			up_dt1 	| up_tl 	| up_ks_ar	| up_amen_d1r | 
-			up_d2r	| up_d1l 	| up_ssgeg  | up_keyon;			
+wire up_ssg_op	= up_ssgeg	& update_op_I;
 
 always @(*) begin
 	// next = cur==5'd23 ? 5'd0 : cur +1'b1;
@@ -248,22 +236,10 @@ always @(*) begin
 	next_ch = cur_ch[1:0]==2'b10 ? cur_ch+2'd2 : cur_ch+1'd1;
 end
 
-assign	busy = busy_op;
-
 always @(posedge clk) begin : up_counter
 	if( clk_en ) begin
 		{ cur_op, cur_ch }	<= { next_op, next_ch };
 		zero 	<= next == 5'd0;
-		last	<= up;
-		if( up && !last ) begin
-			cnt		<= cur;
-			busy_op	<= 1'b1;
-			up_keyon_long <= up_keyon;
-		end
-		else if( cnt == cur ) begin
-			busy_op <= 1'b0;
-			up_keyon_long <= 1'b0;
-		end
 	end
 end
 
@@ -275,12 +251,12 @@ jt12_kon u_kon(
 	.keyon_ch	( keyon_ch	),
 	.cur_op		( cur_op	),
 	.cur_ch		( cur_ch	),
-	.up_keyon	( up_keyon_long	),
+	.up_keyon	( up_keyon	),
 	.csm		( csm		),
 	// .flag_A		( flag_A	),
 	.overflow_A	( overflow_A),
 	
-	.keyon_II	( keyon_II	)
+	.keyon_I	( keyon_I	)
 );
 
 jt12_mod u_mod(
@@ -313,44 +289,41 @@ jt12_opram u_opram(
 );
 
 assign regop_in = {
-	up_tl_op	? tl_in  : tl_VII, // 7
-	up_dt1_op	? dt1_in : dt1_II,	// 3
-	up_mul_op	? mul_in : mul_V,	// 4 - 7
-	up_ks_op	? ks_in	 : ks_III,	// 2 - 16
-	up_ar_op	? ar_in	 : ar_II,	// 5 - 21
-	up_amen_op	? amen_in: amsen_VII,// 1 - 22
-	up_d1r_op	? d1r_in : d1r_II,	// 5 - 25
-	up_d2r_op	? d2r_in : d2r_II,	// 5 - 30
-	up_d1l_op	? d1l_in : d1l,		// 4 - 34
-	up_rr_op	? rr_in	 : rr_II,	// 4 - 38
-	up_ssg_op	? ssg_in[3]   : ssg_en_II,	// 1 - 39
-	up_ssg_op	? ssg_in[2:0] : ssg_eg_II	// 3 - 42
+	up_tl_op	? tl_in  : tl_IV, // 7
+	up_dt1_op	? dt1_in : dt1_I,	// 3
+	up_mul_op	? mul_in : mul_II,	// 4 - 7
+	up_ks_op	? ks_in	 : ks_II,	// 2 - 16
+	up_ar_op	? ar_in	 : ar_I,	// 5 - 21
+	up_amen_op	? amen_in: amsen_IV,// 1 - 22
+	up_dr_op	? d1r_in : d1r_I,	// 5 - 25
+	up_sr_op	? d2r_in : d2r_I,	// 5 - 30
+	up_sl_op	? sl_in  : sl_I,	// 4 - 34
+	up_rr_op	? rr_in	 : rr_I,	// 4 - 38
+	up_ssg_op	? ssg_in[3]   : ssg_en_I,	// 1 - 39
+	up_ssg_op	? ssg_in[2:0] : ssg_eg_I	// 3 - 42
 };
 
-assign { tl_VII, dt1_II, mul_V, ks_III, 
-			ar_II,	amsen_VII, d1r_II, d2r_II, d1l, rr_II,
-			ssg_en_II,	ssg_eg_II 				} = regop_out;
+assign { tl_IV, dt1_I, mul_II, ks_II, 
+			ar_I,	amsen_IV, d1r_I, d2r_I, sl_I, rr_I,
+			ssg_en_I,	ssg_eg_I 				} = regop_out;
 
-
-wire [2:0] block_latch, fnum_latch;
 
 // memory for CH registers
 // Block/fnum data is latched until fnum low byte is written to
 // Trying to synthesize this memory as M-9K RAM in Altera devices
 // turns out worse in terms of resource utilization. Probably because
 // this memory is already very small. It is better to leave it as it is.
-parameter regch_width=31;
+parameter regch_width=25;
 wire [regch_width-1:0] regch_out;
 wire [regch_width-1:0] regch_in = {
-	up_block_ch	? { block_in, fnhi_in } : { block_latch, fnum_latch }, // 3+3
-	up_fnumlo_ch? { block_latch, fnum_latch, fnlo_in } : { block_I_raw, fnum_I_raw }, // 14
+	up_fnumlo_ch? { latch_fnum, fnlo_in } : { block_I_raw, fnum_I_raw }, // 14
 	up_alg_ch	? { fb_in, alg_in } : { fb_I, alg },//3+3
-	up_pms_ch	? { ams_in, pms_in } : { ams_VII, pms_I }//2+2+3
+	up_ams_ch	?            ams_in : ams_IV, //2
+	up_pms_ch	?            pms_in : pms_I   //3
 }; 
 
-assign { block_latch, fnum_latch, 
-			block_I_raw, fnum_I_raw, 
-			fb_I, alg, ams_VII, pms_I } = regch_out;
+assign { 	block_I_raw, fnum_I_raw, 
+			fb_I, alg, ams_IV, pms_I } = regch_out;
 
 jt12_sh_rst #(.width(regch_width),.stages(6)) u_regch(
 	.clk	( clk		),

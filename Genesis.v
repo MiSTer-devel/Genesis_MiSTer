@@ -752,13 +752,15 @@ dpram #(13) ramZ80
 );
 
 always @(posedge MCLK) begin
-	reg [1:0] zstate;
+	reg [2:0] zstate;
 	reg       src;
+	reg [2:0] cnt;
 	reg       we;
 
 	localparam	ZBUS_IDLE = 0,
 					ZBUS_TEST = 1,
-					ZBUS_READ = 2;
+					ZBUS_WAIT = 2,
+					ZBUS_READ = 3;
 
 	ZBUS_WE <= 0;
 
@@ -789,10 +791,17 @@ always @(posedge MCLK) begin
 			end
 
 		ZBUS_TEST:
-			if (~(FM_SEL & we & FM_DO[7]))
 			begin
 				ZBUS_WE <= we;
 				zstate <= ZBUS_READ;
+				cnt <= 2;
+				if (FM_SEL & we) zstate <= ZBUS_WAIT;
+			end
+
+		ZBUS_WAIT:
+			begin
+				cnt <= cnt - T80_CLKEN;
+				if (!cnt) zstate <= ZBUS_READ;
 			end
 
 		ZBUS_READ:
@@ -865,7 +874,7 @@ always @(posedge MCLK) begin
 	reg [16:0] lfsr;
 
 	if (TG68_CLKEN) begin
-		lfsr = {(lfsr[0] ^ lfsr[2] ^ !lfsr), lfsr[16:1]};
+		lfsr <= {(lfsr[0] ^ lfsr[2] ^ !lfsr), lfsr[16:1]};
 		NO_DATA <= {NO_DATA[14:0], lfsr[0]};
 	end
 end

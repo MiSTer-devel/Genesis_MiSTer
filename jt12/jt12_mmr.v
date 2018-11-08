@@ -69,24 +69,24 @@ module jt12_mmr(
 	output	[ 2:0]	fb_II,
 	output	[ 2:0]	alg,
 	output	[ 2:0]	pms_I,
-	output	[ 1:0]	ams_VII,
-	output			amsen_VII,
-	output	[ 2:0]	dt1_II,
-	output	[ 3:0]	mul_V,
-	output	[ 6:0]	tl_VII,
+	output	[ 1:0]	ams_IV,
+	output			amsen_IV,
+	output	[ 2:0]	dt1_I,
+	output	[ 3:0]	mul_II,
+	output	[ 6:0]	tl_IV,
 	output	reg		eg_stop,
 
-	output	[ 4:0]	ar_II,
-	output	[ 4:0]	d1r_II,
-	output	[ 4:0]	d2r_II,
-	output	[ 3:0]	rr_II,
-	output	[ 3:0]	d1l,
-	output	[ 1:0]	ks_III,
+	output	[ 4:0]	ar_I,
+	output	[ 4:0]	d1r_I,
+	output	[ 4:0]	d2r_I,
+	output	[ 3:0]	rr_I,
+	output	[ 3:0]	sl_I,
+	output	[ 1:0]	ks_II,
 	// SSG operation
-	output			ssg_en_II,
-	output	[2:0]	ssg_eg_II,
+	output			ssg_en_I,
+	output	[2:0]	ssg_eg_I,
 
-	output			keyon_II,
+	output			keyon_I,
 
 //	output	[ 1:0]	cur_op,
 	// Operator
@@ -110,7 +110,12 @@ reg cen_int;
 
 always @(negedge clk) begin
 	cen_int <= cen_cnt == cen_cnt_lim;
+	`ifdef FASTDIV
+	// always enabled for fast sims (use with GYM output, timer will not work well)
+	clk_en <= 1'b1;
+	`else
 	clk_en  <= cen & cen_int;	
+	`endif
 end
 
 always @(posedge clk)
@@ -128,20 +133,9 @@ reg [7:0]	selected_register;
 reg		irq_zero_en, irq_brdy_en, irq_eos_en,
 		irq_tb_en, irq_ta_en;
 		*/
-reg		up_clr;
-reg 	up_alg;
-
-reg 	up_block;
-reg 	up_fnumlo;
-reg 	up_pms;
-reg 	up_dt1;
-reg 	up_tl;
-reg 	up_ks_ar;
-reg 	up_amen_d1r;
-reg 	up_d2r;
-reg		up_d1l;
-reg		up_ssgeg;
-reg		up_keyon;
+reg [6:0] up_opreg; // hot-one encoding. tells which operator register gets updated next
+reg	[2:0] up_chreg; // hot-one encoding. tells which channel register gets updated next
+reg	up_keyon;
 
 wire			busy_reg;
 
@@ -167,7 +161,7 @@ reg	csm, effect;
 
 reg [ 2:0] block_ch3op2,  block_ch3op3,  block_ch3op1;
 reg [10:0] fnum_ch3op2, fnum_ch3op3, fnum_ch3op1;
-reg [ 5:0] latch_ch3op2,  latch_ch3op3,  latch_ch3op1;
+reg [ 5:0] latch_fnum;
 
 
 reg [2:0] up_ch;
@@ -184,12 +178,11 @@ always @(posedge clk) begin : memory_mapped_registers
 	if( rst ) begin
 		selected_register 	<= 8'h0;
 		cen_cnt_lim			<= 3'd5;
-		busy				<= 1'b0;
 		up_ch				<= 3'd0;
 		up_op				<= 2'd0;
-		{ 	up_keyon,		up_alg, 	up_block, 	up_fnumlo,
-			up_pms, 	up_dt1, 	up_tl, 		up_ks_ar,
-			up_amen_d1r,up_d2r,		up_d1l,		up_ssgeg } <=  12'd0;
+		up_keyon			<= 1'd0;
+		up_opreg			<= 7'd0;
+		up_chreg			<= 3'd0;
 		`ifdef TEST_SUPPORT
 		{ test_eg, test_op0 } <= 2'd0;
 		`endif
@@ -200,7 +193,6 @@ always @(posedge clk) begin : memory_mapped_registers
 		{ value_A, value_B } <= 18'd0;
 		{ clr_flag_B, clr_flag_A,
 		enable_irq_B, enable_irq_A, load_B, load_A } <= 6'd0;
-		up_clr <= 1'b0;
 		fast_timers <= 1'b0;
 		// LFO
 		lfo_freq	<= 3'd0;
@@ -217,18 +209,15 @@ always @(posedge clk) begin : memory_mapped_registers
 	end else begin
 		// WRITE IN REGISTERS
 		if( (!old_write && write) /*&& !busy*/ ) begin
-			busy <= 1'b1;
 			if( !addr[0] ) begin
 				selected_register <= din;
-				up_ch	<= {addr[1], din[1:0]};
-				up_op	<= din[3:2]; // 0=S1,1=S3,2=S2,3=S4
 			end else begin
 				// Global registers
-				// busy <= 1'b1; // only set for data port writes, according to Eke (spritesmind.net)
 				din_copy <= din;
-				if( selected_register < 8'h30 ) begin
-					case( selected_register)
-					// registros especiales
+				up_keyon <= selected_register == REG_KON;
+				up_ch <= {addr[1], selected_register[1:0]};
+				up_op <= selected_register[3:2]; // 0=S1,1=S3,2=S2,3=S4
+				case( selected_register)
 					//REG_TEST:	lfo_rst <= 1'b1; // regardless of din
 					`ifdef TEST_SUPPORT
 					REG_TEST2:	{test_op0, test_eg} <= din[1:0];
@@ -238,7 +227,6 @@ always @(posedge clk) begin : memory_mapped_registers
 						pg_stop <= din[3];
 						fast_timers <= din[2];
 						end
-					REG_KON: 	up_keyon 	<= 1'b1;
 					REG_CLKA1:	value_A[9:2]<= din;
 					REG_CLKA2:	value_A[1:0]<= din[1:0];
 					REG_CLKB:	value_B		<= din;
@@ -257,70 +245,60 @@ always @(posedge clk) begin : memory_mapped_registers
 					REG_CLK_N6:	cen_cnt_lim <= 3'd5;
 					REG_CLK_N3:	cen_cnt_lim <= 3'd2;
 					REG_CLK_N2:	cen_cnt_lim <= 3'd1;
+					// CH3 special registers
+					8'hA9: { block_ch3op1, fnum_ch3op1 } <= { latch_fnum, din };
+					8'hA8: { block_ch3op3, fnum_ch3op3 } <= { latch_fnum, din };
+					8'hAA: { block_ch3op2, fnum_ch3op2 } <= { latch_fnum, din };
+					// According to http://www.mjsstuf.x10host.com/pages/vgmPlay/vgmPlay.htm
+					// There is a single fnum latch for all channels
+					8'hA4, 8'hA5, 8'hA6, 8'hAD, 8'hAC, 8'hAE: latch_fnum <= din[5:0];
 					default:;	// avoid incomplete-case warning
-					endcase
-				end
-                else if( selected_register[1:0]!=2'b11 ) begin
-					// channel registers
-					if( selected_register >= 8'hA0 ) begin
-						case( selected_register )
-							8'hA0, 8'hA1, 8'hA2:	up_fnumlo	<= 1'b1;
-							8'hA4, 8'hA5, 8'hA6:	up_block	<= 1'b1;
-							// CH3 special registers
-							8'hA9: { block_ch3op1, fnum_ch3op1 } <= { latch_ch3op1, din };
-                            8'hA8: { block_ch3op3, fnum_ch3op3 } <= { latch_ch3op3, din };
-                            8'hAA: { block_ch3op2, fnum_ch3op2 } <= { latch_ch3op2, din };
-                            8'hAD: latch_ch3op1 <= din[5:0];
-							8'hAC: latch_ch3op3 <= din[5:0];
-                            8'hAE: latch_ch3op2 <= din[5:0];
-							// FB + Algorithm
-                            8'hB0, 8'hB1, 8'hB2:	up_alg		<= 1'b1;
-							8'hB4, 8'hB5, 8'hB6:	up_pms		<= 1'b1;
-							default:;	// avoid incomplete-case warning
-						endcase
-					end
-					else
-					// operator registers
-					begin
-						case( selected_register[7:4] )
-							4'h3: up_dt1 	<= 1'b1;
-							4'h4: up_tl		<= 1'b1;
-							4'h5: up_ks_ar	<= 1'b1;
-							4'h6: up_amen_d1r	<= 1'b1;
-							4'h7: up_d2r 	<= 1'b1;
-							4'h8: up_d1l 	<= 1'b1;
-							4'h9: up_ssgeg	<= 1'b1;
-							default:;	// avoid incomplete-case warning
-						endcase
-					end
-                end
+				endcase
+				if( selected_register[1:0]==2'b11 ) 
+					{ up_chreg, up_opreg } <= { 3'h0, 7'h0 };
+				else
+					casez( selected_register )
+						// channel registers
+						8'hA0, 8'hA1, 8'hA2:    { up_chreg, up_opreg } <= { 3'h1, 7'd0 }; // up_fnumlo
+						// FB + Algorithm
+						8'hB0, 8'hB1, 8'hB2: { up_chreg, up_opreg } <= { 3'h2, 7'd0 }; // up_alg
+						8'hB4, 8'hB5, 8'hB6: { up_chreg, up_opreg } <= { 3'h4, 7'd0 }; // up_pms
+						// operator registers
+						8'h3?: { up_chreg, up_opreg } <= { 3'h0, 7'h01 }; // up_dt1
+						8'h4?: { up_chreg, up_opreg } <= { 3'h0, 7'h02 }; // up_tl
+						8'h5?: { up_chreg, up_opreg } <= { 3'h0, 7'h04 }; // up_ks_ar
+						8'h6?: { up_chreg, up_opreg } <= { 3'h0, 7'h08 }; // up_amen_dr
+						8'h7?: { up_chreg, up_opreg } <= { 3'h0, 7'h10 }; // up_sr
+						8'h8?: { up_chreg, up_opreg } <= { 3'h0, 7'h20 }; // up_sl
+						8'h9?: { up_chreg, up_opreg } <= { 3'h0, 7'h40 }; // up_ssgeg
+						default: { up_chreg, up_opreg } <= { 3'h0, 7'h0 };
+					endcase // selected_register
 			end
 		end
 		else if(clk_en) begin /* clear once-only bits */
-			// csm 	<= 1'b0;
 			// lfo_rst <= 1'b0;
 			{ clr_flag_B, clr_flag_A } <= 2'd0;
-			up_keyon <= 1'b0;
-			if( |{  up_keyon,	up_alg, 	up_block, 	up_fnumlo,
-					up_pms, 	up_dt1, 	up_tl, 		up_ks_ar,
-					up_amen_d1r,up_d2r,		up_d1l,		up_ssgeg } == 1'b0 )
-				busy	<= 1'b0; // busy_reg | write;
-			else
-				busy	<= 1'b1;
-
-			if( busy_reg ) begin
-				up_clr <= 1'b1;
-			end
-			else begin
-				up_clr <= 1'b0;
-				if( up_clr	)
-  			 	 { 	up_alg, 	up_block, 	up_fnumlo,
-					up_pms, 	up_dt1, 	up_tl, 		up_ks_ar,
-					up_amen_d1r,up_d2r,		up_d1l,		up_ssgeg } <=  11'd0;
-			end
 		end
 	end
 end
+
+reg [4:0] busy_cnt; // busy lasts for 32 synth clock cycles, like in real chip
+
+always @(posedge clk)
+	if( rst ) begin
+		busy <= 1'b0;
+		busy_cnt <= 5'd0;
+	end
+	else begin
+		if (!old_write && write && addr[0] ) begin // only set for data writes
+			busy <= 1'b1;
+			busy_cnt <= 5'd0;
+		end
+		else if(clk_en) begin
+			if( busy_cnt == 5'd31 ) busy <= 1'b0;
+			busy_cnt <= busy_cnt+5'd1;
+		end
+	end
 
 jt12_reg u_reg(
 	.rst		( rst		),
@@ -329,18 +307,16 @@ jt12_reg u_reg(
 	.din		( din_copy	),
 
 	.up_keyon	( up_keyon	),
-	.up_alg		( up_alg	),
-	.up_block	( up_block	),
-	.up_fnumlo	( up_fnumlo	),
-	.up_pms		( up_pms	),
-	.up_dt1		( up_dt1	),
-	.up_tl		( up_tl		),
-	.up_ks_ar	( up_ks_ar	),
-	.up_amen_d1r(up_amen_d1r),
-	.up_d2r		( up_d2r	),
-
-	.up_d1l		( up_d1l	),
-	.up_ssgeg	( up_ssgeg	),
+	.up_fnumlo	( up_chreg[0]	),
+	.up_alg		( up_chreg[1]	),
+	.up_pms		( up_chreg[2]	),
+	.up_dt1		( up_opreg[0]	),
+	.up_tl		( up_opreg[1]	),
+	.up_ks_ar	( up_opreg[2]	),
+	.up_amen_dr ( up_opreg[3]	),
+	.up_sr		( up_opreg[4]	),
+	.up_sl_rr	( up_opreg[5]	),
+	.up_ssgeg	( up_opreg[6]	),
 
 	.op			( up_op		),		// operator to update
 	.ch			( up_ch 	),		// channel to update
@@ -349,7 +325,6 @@ jt12_reg u_reg(
 	.flag_A		( flag_A	),
 	.overflow_A	( overflow_A),
 
-	.busy		( busy_reg	),
 	.ch6op		( ch6op		),
 	// CH3 Effect-mode operation
 	.effect		( effect	),		// allows independent freq. for CH 3
@@ -359,6 +334,7 @@ jt12_reg u_reg(
 	.block_ch3op2( block_ch3op2 ),
 	.block_ch3op3( block_ch3op3 ),
 	.block_ch3op1( block_ch3op1 ),
+	.latch_fnum	( latch_fnum	),
 	// Operator
 	.use_prevprev1(use_prevprev1),
 	.use_internal_x(use_internal_x),
@@ -368,31 +344,30 @@ jt12_reg u_reg(
 	// PG
 	.fnum_I		(	fnum_I	),
 	.block_I	(	block_I ),
-	.mul_V		(	mul_V	),
-	.dt1_II		(	dt1_II	),
+	.mul_II		(	mul_II	),
+	.dt1_I		(	dt1_I	),
 
 	// EG
-	.ar_II		(ar_II		),	// attack  rate
-	.d1r_II		(d1r_II		), // decay   rate
-	.d2r_II		(d2r_II		), // sustain rate
-	.rr_II		(rr_II		),	// release rate
-	.d1l		(d1l		),   // sustain level
-	.ks_III		(ks_III		),	   // key scale
+	.ar_I		(ar_I		), // attack  rate
+	.d1r_I		(d1r_I		), // decay   rate
+	.d2r_I		(d2r_I		), // sustain rate
+	.rr_I		(rr_I		), // release rate
+	.sl_I		(sl_I		), // sustain level
+	.ks_II		(ks_II		), // key scale
 	// SSG operation
-	.ssg_en_II	( ssg_en_II	),
-	.ssg_eg_II	( ssg_eg_II	),
+	.ssg_en_I	( ssg_en_I	),
+	.ssg_eg_I	( ssg_eg_I	),
 	// envelope number
-	.tl_VII		(tl_VII		),
+	.tl_IV		(tl_IV		),
 	.pms_I		(pms_I		),
-	.ams_VII	(ams_VII	),
-	.amsen_VII	(amsen_VII	),
+	.ams_IV		(ams_IV		),
+	.amsen_IV	(amsen_IV	),
 	// channel configuration
 	.rl			( rl		),
 	.fb_II		( fb_II		),
 	.alg		( alg		),
-	.keyon_II	( keyon_II	),
+	.keyon_I	( keyon_I	),
 
-	//.cur_op		( cur_op	),
 	.zero		( zero		),
 	.s1_enters	( s1_enters	),
 	.s2_enters	( s2_enters	),

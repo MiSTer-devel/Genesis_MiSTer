@@ -36,18 +36,30 @@ module jt12_kon(
 	// input			flag_A,
 	input			overflow_A,
 
-	output	reg		keyon_II
+	output	reg		keyon_I
 );
 
-//reg csm_copy;
+// capture overflow signal so it lasts long enough
+reg overflow2;
+reg [4:0] overflow_cycle;
 
-reg din;
-wire drop;
+always @(posedge clk) if( clk_en ) begin
+	if(overflow_A) begin
+		overflow2 <= 1'b1;
+		overflow_cycle <= { cur_op, cur_ch };
+	end else begin
+		if(overflow_cycle == {cur_op, cur_ch}) overflow2<=1'b0;
+	end
+end
+
+reg din, drop_24;
+wire drop_23;
 
 reg [3:0] cur_op_hot;
 
 always @(posedge clk) if( clk_en ) begin
-	keyon_II <= (csm&&cur_ch==3'd2&&overflow_A) || drop;
+	keyon_I <= (csm&&cur_ch==3'd2&&overflow2) || drop_23;
+	drop_24 <= drop_23;
 end
 
 always @(*) begin
@@ -57,15 +69,15 @@ always @(*) begin
 		2'd2: cur_op_hot = 4'b0010; // S2
 		2'd3: cur_op_hot = 4'b1000; // S4
 	endcase
-	din = keyon_ch==cur_ch && up_keyon ? |(keyon_op&cur_op_hot) : drop;
+	din = keyon_ch==cur_ch && up_keyon ? |(keyon_op&cur_op_hot) : drop_24;
 end
 
-jt12_sh_rst #(.width(1),.stages(24),.rstval(1'b0)) u_konch(
+jt12_sh_rst #(.width(1),.stages(23),.rstval(1'b0)) u_konch(
 	.clk	( clk		),
 	.clk_en	( clk_en	),
 	.rst	( rst		),
 	.din	( din		),
-	.drop	( drop		)
+	.drop	( drop_23	)
 );
 
 endmodule

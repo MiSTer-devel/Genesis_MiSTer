@@ -309,13 +309,14 @@ end
 
 always @(posedge clk) if( clk_en ) begin
 	// REGISTER CYCLE 11
-	op_XII <= ({ test_214, shifter_3 } ^ {14{signbit_XI}}) + signbit_XI;               
+	op_XII <= ({ test_214, shifter_3 } ^ {14{signbit_XI}}) + {13'd0,signbit_XI};               
 	// REGISTER CYCLE 12
 	// Extra register, take output after here
     op_result_internal <= op_XII;   
 end
 
 `ifdef SIMULATION
+/* verilator lint_off PINMISSING */
 reg [4:0] sep24_cnt;
 
 wire signed [13:0] op_ch0s1, op_ch1s1, op_ch2s1, op_ch3s1,
@@ -542,7 +543,7 @@ sep24 #( .width(10), .pos0(17) ) egsep
 	.ch4s4 (eg_ch4s4), 
 	.ch5s4 (eg_ch5s4)
 );
-
+/* verilator lint_on PINMISSING */
 `endif
 
 

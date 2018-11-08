@@ -108,14 +108,17 @@ always @(*) begin
 		{3'd7, 3'd7 }: pm_base = 5'd24;
 	endcase
 
+	// The MSB of pm_unsigned must be zero for the
+	// 2's-complement operation to perform correctly
+	// Do not trim it!
 	casez( fnum[10:4] )
 		7'b1??_????: pm_unsigned = { 1'b0, pm_base, 2'd0 };
 		7'b01?_????: pm_unsigned = { 2'b0, pm_base, 1'd0 };
-		7'b001_????: pm_unsigned = { 3'b0, pm_base };
-		7'b000_1???: pm_unsigned = { 4'b0, pm_base[4:1] };
-		7'b000_01??: pm_unsigned = { 5'b0, pm_base[4:2] };
-		7'b000_001?: pm_unsigned = { 6'b0, pm_base[4:3] };
-		7'b000_0001: pm_unsigned = { 7'b0, pm_base[4]   };
+		7'b001_????: pm_unsigned = { 3'b0, pm_base       };
+		7'b000_1???: pm_unsigned = { 4'b0, pm_base[4:1]  };
+		7'b000_01??: pm_unsigned = { 5'b0, pm_base[4:2]  };
+		7'b000_001?: pm_unsigned = { 6'b0, pm_base[4:3]  };
+		7'b000_0001: pm_unsigned = { 7'b0, pm_base[4]    };
 		default: pm_unsigned = 8'd0;
 	endcase
 
