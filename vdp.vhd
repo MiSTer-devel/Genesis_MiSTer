@@ -1744,7 +1744,7 @@ begin
 					HINT_COUNT <= HIT;
 					hint_en := '1';
 				elsif hint_en = '1' then
-					if V_CNT = VDISP_START+VDISP_SIZEi-1 then
+					if V_CNT = VDISP_START+VDISP_SIZEi then
 						hint_en := '0';
 					else
 						if HINT_COUNT = 0 then
