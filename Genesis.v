@@ -529,7 +529,7 @@ always @(posedge MCLK) begin
 	reg [15:0] data;
 	reg        uds_n;
 	reg        lds_n;
-
+	
 	localparam 	SRC_TG68 = 0,
 					SRC_T80  = 1,
 					SRC_VDP  = 2;
@@ -759,11 +759,10 @@ always @(posedge MCLK) begin
 
 	localparam	ZBUS_IDLE = 0,
 					ZBUS_TEST = 1,
-					ZBUS_WAIT = 2,
-					ZBUS_READ = 3;
+					ZBUS_READ = 2;
 
 	ZBUS_WE <= 0;
-
+	
 	if (reset) begin
 		TG68_ZBUS_DTACK_N <= 1;
 		T80_ZBUS_DTACK_N  <= 1;
@@ -792,16 +791,10 @@ always @(posedge MCLK) begin
 
 		ZBUS_TEST:
 			begin
-				ZBUS_WE <= we;
-				zstate <= ZBUS_READ;
-				cnt <= 2;
-				if (FM_SEL & we) zstate <= ZBUS_WAIT;
-			end
-
-		ZBUS_WAIT:
-			begin
-				cnt <= cnt - T80_CLKEN;
-				if (!cnt) zstate <= ZBUS_READ;
+				if(~FM_SEL || ~we || !FM_DO[7] || !ZBUS_A[0]) begin
+					ZBUS_WE <= we;
+					zstate <= ZBUS_READ;
+				end
 			end
 
 		ZBUS_READ:
@@ -847,7 +840,7 @@ wire [11:0] FM_left;
 
 jt12 fm
 (
-	.rst(reset), //~T80_RESET_N,
+	.rst(~T80_RESET_N),
 	.clk(MCLK),
 	.cen(TG68_CLKEN),
 

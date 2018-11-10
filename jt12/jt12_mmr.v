@@ -126,7 +126,8 @@ always @(posedge clk)
 		else cen_cnt <= cen_cnt + 3'd1;
 	end
 
-reg [7:0]	selected_register;
+reg [7:0] selected_register;
+reg       selected_part;
 
 //reg		sch; // 0 => CH1~CH3 only available. 1=>CH4~CH6
 /*
@@ -177,6 +178,7 @@ always @(posedge clk)
 always @(posedge clk) begin : memory_mapped_registers
 	if( rst ) begin
 		selected_register 	<= 8'h0;
+		selected_part  <= 0;
 		cen_cnt_lim			<= 3'd5;
 		up_ch				<= 3'd0;
 		up_op				<= 2'd0;
@@ -211,11 +213,12 @@ always @(posedge clk) begin : memory_mapped_registers
 		if( (!old_write && write) /*&& !busy*/ ) begin
 			if( !addr[0] ) begin
 				selected_register <= din;
+				selected_part <= addr[1];
 			end else begin
 				// Global registers
 				din_copy <= din;
 				up_keyon <= selected_register == REG_KON;
-				up_ch <= {addr[1], selected_register[1:0]};
+				up_ch <= {selected_part, selected_register[1:0]};
 				up_op <= selected_register[3:2]; // 0=S1,1=S3,2=S2,3=S4
 				case( selected_register)
 					//REG_TEST:	lfo_rst <= 1'b1; // regardless of din
@@ -290,7 +293,7 @@ always @(posedge clk)
 		busy_cnt <= 5'd0;
 	end
 	else begin
-		if (!old_write && write && addr[0] ) begin // only set for data writes
+		if (!old_write && write && addr[0] && selected_register >= 8'h30 ) begin // only set for data writes
 			busy <= 1'b1;
 			busy_cnt <= 5'd0;
 		end
