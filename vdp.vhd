@@ -245,7 +245,6 @@ signal SHI			: std_logic;
 signal DMA			: std_logic;
 signal LSM			: std_logic_vector(1 downto 0);
 
-signal HV8			: std_logic;
 signal HV			: std_logic_vector(15 downto 0);
 signal STATUS		: std_logic_vector(15 downto 0);
 
@@ -469,8 +468,6 @@ type sp1c_t is (
 	SP1C_Y_TST,
 	SP1C_SHOW,
 	SP1C_NEXT,
-	SP1C_CLR1,
-	SP1C_CLR2,
 	SP1C_DONE
 );
 signal SP1C	: SP1C_t;
@@ -862,12 +859,10 @@ begin
 				end if;
 
 				case HSIZE is
-				when "00" => -- HS 32 cells
+				when "00"|"10" => -- HS 32 cells
 					V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + (BGB_Y(9 downto 3) & "00000" & "0");
 				when "01" => -- HS 64 cells
 					V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + (BGB_Y(9 downto 3) & "000000" & "0");
-				when "10" => -- illegal 32x1 cells
-					V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + BGB_Y(9 downto 3);
 				when "11" => -- HS 128 cells
 					V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + (BGB_Y(9 downto 3) & "0000000" & "0");
 				end case;
@@ -1048,12 +1043,10 @@ begin
 					V_BGA_BASE := (NTAB & "0000000000000") + (BGA_X(9 downto 3) & "0");
 
 					case HSIZE is
-					when "00" => -- HS 32 cells
+					when "00"|"10" => -- HS 32 cells
 						V_BGA_BASE := V_BGA_BASE + (BGA_Y(9 downto 3) & "00000" & "0");
 					when "01" => -- HS 64 cells
 						V_BGA_BASE := V_BGA_BASE + (BGA_Y(9 downto 3) & "000000" & "0");
-					when "10" => -- illegal 32x1 cells
-						V_BGA_BASE := V_BGA_BASE +  BGA_Y(9 downto 3);
 					when "11" => -- HS 128 cells
 						V_BGA_BASE := V_BGA_BASE + (BGA_Y(9 downto 3) & "0000000" & "0");
 					end case;
@@ -1284,32 +1277,17 @@ begin
 			when SP1C_NEXT =>
 				OBJ_TOT := OBJ_TOT + 1;
 				OBJ_NEXT := OBJ_LINK;
-				OBJ_NB_CLR := OBJ_NB;
 
 				-- limit number of sprites per line
 				if OBJ_NB = OBJ_PER_LINE then
-					SP1C <= SP1C_CLR1;
+					SP1C <= SP1C_DONE;
 					SP1_SOVR_SET <= '1';
 				-- check a total sprites
 				elsif OBJ_TOT = OBJ_MAX or OBJ_LINK >= OBJ_MAX or OBJ_LINK = 0 or STOP = '1' then
-					SP1C <= SP1C_CLR1;
+					SP1C <= SP1C_DONE;
 				else
 					SP1C <= SP1C_Y_RD;
 				end if;
-
-			when SP1C_CLR1 =>
-				if OBJ_NB_CLR < OBJ_PER_LINE then
-					OBJ_VISINFO_ADDR_WR <= OBJ_NB_CLR;
-					OBJ_NB_CLR := OBJ_NB_CLR + 1;
-					OBJ_VISINFO_WE <= '1';
-					OBJ_VISINFO_D <= (others => '1');
-					SP1C <= SP1C_CLR2;
-				else
-					SP1C <= SP1C_DONE;
-				end if;
-
-			when SP1C_CLR2 =>
-				SP1C <= SP1C_CLR1;
 
 			when others => -- SP1C_DONE
 				if SP1E_ACTIVATE = '1' then
@@ -1360,38 +1338,34 @@ begin
 
 		case SP2C is
 			when SP2C_INIT =>
-				-- Treat VISINFO as a shift register, so start reading
-				-- from the first unused location.
-				-- This way visible sprites processed late.
 				OBJ_PIX := (others => '0');
-				OBJ_IDX := (others => '0');
 				OBJ_MASKED := '0';
 				OBJ_VALID_X := DOT_OVERFLOW;
 				DOT_OVERFLOW := '0';
-				OBJ_VISINFO_ADDR_RD <= (others => '0');
-				if OBJ_NB = 0 then
-					SP2C <= SP2C_DONE;
-				else
-					if OBJ_NB < OBJ_PER_LINE then
-						OBJ_IDX := OBJ_NB;
-						OBJ_VISINFO_ADDR_RD <= OBJ_NB;
-					end if;
-					SP2C <= SP2C_Y_RD;
+
+				-- Treat VISINFO as a shift register, so start reading
+				-- from the first unused location.
+				-- This way visible sprites processed late.
+				OBJ_IDX := OBJ_NB;
+				if OBJ_NB = OBJ_PER_LINE then
+					OBJ_IDX := (others => '0');
 				end if;
+				OBJ_VISINFO_ADDR_RD <= OBJ_IDX;
+
+				SP2C <= SP2C_Y_RD;
 
 			when SP2C_Y_RD =>
 				if SP2_EN = '1' then
-					SP2C <= SP2C_Y_RD2;
+					if OBJ_IDX < OBJ_NB then
+						SP2C <= SP2C_Y_RD2;
+					else
+						SP2C <= SP2C_NEXT;
+					end if;
 				end if;
 
 			when SP2C_Y_RD2 =>
-				if OBJ_VISINFO_Q < OBJ_MAX then
-					OBJ_CACHE_ADDR_RD_SP2 <= OBJ_VISINFO_Q;
-					SP2C <= SP2C_Y_RD3;
-				else
-					OBJ_IDX := OBJ_IDX + 1;
-					SP2C <= SP2C_NEXT;
-				end if;
+				OBJ_CACHE_ADDR_RD_SP2 <= OBJ_VISINFO_Q;
+				SP2C <= SP2C_Y_RD3;
 
 			when SP2C_Y_RD3 =>
 				SP2C <= SP2C_Y_RD4;
@@ -1456,7 +1430,6 @@ begin
 					OBJ_HF := SP2_VRAM_DO(11);
 					OBJ_PAL := SP2_VRAM_DO(14 downto 13);
 					OBJ_PRI := SP2_VRAM_DO(15);
-					OBJ_IDX := OBJ_IDX + 1;
 
 					-- sprite masking algorithm as implemented by gens-ii
 					if OBJ_X = "000000000" and OBJ_VALID_X = '1' then
@@ -1560,16 +1533,21 @@ begin
 				end if;
 
 			when SP2C_NEXT =>
-				if OBJ_IDX = OBJ_NB then
-					SP2C <= SP2C_DONE;
-				else
-					OBJ_VISINFO_ADDR_RD <= OBJ_IDX;
-					if OBJ_IDX >= OBJ_PER_LINE then
+				SP2C <= SP2C_Y_RD;
+				if OBJ_IDX = OBJ_PER_LINE - 1 then
+					if OBJ_NB = 0 or OBJ_NB = OBJ_PER_LINE then
+						SP2C <= SP2C_DONE;
+					else
 						OBJ_IDX := (others => '0');
-						OBJ_VISINFO_ADDR_RD <= (others => '0');
 					end if;
-					SP2C <= SP2C_Y_RD;
+				else
+					if OBJ_NB = OBJ_IDX + 1 then
+						SP2C <= SP2C_DONE;
+					else
+						OBJ_IDX := OBJ_IDX + 1;
+					end if;
 				end if;
+				OBJ_VISINFO_ADDR_RD <= OBJ_IDX;
 
 			when others => -- SP2C_DONE
 				if SP2E_ACTIVATE = '1' then
@@ -1712,11 +1690,6 @@ begin
 					BG_Y  <= V_CNT - VDISP_START;
 					BGEN_ACTIVE <= '1';
 				end if;
-
-				SPBUF <= not SPBUF;
-				if V_CNT >= VDISP_START-1 and V_CNT < VDISP_END-1 then
-					SP2E_ACTIVATE <= '1';
-				end if;
 			end if;
 
 			if H_CNT = HDISP_START-1 then
@@ -1729,6 +1702,11 @@ begin
 
 				if V_CNT = VDISP_END+1 then
 					T80_VINT <= '0';
+				end if;
+				
+				SPBUF <= not SPBUF;
+				if V_CNT >= VDISP_START-1 and V_CNT < VDISP_END-1 then
+					SP2E_ACTIVATE <= '1';
 				end if;
 			end if;
 
