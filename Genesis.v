@@ -791,7 +791,7 @@ always @(posedge MCLK) begin
 
 		ZBUS_TEST:
 			begin
-				if(~FM_SEL || ~we || !FM_DO[7] || !ZBUS_A[0]) begin
+				if(~FM_SEL || ~we || !FM_DO[7]) begin
 					ZBUS_WE <= we;
 					zstate <= ZBUS_READ;
 				end
