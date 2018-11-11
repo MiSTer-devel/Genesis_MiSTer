@@ -189,16 +189,14 @@ cyclonev_hps_interface_mpu_general_purpose h2f_gp
 
 reg [15:0] cfg;
 
-reg        cfg_got   = 0;
-reg        cfg_set   = 0;
+reg  cfg_got   = 0;
+reg  cfg_set   = 0;
 //wire [2:0] hdmi_res  = cfg[10:8];
-wire       dvi_mode  = cfg[7];
-wire       audio_96k = cfg[6];
-wire       ypbpr_en  = cfg[5];
-wire       csync     = cfg[3];
-`ifndef LITE
+wire dvi_mode  = cfg[7];
+wire audio_96k = cfg[6];
+wire ypbpr_en  = cfg[5];
+wire csync     = cfg[3];
 wire vga_scaler= cfg[2];
-`endif
 
 reg        cfg_custom_t = 0;
 reg  [5:0] cfg_custom_p1;
@@ -760,20 +758,11 @@ vga_out vga_out
 	.ypbpr_full(1),
 	.ypbpr_en(ypbpr_en),
 	.dout(vga_o),
-`ifdef LITE
-	.din(vga_q)
-`else
 	.din(vga_scaler ? {24{HDMI_TX_DE}} & HDMI_TX_D : vga_q)
-`endif
 );
 
-`ifdef LITE
-	wire vs1 = vs;
-	wire hs1 = hs;
-`else
-	wire vs1 = vga_scaler ? HDMI_TX_VS : vs;
-	wire hs1 = vga_scaler ? HDMI_TX_HS : hs;
-`endif
+wire vs1 = vga_scaler ? HDMI_TX_VS : vs;
+wire hs1 = vga_scaler ? HDMI_TX_HS : hs;
 
 assign VGA_VS = VGA_EN ? 1'bZ      : csync ?     1'b1     : ~vs1;
 assign VGA_HS = VGA_EN ? 1'bZ      : csync ? ~(vs1 ^ hs1) : ~hs1;
