@@ -9,11 +9,13 @@ use IEEE.NUMERIC_STD.ALL;
 
 entity psg is
 	port (
+		reset	: in  STD_LOGIC;
 		clk	: in  STD_LOGIC;
 		clken	: in  STD_LOGIC;
-		reset	: in  STD_LOGIC;
+
 		WR_n	: in  STD_LOGIC;
 		D_in	: in  STD_LOGIC_VECTOR(7 downto 0);
+
 		snd   : out STD_LOGIC_VECTOR(5 downto 0)
 	);
 end entity;
@@ -84,23 +86,22 @@ begin
 		end if;
 	end process;
 
-	process (clk)
+	process (clk, reset)
 	begin
-		if rising_edge(clk) then
+		if reset = '1' then
+			volume0 <= (others => '1');
+			volume1 <= (others => '1');
+			volume2 <= (others => '1');
+			volume3 <= (others => '1');
+			tone0 <= (others => '0');
+			tone1 <= (others => '0');
+			tone2 <= (others => '0');
+			ctrl3 <= (others => '0');
+			old_WR_n <= '0';
 
+		elsif rising_edge(clk) then
 			old_WR_n <= WR_n;
-
-			if reset = '1' then
-				volume0 <= (others => '1');
-				volume1 <= (others => '1');
-				volume2 <= (others => '1');
-				volume3 <= (others => '1');
-				tone0 <= (others => '0');
-				tone1 <= (others => '0');
-				tone2 <= (others => '0');
-				ctrl3 <= (others => '0');
-
-			elsif old_WR_n = '1' and WR_n='0' then
+			if old_WR_n = '1' and WR_n='0' then
 				if D_in(7)='1' then
 					case D_in(6 downto 4) is
 						when "000" => tone0(3 downto 0) <= D_in(3 downto 0);
@@ -138,4 +139,99 @@ begin
 		+ unsigned("00"&output3)
 	);
 
+end rtl;
+
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.STD_LOGIC_ARITH.ALL;
+use IEEE.STD_LOGIC_UNSIGNED.ALL;
+
+entity psg_tone is
+    Port (
+		clk	: in  STD_LOGIC;
+		clk_en: in  STD_LOGIC;
+		tone	: in  STD_LOGIC_VECTOR (9 downto 0);
+		volume: in  STD_LOGIC_VECTOR (3 downto 0);
+		output: out STD_LOGIC_VECTOR (3 downto 0));
+end psg_tone;
+
+architecture rtl of psg_tone is
+
+	signal counter	: std_logic_vector(9 downto 0) := (0=>'1', others=>'0');
+	signal v			: std_logic := '0';
+
+begin
+
+	process (clk)
+	begin
+		if rising_edge(clk) then
+			if clk_en = '1' then 
+				if counter = 0 then
+					v <= not v;
+					counter <= tone;
+				else
+					counter <= counter-1;
+				end if;
+			end if;
+		end if;
+	end process;
+
+	output <= not volume when v = '1' else "0000";
+end rtl;
+
+
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.STD_LOGIC_ARITH.ALL;
+use IEEE.STD_LOGIC_UNSIGNED.ALL;
+
+entity psg_noise is
+port (
+	clk	   : in  STD_LOGIC;
+	clk_en   : in  STD_LOGIC;
+	style		: in  STD_LOGIC_VECTOR (2 downto 0);
+	tone		: in  STD_LOGIC_VECTOR (9 downto 0);
+	volume	: in  STD_LOGIC_VECTOR (3 downto 0);
+	output	: out STD_LOGIC_VECTOR (3 downto 0));
+end psg_noise;
+
+architecture rtl of psg_noise is
+
+	signal counter	: std_logic_vector(9 downto 0);
+	signal v			: std_logic;
+	signal shift	: std_logic_vector(15 downto 0) := "1000000000000000";
+
+begin
+
+	process (clk)
+		variable feedback: std_logic;
+	begin
+		if rising_edge(clk) then
+			if clk_en = '1' then
+				if counter=1 then
+					v <= not v;
+					case style(1 downto 0) is
+						when "00" => counter <= "0000010000";
+						when "01" => counter <= "0000100000";
+						when "10" => counter <= "0001000000";
+						when "11" => counter <= tone;
+						when others =>
+					end case;
+				else
+					counter <= counter-1;
+				end if;
+				-- output update
+				if(v = '0') then
+					if (style(2)='1') then
+						feedback := shift(0) xor shift(3);
+					else
+						feedback := shift(0);
+					end if;
+					shift <= feedback & shift(15 downto 1);			
+				end if;
+			end if;
+		end if;
+	end process;
+
+	output <= not volume when shift(0) = '1' else "0000";
 end rtl;

@@ -365,9 +365,7 @@ set_global_assignment -name QSYS_FILE sys/vip.qsys
 set_global_assignment -name QIP_FILE TG68K/TG68K.qip
 set_global_assignment -name QIP_FILE T80/t80.qip
 set_global_assignment -name QIP_FILE jt12/jt12.qip
-set_global_assignment -name VHDL_FILE psg/psg_tone.vhd
-set_global_assignment -name VHDL_FILE psg/psg_noise.vhd
-set_global_assignment -name VHDL_FILE psg/psg.vhd
+set_global_assignment -name VHDL_FILE psg.vhd
 set_global_assignment -name SYSTEMVERILOG_FILE compressor.sv
 set_global_assignment -name VHDL_FILE vdp.vhd
 set_global_assignment -name VHDL_FILE gen_io.vhd
