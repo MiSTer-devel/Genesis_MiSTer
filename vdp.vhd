@@ -1685,7 +1685,7 @@ begin
 				end if;
 			end if;
 
-			if H_CNT = HDISP_START-16-1 then
+			if H_CNT = HDISP_START-18-1 then
 				if V_CNT >= VDISP_START and V_CNT < VDISP_END then
 					BG_Y  <= V_CNT - VDISP_START;
 					BGEN_ACTIVE <= '1';
@@ -1713,6 +1713,11 @@ begin
 			V30prev := V30prev and V30i;
 
 			if H_CNT = HDISP_START+HDISP_SIZE-1 then
+				IN_HBL <= '1';
+				BGEN_ACTIVE <= '0';
+			end if;
+
+			if H_CNT = HDISP_START+HDISP_SIZE+4-1 then
 				V_CNT <= V_CNT + 1;
 				if V_CNT >= VTOTAL-1 then
 					V_CNT <= (others => '0');
@@ -1752,9 +1757,6 @@ begin
 
 				BGB_VSRAM1_LATCH <= VSRAM_BGB(10 downto 0);
 				BGA_VSRAM0_LATCH <= VSRAM_BGA(10 downto 0);
-
-				IN_HBL <= '1';
-				BGEN_ACTIVE <= '0';
 			end if;
 
 			if H_CNT = HDISP_START+HDISP_SIZE+6-1 then
