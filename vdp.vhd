@@ -435,10 +435,9 @@ signal SP_Y				: std_logic_vector(8 downto 0);
 signal SOVR				: std_logic;
 signal SP1_SOVR_SET	: std_logic;
 signal SP2_SOVR_SET	: std_logic;
-signal SOVR_CLR		: std_logic;
 
 signal SCOL				: std_logic;
-signal SCOL_CLR		: std_logic;
+signal SCOL_SET		: std_logic;
 
 signal OBJ_CACHE_ADDR_RD	: std_logic_vector(6 downto 0);
 signal OBJ_CACHE_Y_Q			: std_logic_vector(15 downto 0);
@@ -459,7 +458,7 @@ signal OBJ_COLINFO_Q_A		: std_logic_vector(6 downto 0);
 signal OBJ_COLINFO_Q_B		: std_logic_vector(6 downto 0);
 
 -- PART 1
-signal SP1E_ACTIVATE	: std_logic;
+signal SP1E_ACTIVE	: std_logic;
 
 type sp1c_t is (
 	SP1C_INIT,
@@ -477,7 +476,7 @@ signal OBJ_NB			: std_logic_vector(4 downto 0);
 signal OBJ_CACHE_ADDR_RD_SP1	: std_logic_vector(6 downto 0);
 
 -- PART 2
-signal SP2E_ACTIVATE	: std_logic;
+signal SP2E_ACTIVE	: std_logic;
 
 type sp2c_t is (
 	SP2C_INIT,
@@ -1290,7 +1289,7 @@ begin
 				end if;
 
 			when others => -- SP1C_DONE
-				if SP1E_ACTIVATE = '1' then
+				if SP1E_ACTIVE = '1' then
 					SP1C <= SP1C_INIT;
 				end if;
 		end case;
@@ -1324,15 +1323,13 @@ begin
 	if RST_N = '0' then
 		SP2_SEL <= '0';
 		SP2C <= SP2C_DONE;
-		SCOL <= '0';
+		SCOL_SET <= '0';
 		SP2_SOVR_SET <= '0';
 
 	elsif rising_edge(CLK) then
 
 		SP2_SOVR_SET <= '0';
-		if SCOL_CLR = '1' then
-			SCOL <= '0';
-		end if;
+		SCOL_SET <= '0';
 
 		OBJ_COLINFO_WE_A <= '0';
 
@@ -1510,7 +1507,7 @@ begin
 							end if;
 						else
 							if OBJ_COLNO /= "0000" then
-								SCOL <= '1';
+								SCOL_SET <= '1';
 							end if;
 						end if;
 					end if;
@@ -1550,24 +1547,10 @@ begin
 				OBJ_VISINFO_ADDR_RD <= OBJ_IDX;
 
 			when others => -- SP2C_DONE
-				if SP2E_ACTIVATE = '1' then
+				if SP2E_ACTIVE = '1' then
 					SP2C <= SP2C_INIT;
 				end if;
 		end case;
-	end if;
-end process;
-
--- Sprite Overflow
-process( RST_N, CLK )
-begin
-	if RST_N = '0' then
-		SOVR <= '0';
-	elsif rising_edge( CLK) then
-		if SP1_SOVR_SET = '1' or SP2_SOVR_SET = '1' then
-			SOVR <= '1';
-		elsif SOVR_CLR = '1' then
-			SOVR <= '0';
-		end if;
 	end if;
 end process;
 
@@ -1627,16 +1610,16 @@ begin
 		IN_VBL <= '1';
 
 		BGEN_ACTIVE <= '0';
-		SP1E_ACTIVATE <= '0';
-		SP2E_ACTIVATE <= '0';
+		SP1E_ACTIVE <= '0';
+		SP2E_ACTIVE <= '0';
 
 		V30prev := '1';
 		hint_en := '0';
 
 	elsif rising_edge(CLK) then
 
-		SP1E_ACTIVATE <= '0';
-		SP2E_ACTIVATE <= '0';
+		SP1E_ACTIVE <= '0';
+		SP2E_ACTIVE <= '0';
 		SP1_EN <= '0';
 		SP2_EN <= '0';
 
@@ -1706,7 +1689,7 @@ begin
 				
 				SPBUF <= not SPBUF;
 				if V_CNT >= VDISP_START-1 and V_CNT < VDISP_END-1 then
-					SP2E_ACTIVATE <= '1';
+					SP2E_ACTIVE <= '1';
 				end if;
 			end if;
 
@@ -1761,7 +1744,7 @@ begin
 
 			if H_CNT = HDISP_START+HDISP_SIZE+6-1 then
 				if V_CNT >= VDISP_START-1 and V_CNT < VDISP_END-1 then
-					SP1E_ACTIVATE <= '1';
+					SP1E_ACTIVE <= '1';
 					SP_Y <= V_CNT - VDISP_START + 1;
 				end if;
 			end if;
@@ -1918,14 +1901,12 @@ begin
 		DT_RD_SEL <= '0';
 		DT_FF_SEL <= '0';
 
-		SOVR_CLR <= '0';
-		SCOL_CLR <= '0';
+		SCOL <= '0';
+		SOVR <= '0';
 
 		DBG <= (others => '0');
 
 	elsif rising_edge(CLK) then
-		SOVR_CLR <= '0';
-		SCOL_CLR <= '0';
 
 		if SEL = '0' then
 			FF_DTACK_N <= '1';
@@ -2016,8 +1997,8 @@ begin
 					-- Control Port (Read Status Register) 04-07
 					PENDING <= '0';
 					FF_DO <= STATUS;
-					SOVR_CLR <= '1';
-					SCOL_CLR <= '1';
+					SOVR <= '0';
+					SCOL <= '0';
 					FF_DTACK_N <= '0';
 
 				else
@@ -2040,6 +2021,16 @@ begin
 					end if;
 				end if;
 			end if;
+		end if;
+		
+		-- Sprite Overflow
+		if SP1_SOVR_SET = '1' or SP2_SOVR_SET = '1' then
+			SOVR <= '1';
+		end if;
+
+		-- Sprite Collision
+		if SCOL_SET = '1' then
+			SCOL <= '1';
 		end if;
 	end if;
 end process;
