@@ -71,7 +71,7 @@ USE ieee.numeric_std.ALL;
 -- N_DW    : Avalon data bus width
 -- N_AW    : Avalon address bus width
 -- N_BURST : Burst size in bytes. Power of two.
--- OHRES   : Max. output resolution. Must be a power of two
+-- OHRES   : Max. output resolution.
 
 ENTITY ascal IS
   GENERIC (
@@ -82,7 +82,7 @@ ENTITY ascal IS
     FRAC    : natural RANGE 4 TO 6 :=4;
     NPOLY   : natural RANGE 0 TO 2 :=2;
     FORMAT  : natural RANGE 1 TO 8 :=8;
-    OHRES   : natural RANGE 1 TO 2048 :=2048;
+    OHRES   : natural RANGE 1 TO 4096 := 2048;
     N_DW    : natural RANGE 32 TO 128 := 128;
     N_AW    : natural RANGE 8 TO 32 := 32;
     N_BURST : natural := 256 -- 256 bytes per burst
@@ -302,7 +302,7 @@ ARCHITECTURE rtl OF ascal IS
   ATTRIBUTE ramstyle OF o_line0 : SIGNAL IS "no_rw_check";
   ATTRIBUTE ramstyle OF o_line1 : SIGNAL IS "no_rw_check";
   ATTRIBUTE ramstyle OF o_line2 : SIGNAL IS "no_rw_check";
-  SIGNAL o_wadl,o_radl : natural RANGE 0 TO OHRES-1;
+  SIGNAL o_wadl,o_radl : natural RANGE 0 TO 4095;
   SIGNAL o_ldw,o_ldrm,o_ldr0,o_ldr1,o_ldr2 : unsigned(NP-1 DOWNTO 0);
   SIGNAL o_wr : unsigned(3 DOWNTO 0);
   SIGNAL o_hcpt,o_vcpt     : natural RANGE 0 TO 4095;
@@ -329,7 +329,7 @@ ARCHITECTURE rtl OF ascal IS
   SIGNAL o_alt,o_altp,o_alt1,o_alt2,o_alt3,o_alt4 : unsigned(3 DOWNTO 0);
   SIGNAL o_altv : unsigned(0 TO 11);
   SIGNAL o_primv,o_lastv : unsigned(0 TO 2);
-  SIGNAL o_dcpt,o_dcpt1,o_dcpt2,o_dcpt3,o_dcpt4 : natural RANGE 0 TO OHRES-1;
+  SIGNAL o_dcpt,o_dcpt1,o_dcpt2,o_dcpt3,o_dcpt4 : natural RANGE 0 TO 4095;
   TYPE type_pix IS RECORD
     r,g,b : unsigned(7 DOWNTO 0); -- 0.8
   END RECORD;
@@ -1285,7 +1285,7 @@ BEGIN
         END IF;
       ELSE
         IF o_dshi=0 THEN
-          o_dcpt<=(o_dcpt+1) MOD OHRES;
+          o_dcpt<=(o_dcpt+1) MOD 4096;
           o_hpos_next<=o_hpos_next+o_hdelta;
           o_hpos<=o_hpos_next;
         ELSE
@@ -1507,28 +1507,30 @@ BEGIN
   BEGIN
     IF rising_edge(o_clk) THEN
       -- WRITES
-      IF o_wr(0)='1' THEN
-        o_linem(o_wadl)<=o_ldw; -- -1
-      END IF;
-      IF o_wr(1)='1' THEN
-        o_line0(o_wadl)<=o_ldw; -- 0
-      END IF;
-      IF o_wr(2)='1' THEN
-        o_line1(o_wadl)<=o_ldw; -- 1
-      END IF;
-      IF o_wr(3)='1' THEN
-        o_line2(o_wadl)<=o_ldw; -- 2
-      END IF;
-
-      -- READS
-      o_ldrm<=o_linem(o_radl);
-      o_ldr0<=o_line0(o_radl);
-      o_ldr1<=o_line1(o_radl);
-      o_ldr2<=o_line2(o_radl);
+		if o_wadl < OHRES then
+			IF o_wr(0)='1' THEN
+			  o_linem(o_wadl)<=o_ldw; -- -1
+			END IF;
+			IF o_wr(1)='1' THEN
+			  o_line0(o_wadl)<=o_ldw; -- 0
+			END IF;
+			IF o_wr(2)='1' THEN
+			  o_line1(o_wadl)<=o_ldw; -- 1
+			END IF;
+			IF o_wr(3)='1' THEN
+			  o_line2(o_wadl)<=o_ldw; -- 2
+			END IF;
+		end if;
+	  
+		-- READS
+		o_ldrm<=o_linem(o_radl);
+		o_ldr0<=o_line0(o_radl);
+		o_ldr1<=o_line1(o_radl);
+		o_ldr2<=o_line2(o_radl);
     END IF;
   END PROCESS OLBUF;
   
-  o_radl<=(o_hcpt-o_hmin+OHRES) MOD OHRES;
+  o_radl<=(o_hcpt-o_hmin+4096) MOD 4096;
   --xxx_vposi<=to_integer(o_vpos(23 DOWNTO 12)); -- Simu!
   
   -----------------------------------------------------------------------------

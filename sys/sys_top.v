@@ -517,7 +517,7 @@ ascal
 	.vimin  (0),
 	.vimax  (0),
 
-	.o_clk  (HDMI_TX_CLK),
+	.o_clk  (iHdmiClk),
 	.o_ce   (1),
 	.o_r    (hdmi_data[23:16]),
 	.o_g    (hdmi_data[15:8]),
