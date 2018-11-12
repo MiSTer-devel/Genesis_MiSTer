@@ -82,7 +82,7 @@ ENTITY ascal IS
     FRAC    : natural RANGE 4 TO 6 :=4;
     NPOLY   : natural RANGE 0 TO 2 :=2;
     FORMAT  : natural RANGE 1 TO 8 :=8;
-    OHRES   : natural RANGE 1 TO 2048 :=2048;
+    OHRES   : natural RANGE 1 TO 4096 :=4096;
     N_DW    : natural RANGE 32 TO 128 := 128;
     N_AW    : natural RANGE 8 TO 32 := 32;
     N_BURST : natural := 256 -- 256 bytes per burst
