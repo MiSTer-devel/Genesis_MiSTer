@@ -129,6 +129,10 @@ localparam CONF_STR = {
 	"O5,6 buttons mode,No,Yes;",
 	"-;",
 	"OA,VRAM access rate,Fast,Original;",
+`ifdef LITE
+	"OB,Enable FM,Yes,No;",
+	"OC,Enable PSG,Yes,No;",
+`endif	
 	"R0,Reset;",
 	"J1,A,B,C,Start,Mode,X,Y,Z;",
 	"V,v1.55.",`BUILD_DATE
@@ -226,9 +230,13 @@ Genesis Genesis
 	.JOY_1((status[4] ? joystick_1[11:0] : joystick_0[11:0])),
 	.JOY_2((status[4] ? joystick_0[11:0] : joystick_1[11:0])),
 
-	.MAPPER_A(mapper_a),
-	.MAPPER_WE(mapper_we),
-	.MAPPER_D(mapper_d),
+`ifdef LITE
+	.ENABLE_FM(~status[11]),
+	.ENABLE_PSG(~status[12]),
+`else
+	.ENABLE_FM(1),
+	.ENABLE_PSG(1),
+`endif
 
 	.ROMSZ(ioctl_addr[24:1]),
 	.ROM_ADDR(rom_addr),
@@ -281,7 +289,7 @@ compressor compressor
 
 ///////////////////////////////////////////////////
 
-wire [22:1] rom_addr;
+wire [24:1] rom_addr;
 wire [15:0] rom_data;
 wire rom_rd, rom_rdack;
 
@@ -294,7 +302,7 @@ ddram ddram
    .we_req(rom_wr),
    .we_ack(rom_wrack),
 
-   .rdaddr(use_map ? {map[rom_addr[21:19]], rom_addr[18:1]} : rom_addr),
+   .rdaddr(rom_addr),
    .dout(rom_data),
    .rd_req(rom_rd),
    .rd_ack(rom_rdack)
@@ -317,24 +325,6 @@ always @(posedge clk_sys) begin
 		end else if(ioctl_wait && (rom_wr == rom_wrack)) begin
 			ioctl_wait <= 0;
 		end
-	end
-end
-
-wire [2:0] mapper_a;
-wire [5:0] mapper_d;
-wire       mapper_we;
-
-reg  [5:0] map[8] = '{0,1,2,3,4,5,6,7};
-reg        use_map = 0;
-
-always @(posedge clk_sys) begin
-	if(reset) begin
-		map <= '{0,1,2,3,4,5,6,7};
-		use_map <= 0;
-	end
-	else if (mapper_we && mapper_a) begin
-		map[mapper_a] <= mapper_d;
-		use_map <= 1;
 	end
 end
 
