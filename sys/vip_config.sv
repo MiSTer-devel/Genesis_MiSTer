@@ -19,10 +19,12 @@ module vip_config
 	
 	input      [11:0] VSET,
 	
+	input             coef_set,
 	input             coef_clk,
 	input       [6:0] coef_addr,
 	input       [8:0] coef_data,
 	input             coef_wr,
+	input       [2:0] scaler_flt,
 
 	output reg  [8:0] address,
 	output reg        write,
@@ -72,12 +74,12 @@ wire [8:0] coef_q;
 coeffbuf coeffbuf
 (
 	.wrclock(coef_clk),
-	.wraddress(coef_addr),
+	.wraddress({1'b1,coef_addr}),
 	.data(coef_data),
 	.wren(coef_wr),
 
 	.rdclock(clk),
-	.rdaddress(coef_a),
+	.rdaddress({|scaler_flt,coef_a}),
 	.q(coef_q)
 );
 
@@ -110,15 +112,18 @@ always @(posedge clk) begin
 	reg [12:0] timeout = 0;
 	reg  [3:0] coef_state = 0;
 	reg  [6:0] coef_n;
+	reg        coef_setd;
 
 	arxd  <= ARX;
 	aryd  <= ARY;
 	vsetd <= VSET;
+	coef_setd <= coef_set;
+	
 	
 	cfg   <= CFG_SET;
 	cfgd  <= cfg;
 
-	if(reset || (arx != arxd) || (ary != aryd) || (vset != vsetd) || (~cfgd && cfg)) begin
+	if(reset || (arx != arxd) || (ary != aryd) || (vset != vsetd) || (~cfgd && cfg) || (coef_setd ^ coef_set)) begin
 		arx <= arxd;
 		ary <= aryd;
 		vset <= vsetd;
@@ -207,12 +212,12 @@ endmodule
 module coeffbuf
 (
 	input	      wrclock,
-	input	[6:0] wraddress,
+	input	[7:0] wraddress,
 	input	[8:0] data,
 	input	      wren,
 
 	input	      rdclock,
-	input	[6:0] rdaddress,
+	input	[7:0] rdaddress,
 	output[8:0] q
 );
 
@@ -248,15 +253,15 @@ defparam
 	altsyncram_component.clock_enable_output_b = "BYPASS",
 	altsyncram_component.intended_device_family = "Cyclone V",
 	altsyncram_component.lpm_type = "altsyncram",
-	altsyncram_component.numwords_a = 128,
-	altsyncram_component.numwords_b = 128,
+	altsyncram_component.numwords_a = 256,
+	altsyncram_component.numwords_b = 256,
 	altsyncram_component.operation_mode = "DUAL_PORT",
 	altsyncram_component.outdata_aclr_b = "NONE",
 	altsyncram_component.outdata_reg_b = "UNREGISTERED",
 	altsyncram_component.init_file = "coeff.mif", 
 	altsyncram_component.power_up_uninitialized = "FALSE",
-	altsyncram_component.widthad_a = 7,
-	altsyncram_component.widthad_b = 7,
+	altsyncram_component.widthad_a = 8,
+	altsyncram_component.widthad_b = 8,
 	altsyncram_component.width_a = 9,
 	altsyncram_component.width_b = 9,
 	altsyncram_component.width_byteena_a = 1;

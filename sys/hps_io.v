@@ -312,9 +312,7 @@ always@(posedge clk_sys) begin
 					'h17,
 					'h18: sd_ack <= 1;
 					'h29: io_dout <= {4'hA, stflg};
-`ifdef LITE
 					'h2B: io_dout <= 1;
-`endif
 				endcase
 
 				sd_buff_addr <= 0;

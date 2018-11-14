@@ -209,11 +209,13 @@ reg  [8:0] coef_data;
 reg        coef_wr = 0;
 
 `ifndef LITE
-reg        vip_newcfg = 0;
+reg vip_newcfg = 0;
+reg coef_set = 0;
 `endif
 
 wire  [7:0] ARX, ARY;
 reg  [11:0] VSET = 0;
+reg   [2:0] scaler_flt;
 
 always@(posedge clk_sys) begin
 	reg  [7:0] cmd;
@@ -222,12 +224,14 @@ always@(posedge clk_sys) begin
 	reg  [7:0] cnt = 0;
 
 	old_strobe <= io_strobe;
-
-`ifndef LITE
 	coef_wr <= 0;
-`endif
 
-	if(~io_uio) has_cmd <= 0;
+	if(~io_uio) begin
+		has_cmd <= 0;
+`ifndef LITE
+		if(has_cmd && cmd == 'h2A) coef_set <= ~coef_set;
+`endif
+	end
 	else
 	if(~old_strobe & io_strobe) begin
 		if(!has_cmd) begin
@@ -277,9 +281,7 @@ always@(posedge clk_sys) begin
 			if(cmd == 'h26) vol_att <= io_din[4:0];
 			if(cmd == 'h27) VSET    <= io_din[11:0];
 			if(cmd == 'h2A) {coef_wr,coef_addr,coef_data} <= {1'b1,io_din};
-`ifdef LITE
 			if(cmd == 'h2B) scaler_flt <= io_din[2:0];
-`endif
 		end
 	end
 end
@@ -410,10 +412,12 @@ vip_config vip_config
 	.VS(VS),
 	.VSET(VSET),
 
+	.coef_set(coef_set),
 	.coef_clk(clk_sys),
 	.coef_addr(coef_addr),
 	.coef_data(coef_data),
 	.coef_wr(coef_wr),
+	.scaler_flt(scaler_flt),
 
 	.address(ctl_address),
 	.write(ctl_write),
@@ -489,7 +493,6 @@ wire [127:0] vbuf_writedata;
 wire  [15:0] vbuf_byteenable;
 wire         vbuf_write;
 
-reg    [2:0] scaler_flt;
 ascal 
 #(
 	.RAMBASE(32'h20000000),
@@ -538,7 +541,7 @@ ascal
 	.vmin   (vmin),
 	.vmax   (vmax),
 
-	.mode     ({1'b1,scaler_flt}),
+	.mode     ({1'b1,scaler_flt ? 3'd4 : 3'd0}),
 	.poly_clk (clk_sys),
 	.poly_a   (coef_addr),
 	.poly_dw  (coef_data),
