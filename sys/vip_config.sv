@@ -110,9 +110,10 @@ always @(posedge clk) begin
 	reg [31:0] wcalc;
 	reg [31:0] hcalc;
 	reg [12:0] timeout = 0;
-	reg  [3:0] coef_state = 0;
+	reg  [4:0] coef_state = 0;
 	reg  [6:0] coef_n;
 	reg        coef_setd;
+	reg        bank = 0;
 
 	arxd  <= ARX;
 	aryd  <= ARY;
@@ -186,8 +187,23 @@ always @(posedge clk) begin
 		end
 		else begin
 			case(coef_state)
-				1,3,5,7: coef_state <= coef_state + 1'd1;
-				2,4,6,8:
+				1,3: coef_state <= coef_state + 1'd1;
+				2: begin
+						address <= 8;
+						writedata <= 0;
+						writedata[0] <= bank;
+						write <= 1;
+						coef_state <= coef_state + 1'd1;
+					end
+				4: begin
+						address <= 10;
+						writedata <= 0;
+						writedata[0] <= bank;
+						write <= 1;
+						coef_state <= coef_state + 1'd1;
+					end
+				5,7,9,11: coef_state <= coef_state + 1'd1;
+				6,8,10,12:
 					begin
 						coef_state <= coef_state + 1'd1;
 						coef_a <= coef_a + 1'd1;
@@ -196,12 +212,29 @@ always @(posedge clk) begin
 						writedata <= coef_q;
 						write <= 1;
 					end
-				9: begin
-						coef_state <= (&coef_n) ? 4'd0 : 4'd1;
+				13: begin
+						coef_state <= (&coef_n) ? 5'd14 : 5'd5;
 						address <= 9'd12 + coef_n[6];
 						writedata <= coef_n[5:2];
 						write <= 1;
 					end
+				14,16: coef_state <= coef_state + 1'd1;
+				15: begin
+						address <= 9;
+						writedata <= 0;
+						writedata[0] <= bank;
+						write <= 1;
+						coef_state <= coef_state + 1'd1;
+					end
+				17: begin
+						address <= 11;
+						writedata <= 0;
+						writedata[0] <= bank;
+						write <= 1;
+						bank <= ~bank;
+						coef_state <= coef_state + 1'd1;
+					end
+				18: coef_state <= 0;
 			endcase;
 		end
 	end

@@ -881,7 +881,7 @@
   <parameter name="ENABLE_FIR" value="0" />
   <parameter name="EXTRA_PIPELINING" value="1" />
   <parameter name="FAMILY" value="Cyclone V" />
-  <parameter name="H_BANKS" value="1" />
+  <parameter name="H_BANKS" value="2" />
   <parameter name="H_COEFF_FILE"><![CDATA[<enter file name (including full path)>]]></parameter>
   <parameter name="H_FRACTION_BITS" value="7" />
   <parameter name="H_FUNCTION" value="LANCZOS_3" />
@@ -906,7 +906,7 @@
   <parameter name="SYMBOLS_IN_SEQ" value="1" />
   <parameter name="USER_PACKET_FIFO_DEPTH" value="0" />
   <parameter name="USER_PACKET_SUPPORT" value="DISCARD" />
-  <parameter name="V_BANKS" value="1" />
+  <parameter name="V_BANKS" value="2" />
   <parameter name="V_COEFF_FILE"><![CDATA[<enter file name (including full path)>]]></parameter>
   <parameter name="V_FRACTION_BITS" value="7" />
   <parameter name="V_FUNCTION" value="LANCZOS_2" />
