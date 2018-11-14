@@ -210,6 +210,7 @@ Genesis Genesis
 	.LOADING(ioctl_download),
 	.EXPORT(|status[7:6]),
 	.PAL(status[7]),
+	.SRAM_QUIRK(sram_quirk),
 
 	.DAC_LDATA(audio_l),
 	.DAC_RDATA(audio_r),
@@ -349,6 +350,28 @@ always @(posedge clk_sys) begin
 	if(status[8] & (old_download ^ ioctl_download) & |ioctl_index) begin
 		region_set <= ioctl_download;
 		region_req <= ioctl_index[7:6];
+	end
+end
+
+reg sram_quirk = 0;
+always @(posedge clk_sys) begin
+	reg [47:0] cart_id;
+	reg old_download, old_reset;
+	old_download <= ioctl_download;
+
+	if(~old_download && ioctl_download) sram_quirk <= 0;
+
+	if(ioctl_wr) begin
+		if(ioctl_addr == 'h184) cart_id[47:32] <= {ioctl_data[7:0],ioctl_data[15:8]};
+		if(ioctl_addr == 'h186) cart_id[31:16] <= {ioctl_data[7:0],ioctl_data[15:8]};
+		if(ioctl_addr == 'h188) cart_id[15:00] <= {ioctl_data[7:0],ioctl_data[15:8]};
+		if(ioctl_addr == 'h18A) begin
+			     if({cart_id,ioctl_data[7:0]} == "-081276") sram_quirk <= 1;
+			else if({cart_id                } == "-81406" ) sram_quirk <= 1;
+			else if({cart_id,ioctl_data[7:0]} == "-081586") sram_quirk <= 1;
+			else if({cart_id                } == "-81576" ) sram_quirk <= 1;
+			else if({cart_id                } == "-81476" ) sram_quirk <= 1;
+		end
 	end
 end
 
