@@ -211,6 +211,7 @@ Genesis Genesis
 	.EXPORT(|status[7:6]),
 	.PAL(status[7]),
 	.SRAM_QUIRK(sram_quirk),
+	.EEPROM_QUIRK(eeprom_quirk),
 
 	.DAC_LDATA(audio_l),
 	.DAC_RDATA(audio_r),
@@ -354,12 +355,13 @@ always @(posedge clk_sys) begin
 end
 
 reg sram_quirk = 0;
+reg eeprom_quirk = 0;
 always @(posedge clk_sys) begin
 	reg [47:0] cart_id;
 	reg old_download, old_reset;
 	old_download <= ioctl_download;
 
-	if(~old_download && ioctl_download) sram_quirk <= 0;
+	if(~old_download && ioctl_download) {eeprom_quirk,sram_quirk} <= 0;
 
 	if(ioctl_wr) begin
 		if(ioctl_addr == 'h184) cart_id[47:32] <= {ioctl_data[7:0],ioctl_data[15:8]};
@@ -371,6 +373,7 @@ always @(posedge clk_sys) begin
 			else if({cart_id,ioctl_data[7:0]} == "-081586") sram_quirk <= 1;
 			else if({cart_id                } == "-81576" ) sram_quirk <= 1;
 			else if({cart_id                } == "-81476" ) sram_quirk <= 1;
+			else if({cart_id                } == "K-1215" ) eeprom_quirk <= 1;
 		end
 	end
 end

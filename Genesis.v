@@ -48,6 +48,7 @@ module Genesis
 	input         EXPORT,
 	input         FAST_FIFO,
 	input         SRAM_QUIRK,
+	input         EEPROM_QUIRK,
 
 	output  [3:0] RED,
 	output  [3:0] GREEN,
@@ -635,7 +636,11 @@ always @(posedge MCLK) begin
 			end
 
 		MBUS_ROM_ACC:
-			if ((MBUS_A >= ROMSZ && MBUS_A[23:21] == 1) || (SRAM_QUIRK && {MBUS_A,1'b0} == 'h200000)) begin
+			if (EEPROM_QUIRK && {MBUS_A,1'b0} == 'h200000) begin
+				data <= 0;
+				mstate <= MBUS_FINISH;
+			end
+			else if ((MBUS_A >= ROMSZ && MBUS_A[23:21] == 1) || (SRAM_QUIRK && {MBUS_A,1'b0} == 'h200000)) begin
 				sram_we_u <= ~MBUS_RNW & ~MBUS_UDS_N;
 				sram_we_l <= ~MBUS_RNW & ~MBUS_LDS_N;
 				mstate <= MBUS_SRAM_READ;
