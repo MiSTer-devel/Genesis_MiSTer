@@ -200,7 +200,7 @@ wire interlace;
 assign DDRAM_CLK = clk_ram;
 wire reset = RESET | status[0] | buttons[1] | region_set;
 
-wire [12:0] audio_l, audio_r;
+wire [11:0] audio_l, audio_r;
 
 Genesis Genesis
 (
@@ -285,8 +285,8 @@ video_mixer #(.LINE_LENGTH(320), .HALF_DEPTH(1)) video_mixer
 compressor compressor
 (
 	clk_sys,
-	audio_l[12:1], audio_r[12:1],
-	AUDIO_L,       AUDIO_R
+	audio_l, audio_r,
+	AUDIO_L, AUDIO_R
 );
 
 ///////////////////////////////////////////////////

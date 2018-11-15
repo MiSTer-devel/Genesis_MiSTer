@@ -40,8 +40,8 @@ module Genesis
 
 	input         ENABLE_FM,
 	input         ENABLE_PSG,
-	output [12:0] DAC_LDATA,
-	output [12:0] DAC_RDATA,
+	output [11:0] DAC_LDATA,
+	output [11:0] DAC_RDATA,
 
 	input         LOADING,
 	input         PAL,
@@ -913,8 +913,8 @@ jt12 fm
 	.snd_right(FM_right)
 );
 
-assign DAC_LDATA = ({13{ENABLE_FM}} & {FM_left[11],  FM_left})  + ({13{ENABLE_PSG}} & {PSG_SND, 3'b000});
-assign DAC_RDATA = ({13{ENABLE_FM}} & {FM_right[11], FM_right}) + ({13{ENABLE_PSG}} & {PSG_SND, 3'b000});
+assign DAC_LDATA = ({12{ENABLE_FM}} & FM_left)  + ({12{ENABLE_PSG}} & {PSG_SND, 3'b00});
+assign DAC_RDATA = ({12{ENABLE_FM}} & FM_right) + ({12{ENABLE_PSG}} & {PSG_SND, 3'b00});
 
 
 //-----------------------------------------------------------------------
