@@ -108,7 +108,7 @@ always @(posedge MCLK) ram_rst_a <= ram_rst_a + LOADING;
 // CPU 68000
 //--------------------------------------------------------------
 reg   [2:0] TG68_IPL_N;
-wire [31:1] TG68_A;
+wire [23:1] TG68_A;
 wire [15:0] TG68_DO;
 reg         TG68_AS_N;
 wire        TG68_UDS_N;
@@ -152,13 +152,13 @@ always @(posedge MCLK) begin
 	end
 end
 
-wire  TG68_DTACK_N = (TG68_MBUS_SEL ? TG68_MBUS_DTACK_N :
-                     TG68_ZBUS_SEL ? TG68_ZBUS_DTACK_N :
-                     1'b0) | VBUS_BUSY;
+wire TG68_DTACK_N = (TG68_MBUS_SEL ? TG68_MBUS_DTACK_N :
+							TG68_ZBUS_SEL ? TG68_ZBUS_DTACK_N :
+							1'b0) | VBUS_BUSY;
 
 wire [15:0] TG68_DI= TG68_MBUS_SEL ? TG68_MBUS_D :
-                     TG68_ZBUS_SEL ? TG68_ZBUS_D :
-                     NO_DATA;
+							TG68_ZBUS_SEL ? TG68_ZBUS_D :
+							NO_DATA;
 
 TG68KdotC_Kernel #(.TASbug(1)) CPU_68K
 (
@@ -192,13 +192,13 @@ wire  [7:0] T80_DO;
 wire        T80_IO = ~T80_MREQ_N & (~T80_RD_N | ~T80_WR_N);
 reg         T80_ENA;
 
-wire   T80_WAIT_N = T80_MBUS_SEL ? ~T80_MBUS_DTACK_N :
-                    T80_ZBUS_SEL ? ~T80_ZBUS_DTACK_N :
-                    1'b1;
+wire T80_WAIT_N = T80_MBUS_SEL ? ~T80_MBUS_DTACK_N :
+						T80_ZBUS_SEL ? ~T80_ZBUS_DTACK_N :
+						1'b1;
 
-wire [7:0] T80_DI = T80_MBUS_SEL ? T80_MBUS_D :
-                    T80_ZBUS_SEL ? T80_ZBUS_D :
-                    8'hFF;
+wire [7:0] T80_DI =	T80_MBUS_SEL ? T80_MBUS_D :
+							T80_ZBUS_SEL ? T80_ZBUS_D :
+							8'hFF;
 
 T80s #(.T2Write(1)) CPU_Z80
 (
@@ -217,26 +217,17 @@ T80s #(.T2Write(1)) CPU_Z80
 	.do(T80_DO)
 );
 
-// CONTROL AREA
-// $A11100 ZBUS request
-// $A11200 Reset the Z80
-wire        MBUS_CTRL_SEL = MBUS_A[23:12] == 12'hA11 && !MBUS_A[7:1];
-
 wire        CTRL_F  = (MBUS_A[11:8] == 1) ? T80_BUSRQ_N : (MBUS_A[11:8] == 2) ? T80_RESET_N : NO_DATA[8];
 wire [15:0] CTRL_DO = {NO_DATA[15:9], CTRL_F, NO_DATA[7:0]};
-reg         CTRL_WE;
+reg         CTRL_SEL;
 always @(posedge MCLK) begin
 	if (reset) begin
 		T80_BUSRQ_N <= 1;
 		T80_RESET_N <= 0;
 	end
-	else if(CTRL_WE) begin
-		if (MBUS_A[11:8] == 1) begin
-			T80_BUSRQ_N <= ~MBUS_DO[8];
-		end
-		else if (MBUS_A[11:8] == 2) begin
-			T80_RESET_N <= MBUS_DO[8];
-		end
+	else if(CTRL_SEL & ~MBUS_RNW & ~MBUS_UDS_N) begin
+		if (MBUS_A[11:8] == 1) T80_BUSRQ_N <= ~MBUS_DO[8];
+		if (MBUS_A[11:8] == 2) T80_RESET_N <=  MBUS_DO[8];
 	end
 end
 
@@ -244,21 +235,11 @@ end
 //--------------------------------------------------------------
 // VDP + PSG
 //--------------------------------------------------------------
-// VDP in Z80 address space :
-// Z80:
-// 7F = 01111111 000
-// 68000:
-// 7F = 01111111 000
-// FF = 11111111 000
-wire MBUS_VDP_SEL = (MBUS_A[23:21] == 3'b110 && !MBUS_A[18:16]          && !MBUS_A[7:5])
-                 || (MBUS_A[23:16] == 8'hA0  && (MBUS_A[14:8] == 7'h7F) && !MBUS_A[7:5]); // Z80 Address space
-
 reg         VDP_SEL;
-reg         VDP_RNW;
 wire [15:0] VDP_DO;
 wire        VDP_DTACK_N;
 
-wire [23:0] VBUS_ADDR;
+wire [23:0] VBUS_A;
 wire        VBUS_SEL;
 wire        VBUS_BUSY;
 
@@ -315,7 +296,7 @@ vdp vdp
 
 	.sel(VDP_SEL),
 	.a(MBUS_A[4:1]),
-	.rnw(VDP_RNW),
+	.rnw(MBUS_RNW),
 	.di(MBUS_DO),
 	.do(VDP_DO),
 	.dtack_n(VDP_DTACK_N),
@@ -335,7 +316,7 @@ vdp vdp
 	.t80_vint(T80_VINT),
 	.t80_intack(~T80_M1_N & ~T80_IORQ_N),
 
-	.vbus_addr(VBUS_ADDR),
+	.vbus_addr(VBUS_A),
 	.vbus_data(VBUS_D),
 	.vbus_sel(VBUS_SEL),
 	.vbus_dtack_n(VBUS_DTACK_N),
@@ -365,7 +346,7 @@ psg psg
 	.clk(MCLK),
 	.clken(T80_CLKEN),
 
-	.wr_n(VDP_RNW | ~VDP_SEL | ~MBUS_A[4] | MBUS_A[3]),
+	.wr_n(MBUS_RNW | ~VDP_SEL | ~MBUS_A[4] | MBUS_A[3]),
 	.d_in(MBUS_DO[15:8]),
 
 	.snd(PSG_SND)
@@ -375,10 +356,7 @@ psg psg
 //--------------------------------------------------------------
 // I/O
 //--------------------------------------------------------------
-wire MBUS_IO_SEL = MBUS_A[23:5] == {16'hA100, 3'b000};
-
 reg        IO_SEL;
-reg        IO_RNW;
 wire [7:0] IO_DO;
 wire       IO_DTACK_N;
 
@@ -417,7 +395,7 @@ gen_io io
 
 	.sel(IO_SEL),
 	.a(MBUS_A[4:1]),
-	.rnw(IO_RNW),
+	.rnw(MBUS_RNW),
 	.di(MBUS_DO[7:0]),
 	.do(IO_DO),
 	.dtack_n(IO_DTACK_N),
@@ -430,7 +408,7 @@ gen_io io
 //-----------------------------------------------------------------------
 // ROM
 //-----------------------------------------------------------------------
-wire MBUS_ROM_SEL = ~MBUS_A[23];
+assign ROM_ADDR = use_map ? {map[MBUS_A[21:19]], MBUS_A[18:1]} : MBUS_A[22:1];
 
 //SSF2 mapper
 reg [5:0] map[8];
@@ -446,31 +424,30 @@ always @(posedge MCLK) begin
 	end
 end
 
-assign ROM_ADDR = use_map ? {map[MBUS_A[21:19]], MBUS_A[18:1]} : MBUS_A[22:1];
 
 //-----------------------------------------------------------------------
 // 64KB SRAM
 //-----------------------------------------------------------------------
-reg sram_we_u;
+reg SRAM_SEL;
+
 dpram #(15) sram_u
 (
 	.clock(MCLK),
 	.address_a(MBUS_A[15:1]),
 	.data_a(MBUS_DO[15:8]),
-	.wren_a(sram_we_u),
+	.wren_a(SRAM_SEL & ~MBUS_RNW & ~MBUS_UDS_N),
 	.q_a(sram_q[15:8]),
 
 	.address_b(ram_rst_a),
 	.wren_b(LOADING)
 );
 
-reg sram_we_l;
 dpram #(15) sram_l
 (
 	.clock(MCLK),
 	.address_a(MBUS_A[15:1]),
 	.data_a(MBUS_DO[7:0]),
-	.wren_a(sram_we_l),
+	.wren_a(SRAM_SEL & ~MBUS_RNW & ~MBUS_LDS_N),
 	.q_a(sram_q[7:0]),
 
 	.address_b(ram_rst_a),
@@ -482,28 +459,26 @@ wire [15:0] sram_q;
 //-----------------------------------------------------------------------
 // 68K RAM
 //-----------------------------------------------------------------------
-wire MBUS_RAM_SEL = &MBUS_A[23:21];
+reg RAM_SEL;
 
-reg ram68k_we_u;
 dpram #(15) ram68k_u
 (
 	.clock(MCLK),
 	.address_a(MBUS_A[15:1]),
 	.data_a(MBUS_DO[15:8]),
-	.wren_a(ram68k_we_u),
+	.wren_a(RAM_SEL & ~MBUS_RNW & ~MBUS_UDS_N),
 	.q_a(ram68k_q[15:8]),
 
 	.address_b(ram_rst_a),
 	.wren_b(LOADING)
 );
 
-reg ram68k_we_l;
 dpram #(15) ram68k_l
 (
 	.clock(MCLK),
 	.address_a(MBUS_A[15:1]),
 	.data_a(MBUS_DO[7:0]),
-	.wren_a(ram68k_we_l),
+	.wren_a(RAM_SEL & ~MBUS_RNW & ~MBUS_LDS_N),
 	.q_a(ram68k_q[7:0]),
 
 	.address_b(ram_rst_a),
@@ -515,13 +490,13 @@ wire [15:0] ram68k_q;
 //-----------------------------------------------------------------------
 // MBUS Handling
 //-----------------------------------------------------------------------
-wire TG68_MBUS_SEL = TG68_IO  & ~TG68_ZBUS;
-wire T80_MBUS_SEL  = T80_IO   & ~T80_ZBUS;
-wire VDP_MBUS_SEL  = VBUS_SEL & ~VDP_ZBUS;
+wire       TG68_MBUS_SEL = TG68_IO  & ~TG68_ZBUS;
+wire       T80_MBUS_SEL  = T80_IO   & ~T80_ZBUS;
+wire       VDP_MBUS_SEL  = VBUS_SEL & ~VDP_ZBUS;
 
-reg TG68_MBUS_DTACK_N;
-reg T80_MBUS_DTACK_N;
-reg VDP_MBUS_DTACK_N;
+reg        TG68_MBUS_DTACK_N;
+reg        T80_MBUS_DTACK_N;
+reg        VDP_MBUS_DTACK_N;
 
 reg [15:0] TG68_MBUS_D;
 reg  [7:0] T80_MBUS_D;
@@ -529,50 +504,67 @@ reg [15:0] VDP_MBUS_D;
 
 reg [23:1] MBUS_A;
 reg [15:0] MBUS_DO;
+
 reg        MBUS_RNW;
 reg        MBUS_UDS_N;
 reg        MBUS_LDS_N;
+
+localparam MSRC_NONE = 0,
+			  MSRC_TG68 = 1,
+			  MSRC_T80  = 2,
+			  MSRC_VDP  = 3;
+
+reg  [1:0] msrc_pre;
+reg [23:1] MBUS_A_SRC;
+
+always @(*) begin
+	if(TG68_MBUS_SEL & TG68_MBUS_DTACK_N & ~VBUS_BUSY) begin
+		msrc_pre   = MSRC_TG68;
+		MBUS_A_SRC = TG68_A[23:1];
+	end
+	else if(T80_MBUS_SEL & T80_MBUS_DTACK_N & ~VBUS_BUSY) begin
+		msrc_pre   = MSRC_T80;
+		MBUS_A_SRC = T80_A[15] ? {BAR[23:15],T80_A[14:1]} : {16'hC000, T80_A[7:1]};
+	end
+	else if(VDP_MBUS_SEL & VDP_MBUS_DTACK_N) begin
+		msrc_pre   = MSRC_VDP;
+		MBUS_A_SRC = VBUS_A[23:1];
+	end
+	else begin
+		msrc_pre   = MSRC_NONE;
+		MBUS_A_SRC = 0;
+	end
+end
+
 
 always @(posedge MCLK) begin
 	reg  [3:0] mstate;
 	reg  [1:0] msrc;
 	reg [15:0] data;
 	
-	localparam 	MSRC_TG68 = 0,
-					MSRC_T80  = 1,
-					MSRC_VDP  = 2;
-
 	localparam 	MBUS_IDLE     = 0,
-					MBUS_SELECT   = 1,
-					MBUS_RAM_ACC  = 2,
-					MBUS_RAM_READ = 3,
-					MBUS_ROM_ACC  = 4,
-					MBUS_ROM_READ = 5,
-					MBUS_VDP_ACC  = 6,
-					MBUS_VDP_READ = 7,
-					MBUS_VDP_WAIT = 8,
-					MBUS_IO_ACC   = 9,
-					MBUS_IO_READ  = 10,
-					MBUS_IO_WAIT  = 11,
-					MBUS_CTRL_ACC = 12,
-					MBUS_SRAM_READ= 13,
-					MBUS_NONE     = 14,
-					MBUS_FINISH   = 15;
+					MBUS_RAM_ACC  = 1,
+					MBUS_RAM_READ = 2,
+					MBUS_ROM_ACC  = 3,
+					MBUS_ROM_READ = 4,
+					MBUS_VDP_ACC  = 5,
+					MBUS_VDP_READ = 6,
+					MBUS_IO_ACC   = 7,
+					MBUS_IO_READ  = 8,
+					MBUS_CTRL_ACC = 9,
+					MBUS_SRAM_READ= 10,
+					MBUS_FINISH   = 11;
 
-	ram68k_we_u <= 0;
-	ram68k_we_l <= 0;
-	sram_we_u <= 0;
-	sram_we_l <= 0;
-	CTRL_WE <= 0;
+	CTRL_SEL <= 0;
+	SRAM_SEL <= 0;
+	RAM_SEL <= 0;
 
 	if (reset) begin
 		TG68_MBUS_DTACK_N <= 1;
 		T80_MBUS_DTACK_N  <= 1;
 		VDP_MBUS_DTACK_N  <= 1;
 		VDP_SEL <= 0;
-		VDP_RNW <= 1;
 		IO_SEL <= 0;
-		IO_RNW <= 1;
 		mstate <= MBUS_IDLE;
 		MBUS_RNW <= 1;
 	end
@@ -585,47 +577,54 @@ always @(posedge MCLK) begin
 		MBUS_IDLE:
 			begin
 				MBUS_RNW <= 1;
-				if(TG68_MBUS_SEL & TG68_MBUS_DTACK_N & ~VBUS_BUSY) begin
-					msrc <= MSRC_TG68;
-					MBUS_A <= TG68_A[23:1];
-					MBUS_DO <= TG68_DO;
-					MBUS_UDS_N <= TG68_UDS_N;
-					MBUS_LDS_N <= TG68_LDS_N;
-					MBUS_RNW <= TG68_RNW;
-					mstate <= MBUS_SELECT;
-				end
-				else if(T80_MBUS_SEL & T80_MBUS_DTACK_N & ~VBUS_BUSY) begin
-					msrc <= MSRC_T80;
-					MBUS_A <= {T80_A[15] ? BAR[23:15] : {8'hA0,1'b0}, T80_A[14:1]};
-					MBUS_DO <= {T80_DO,T80_DO};
-					MBUS_UDS_N <= T80_A[0];
-					MBUS_LDS_N <= ~T80_A[0];
-					MBUS_RNW <= T80_WR_N;
-					mstate <= MBUS_SELECT;
-				end
-				else if(VDP_MBUS_SEL & VDP_MBUS_DTACK_N) begin
-					msrc <= MSRC_VDP;
-					MBUS_A <= VBUS_ADDR[23:1];
-					MBUS_DO <= 0;
-					MBUS_UDS_N <= 0;
-					MBUS_LDS_N <= 0;
-					MBUS_RNW <= 1;
-					mstate <= MBUS_SELECT;
+				if(msrc_pre != MSRC_NONE) begin
+					msrc <= msrc_pre;
+					MBUS_A <= MBUS_A_SRC;
+					if(msrc_pre == MSRC_TG68) begin
+						data <= NO_DATA;
+						MBUS_DO <= TG68_DO;
+						MBUS_UDS_N <= TG68_UDS_N;
+						MBUS_LDS_N <= TG68_LDS_N;
+						MBUS_RNW <= TG68_RNW;
+					end
+					else if(msrc_pre == MSRC_T80) begin
+						data <= 16'hFFFF;
+						MBUS_DO <= {T80_DO,T80_DO};
+						MBUS_UDS_N <= T80_A[0];
+						MBUS_LDS_N <= ~T80_A[0];
+						MBUS_RNW <= T80_WR_N;
+					end
+					else if(msrc_pre == MSRC_VDP) begin
+						data <= NO_DATA;
+						MBUS_DO <= 0;
+						MBUS_UDS_N <= 0;
+						MBUS_LDS_N <= 0;
+						MBUS_RNW <= 1;
+					end
+					
+					//NO DEVICE (usually lockup on real HW)
+					mstate <= MBUS_FINISH;
+					
+					//ROM: 000000-7FFFFF
+					if(~MBUS_A_SRC[23]) mstate <= MBUS_ROM_ACC;  
+
+					//I/O: A10000-A1001F (+mirrors)
+					if(MBUS_A_SRC[23:5] == {16'hA100, 3'b000}) mstate <= MBUS_IO_ACC;
+
+					//CTL: A11100, A11200
+					if(MBUS_A_SRC[23:12] == 12'hA11 && !MBUS_A_SRC[7:1]) mstate <= MBUS_CTRL_ACC;
+
+					//VDP: C00000-C0001F (+mirrors)
+					if(MBUS_A_SRC[23:21] == 3'b110 && !MBUS_A_SRC[18:16] && !MBUS_A_SRC[7:5]) mstate <= MBUS_VDP_ACC;
+
+					//RAM: E00000-FFFFFF
+					if(&MBUS_A_SRC[23:21]) mstate <= MBUS_RAM_ACC;
 				end
 			end
 
-		MBUS_SELECT:
-			     if(MBUS_RAM_SEL)  mstate <= MBUS_RAM_ACC;
-			else if(MBUS_ROM_SEL)  mstate <= MBUS_ROM_ACC;
-			else if(MBUS_VDP_SEL)  mstate <= MBUS_VDP_ACC;
-			else if(MBUS_IO_SEL)   mstate <= MBUS_IO_ACC;
-			else if(MBUS_CTRL_SEL) mstate <= MBUS_CTRL_ACC;
-			else                   mstate <= MBUS_NONE;
-
 		MBUS_RAM_ACC:
 			begin
-				ram68k_we_u <= ~MBUS_RNW & ~MBUS_UDS_N;
-				ram68k_we_l <= ~MBUS_RNW & ~MBUS_LDS_N;
+				RAM_SEL <= 1;
 				mstate <= MBUS_RAM_READ;
 			end
 		
@@ -641,8 +640,7 @@ always @(posedge MCLK) begin
 				mstate <= MBUS_FINISH;
 			end
 			else if ((MBUS_A >= ROMSZ && MBUS_A[23:21] == 1) || (SRAM_QUIRK && {MBUS_A,1'b0} == 'h200000)) begin
-				sram_we_u <= ~MBUS_RNW & ~MBUS_UDS_N;
-				sram_we_l <= ~MBUS_RNW & ~MBUS_LDS_N;
+				SRAM_SEL <= 1;
 				mstate <= MBUS_SRAM_READ;
 			end
 			else begin
@@ -665,7 +663,6 @@ always @(posedge MCLK) begin
 		MBUS_VDP_ACC:
 			begin
 				VDP_SEL <= 1;
-				VDP_RNW <= MBUS_RNW;
 				mstate <= MBUS_VDP_READ;
 			end
 
@@ -673,19 +670,12 @@ always @(posedge MCLK) begin
 			if (~VDP_DTACK_N) begin
 				VDP_SEL <= 0;
 				data <= VDP_DO;
-				mstate <= MBUS_VDP_WAIT;
-			end
-
-		MBUS_VDP_WAIT:
-			if (VDP_DTACK_N) begin
-				VDP_RNW <= 1;
 				mstate <= MBUS_FINISH;
 			end
 
 		MBUS_IO_ACC:
 			begin
 				IO_SEL <= 1;
-				IO_RNW <= MBUS_RNW;
 				mstate <= MBUS_IO_READ;
 			end
 
@@ -693,25 +683,13 @@ always @(posedge MCLK) begin
 			if(~IO_DTACK_N) begin
 				IO_SEL <= 0;
 				data <= {IO_DO, IO_DO};
-				mstate <= MBUS_IO_WAIT;
-			end
-
-		MBUS_IO_WAIT:
-			if (IO_DTACK_N) begin
-				IO_RNW <= 1;
 				mstate <= MBUS_FINISH;
 			end
 
 		MBUS_CTRL_ACC:
 			begin
-				CTRL_WE <= ~MBUS_RNW & ~MBUS_UDS_N;
+				CTRL_SEL <= 1;
 				data <= CTRL_DO;
-				mstate <= MBUS_FINISH;
-			end
-
-		MBUS_NONE:
-			begin
-				data <= NO_DATA;
 				mstate <= MBUS_FINISH;
 			end
 
@@ -748,11 +726,11 @@ end
 // ZBUS Handling
 //-----------------------------------------------------------------------
 // Z80:   0000-7EFF
-// 68000: A00000-A07EFF (A08000-A0FEFF)
+// 68000: A00000-A07FFF (A08000-A0FFFF)
 
-wire       T80_ZBUS  = (T80_A[14:8]     != 'h7F) && ((BAR[23:16]      == 'hA0) || ~T80_A[15]);
-wire       TG68_ZBUS = (TG68_A[14:8]    != 'h7F) && (TG68_A[23:16]    == 'hA0);
-wire       VDP_ZBUS  = (VBUS_ADDR[14:8] != 'h7F) && (VBUS_ADDR[23:16] == 'hA0);
+wire       T80_ZBUS  = ~T80_A[15] && ~&T80_A[14:8];
+wire       TG68_ZBUS = TG68_A[23:16] == 'hA0;
+wire       VDP_ZBUS  = VBUS_A[23:16] == 'hA0;
 
 reg [14:0] ZBUS_A;
 reg        ZBUS_WE;
@@ -829,7 +807,7 @@ always @(posedge MCLK) begin
 				zstate <= ZBUS_ACC;
 			end
 			else if (VDP_ZBUS_SEL & VDP_ZBUS_DTACK_N) begin
-				ZBUS_A <= {VBUS_ADDR[14:1], 1'b1};
+				ZBUS_A <= {VBUS_A[14:1], 1'b1};
 				ZBUS_DO <= 0;
 				we <= 0;
 				zsrc <= ZSRC_VDP;
