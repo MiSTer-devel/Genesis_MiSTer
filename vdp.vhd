@@ -2378,13 +2378,13 @@ begin
 			end if;
 
 		when DMA_FILL_LOOP =>
+			REG(22) <= DMA_SOURCE(15 downto 8);
+			REG(21) <= DMA_SOURCE(7 downto 0);		
+			REG(20) <= DMA_LENGTH(15 downto 8);
+			REG(19) <= DMA_LENGTH(7 downto 0);
 			if DMA_LENGTH = 0 then
 				DMA_FILL_PRE <= '0';
 				DMA_FILL <= '0';
-				REG(20) <= x"00";
-				REG(19) <= x"00";
-				REG(22) <= DMA_SOURCE(15 downto 8);
-				REG(21) <= DMA_SOURCE(7 downto 0);
 				DMAC <= DMA_IDLE;
 			else
 				DMAC <= DMA_FILL_START;
@@ -2441,12 +2441,12 @@ begin
 			end if;
 
 		when DMA_COPY_LOOP =>
+			REG(22) <= DMA_SOURCE(15 downto 8);
+			REG(21) <= DMA_SOURCE(7 downto 0);		
+			REG(20) <= DMA_LENGTH(15 downto 8);
+			REG(19) <= DMA_LENGTH(7 downto 0);
 			if DMA_LENGTH = 0 then
 				DMA_COPY <= '0';
-				REG(20) <= x"00";
-				REG(19) <= x"00";
-				REG(22) <= DMA_SOURCE(15 downto 8);
-				REG(21) <= DMA_SOURCE(7 downto 0);
 				DMAC <= DMA_IDLE;
 			else
 				DMAC <= DMA_COPY_RD;
@@ -2482,14 +2482,14 @@ begin
 			end if;
 
 		when DMA_VBUS_LOOP =>
+			REG(22) <= DMA_SOURCE(15 downto 8);
+			REG(21) <= DMA_SOURCE(7 downto 0);		
+			REG(20) <= DMA_LENGTH(15 downto 8);
+			REG(19) <= DMA_LENGTH(7 downto 0);
 			if DT_FF_DTACK_N = '0' then
 				DT_VBUS_SEL <= '0';
 				if DMA_LENGTH = 0 then
 					DMA_VBUS <= '0';
-					REG(20) <= x"00";
-					REG(19) <= x"00";
-					REG(22) <= DMA_SOURCE(15 downto 8);
-					REG(21) <= DMA_SOURCE(7 downto 0);
 					DMAC <= DMA_IDLE;
 				else
 					DMAC <= DMA_VBUS_RD;
