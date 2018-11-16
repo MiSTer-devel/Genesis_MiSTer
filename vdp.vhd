@@ -65,7 +65,7 @@ entity vdp is
 		T80_VINT			: out std_logic;
 		T80_INTACK		: in  std_logic;
 
-		VBUS_ADDR		: out std_logic_vector(23 downto 0);
+		VBUS_ADDR		: out std_logic_vector(23 downto 1);
 		VBUS_DATA		: in  std_logic_vector(15 downto 0);
 		VBUS_SEL			: out std_logic;
 		VBUS_DTACK_N	: in  std_logic;
@@ -334,7 +334,7 @@ signal DT_DMAF_DATA		: std_logic_vector(15 downto 0);
 signal DT_DMAV_DATA		: std_logic_vector(15 downto 0);
 signal DMAF_SET_REQ		: std_logic;
 
-signal FF_VBUS_ADDR		: std_logic_vector(23 downto 0);
+signal FF_VBUS_ADDR		: std_logic_vector(23 downto 1);
 signal FF_VBUS_SEL		: std_logic;
 
 signal DMA_VBUS			: std_logic;
@@ -2463,7 +2463,7 @@ begin
 
 		when DMA_VBUS_RD =>
 			FF_VBUS_SEL <= '1';
-			FF_VBUS_ADDR <= REG(23)(6 downto 0) & DMA_SOURCE & '0';
+			FF_VBUS_ADDR <= REG(23)(6 downto 0) & DMA_SOURCE;
 			DMAC <= DMA_VBUS_RD2;
 
 		when DMA_VBUS_RD2 =>
