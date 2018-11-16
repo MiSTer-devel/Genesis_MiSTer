@@ -128,7 +128,6 @@ localparam CONF_STR = {
 	"O4,Swap joysticks,No,Yes;",
 	"O5,6 buttons mode,No,Yes;",
 	"-;",
-	"OA,VRAM access rate,Fast,Original;",
 `ifdef LITE
 	"OB,Enable FM,Yes,No;",
 	"OC,Enable PSG,Yes,No;",
@@ -226,7 +225,7 @@ Genesis Genesis
 	.CE_PIX(ce_pix),
 	.FIELD(VGA_F1),
 	.INTERLACE(interlace),
-	.FAST_FIFO(~status[10]),
+	.FAST_FIFO(fifo_quirk),
 
 	.J3BUT(~status[5]),
 	.JOY_1((status[4] ? joystick_1[11:0] : joystick_0[11:0])),
@@ -356,12 +355,13 @@ end
 
 reg sram_quirk = 0;
 reg eeprom_quirk = 0;
+reg fifo_quirk = 0;
 always @(posedge clk_sys) begin
 	reg [47:0] cart_id;
 	reg old_download, old_reset;
 	old_download <= ioctl_download;
 
-	if(~old_download && ioctl_download) {eeprom_quirk,sram_quirk} <= 0;
+	if(~old_download && ioctl_download) {fifo_quirk,eeprom_quirk,sram_quirk} <= 0;
 
 	if(ioctl_wr) begin
 		if(ioctl_addr == 'h184) cart_id[47:32] <= {ioctl_data[7:0],ioctl_data[15:8]};
@@ -374,6 +374,8 @@ always @(posedge clk_sys) begin
 			else if({cart_id                } == "-81576" ) sram_quirk <= 1;
 			else if({cart_id                } == "-81476" ) sram_quirk <= 1;
 			else if({cart_id                } == "K-1215" ) eeprom_quirk <= 1;
+			else if({cart_id                } == "-89016" ) fifo_quirk <= 1;
+			else if({cart_id,ioctl_data[7:0]} == "0001009") fifo_quirk <= 1;
 		end
 	end
 end

@@ -1639,7 +1639,7 @@ begin
 		end if;
 
 		CE_PIX <= '0';
-		FIFO_EN <= '0';
+		FIFO_EN <= FAST_FIFO;
 
 		PIXDIV <= PIXDIV + 1;
 		if (H40 = '1' and PIXDIV = 8-1) or (H40 = '0' and PIXDIV = 10-1) then
@@ -1771,20 +1771,19 @@ begin
 
 			-- FIFO throttle logic
 			if IN_VBL_F = '1' or DE = '0' then
-				FIFO_EN <= not H_CNT(0);
-			elsif H_CNT >= HDISP_START and hcnt < HDISP_SIZE and hcnt(3 downto 0) = 5 then
-				FIFO_EN <= not (hcnt(5) and hcnt(4));
+				if (H_CNT<HDISP_START-1 or hcnt>=HDISP_SIZE or hcnt(5 downto 0)/=x"3F") and H_CNT(0)='1' and H_CNT<420 then
+					FIFO_EN <= '1';
+				end if;
+			elsif (H_CNT>=HDISP_START and hcnt<HDISP_SIZE and hcnt(3 downto 0)=5) and (hcnt(5) and hcnt(4))='0' then
+				FIFO_EN <= '1';
 			elsif H_CNT = HBLANK_DMA1 or H_CNT = HBLANK_DMA2 or H_CNT = HBLANK_DMA3 or H_CNT = HBLANK_DMA4 then
 				FIFO_EN <= '1';
 			end if;
-			
+
 			SP1_EN <= '1'; --SP1 Engine checks one sprite/pixel
 			if hcnt(3 downto 0) = 0 then
 				SP2_EN <= '1'; --Sprite mapping slots in every two cells
 			end if;
-		end if;
-		if FAST_FIFO = '1' then
-			FIFO_EN <= '1';
 		end if;
 	end if;
 end process;
