@@ -78,31 +78,31 @@ wire reset = ~RESET_N | LOADING;
 //--------------------------------------------------------------
 // CLOCK ENABLERS
 //--------------------------------------------------------------
-wire TG68_CLKEN = TG68_CLKENp;
-reg  TG68_CLKENp, TG68_CLKENn;
-reg  T80_CLKEN;
+wire M68K_CLKEN = M68K_CLKENp;
+reg  M68K_CLKENp, M68K_CLKENn;
+reg  Z80_CLKEN;
 
 always @(negedge MCLK) begin
 	reg [3:0] VCLKCNT = 0;
 	reg [3:0] ZCLKCNT = 0;
 
-	T80_CLKEN <= 0;
+	Z80_CLKEN <= 0;
 	ZCLKCNT <= ZCLKCNT + 1'b1;
 	if (ZCLKCNT == 14) begin
 		ZCLKCNT <= 0;
-		T80_CLKEN <= 1;
+		Z80_CLKEN <= 1;
 	end
 
-	TG68_CLKENp <= 0;
+	M68K_CLKENp <= 0;
 	VCLKCNT <= VCLKCNT + 1'b1;
 	if (VCLKCNT == 6) begin
 		VCLKCNT <= 0;
-		TG68_CLKENp <= 1;
+		M68K_CLKENp <= 1;
 	end
 
-	TG68_CLKENn <= 0;
+	M68K_CLKENn <= 0;
 	if (VCLKCNT == 3) begin
-		TG68_CLKENn <= 1;
+		M68K_CLKENn <= 1;
 	end
 end
 
@@ -113,123 +113,123 @@ always @(posedge MCLK) ram_rst_a <= ram_rst_a + LOADING;
 //--------------------------------------------------------------
 // CPU 68000
 //--------------------------------------------------------------
-wire [23:1] TG68_A;
-wire [15:0] TG68_DO;
-wire        TG68_AS_N;
-wire        TG68_UDS_N;
-wire        TG68_LDS_N;
-wire        TG68_RNW;
-wire  [2:0] TG68_FC;
+wire [23:1] M68K_A;
+wire [15:0] M68K_DO;
+wire        M68K_AS_N;
+wire        M68K_UDS_N;
+wire        M68K_LDS_N;
+wire        M68K_RNW;
+wire  [2:0] M68K_FC;
 
-reg   [2:0] TG68_IPL_N;
+reg   [2:0] M68K_IPL_N;
 always @(posedge MCLK) begin
 	reg old_as;
 	
-	if(reset) TG68_IPL_N <= 3'b111;
-	else if (TG68_CLKEN) begin
-		old_as <= TG68_AS_N;
-		if(~old_as & TG68_AS_N) begin
-			if (TG68_VINT) TG68_IPL_N <= 3'b001;
-			else if (TG68_HINT) TG68_IPL_N <= 3'b011;
-			else TG68_IPL_N <= 3'b111;
+	if(reset) M68K_IPL_N <= 3'b111;
+	else if (M68K_CLKEN) begin
+		old_as <= M68K_AS_N;
+		if(~old_as & M68K_AS_N) begin
+			if (M68K_VINT) M68K_IPL_N <= 3'b001;
+			else if (M68K_HINT) M68K_IPL_N <= 3'b011;
+			else M68K_IPL_N <= 3'b111;
 		end
 	end
 end
 
-wire  TG68_DTACK_N = (TG68_MBUS_SEL ? TG68_MBUS_DTACK_N :
-                     TG68_ZBUS_SEL ? TG68_ZBUS_DTACK_N :
+wire  M68K_DTACK_N = (M68K_MBUS_SEL ? M68K_MBUS_DTACK_N :
+                     M68K_ZBUS_SEL ? M68K_ZBUS_DTACK_N :
                      1'b0) | VBUS_BUSY;
 
-wire [15:0] TG68_DI= TG68_MBUS_SEL ? TG68_MBUS_D :
-                     TG68_ZBUS_SEL ? TG68_ZBUS_D :
+wire [15:0] M68K_DI= M68K_MBUS_SEL ? M68K_MBUS_D :
+                     M68K_ZBUS_SEL ? M68K_ZBUS_D :
                      NO_DATA;
 
-wire TG68_INTACK = &TG68_FC;
-wire TG68_IO     = ~TG68_UDS_N | ~TG68_LDS_N;
+wire M68K_INTACK = &M68K_FC;
+wire M68K_IO     = ~M68K_UDS_N | ~M68K_LDS_N;
 
-fx68k fx68k
+fx68k M68K
 (
 	.clk(MCLK),
 	.extReset(reset),
 	.pwrUp(reset),
-	.enPhi1(TG68_CLKENp),
-	.enPhi2(TG68_CLKENn),
+	.enPhi1(M68K_CLKENp),
+	.enPhi2(M68K_CLKENn),
 
-	.eRWn(TG68_RNW),
-	.ASn(TG68_AS_N),
-	.UDSn(TG68_UDS_N),
-	.LDSn(TG68_LDS_N),
+	.eRWn(M68K_RNW),
+	.ASn(M68K_AS_N),
+	.UDSn(M68K_UDS_N),
+	.LDSn(M68K_LDS_N),
 
-	.FC0(TG68_FC[0]),
-	.FC1(TG68_FC[1]),
-	.FC2(TG68_FC[2]),
+	.FC0(M68K_FC[0]),
+	.FC1(M68K_FC[1]),
+	.FC2(M68K_FC[2]),
 
 	.BGn(),
-	.DTACKn(TG68_DTACK_N),
-	.VPAn(~TG68_INTACK),
+	.DTACKn(M68K_DTACK_N),
+	.VPAn(~M68K_INTACK),
 	.BERRn(1),
 	.BRn(1),
 	.BGACKn(1),
-	.IPL0n(TG68_IPL_N[0]),
-	.IPL1n(TG68_IPL_N[1]),
-	.IPL2n(TG68_IPL_N[2]),
-	.iEdb(TG68_DI),
-	.oEdb(TG68_DO),
-	.eab(TG68_A)
+	.IPL0n(M68K_IPL_N[0]),
+	.IPL1n(M68K_IPL_N[1]),
+	.IPL2n(M68K_IPL_N[2]),
+	.iEdb(M68K_DI),
+	.oEdb(M68K_DO),
+	.eab(M68K_A)
 );
 
 
 //--------------------------------------------------------------
 // CPU Z80
 //--------------------------------------------------------------
-reg         T80_RESET_N;
-reg         T80_BUSRQ_N;
-wire        T80_M1_N;
-wire        T80_MREQ_N;
-wire        T80_IORQ_N;
-wire        T80_RD_N;
-wire        T80_WR_N;
-wire [15:0] T80_A;
-wire  [7:0] T80_DO;
-wire        T80_IO = ~T80_MREQ_N & (~T80_RD_N | ~T80_WR_N);
-reg         T80_ENA;
+reg         Z80_RESET_N;
+reg         Z80_BUSRQ_N;
+wire        Z80_M1_N;
+wire        Z80_MREQ_N;
+wire        Z80_IORQ_N;
+wire        Z80_RD_N;
+wire        Z80_WR_N;
+wire [15:0] Z80_A;
+wire  [7:0] Z80_DO;
+wire        Z80_IO = ~Z80_MREQ_N & (~Z80_RD_N | ~Z80_WR_N);
+reg         Z80_ENA;
 
-wire T80_WAIT_N = T80_MBUS_SEL ? ~T80_MBUS_DTACK_N :
-						T80_ZBUS_SEL ? ~T80_ZBUS_DTACK_N :
+wire Z80_WAIT_N = Z80_MBUS_SEL ? ~Z80_MBUS_DTACK_N :
+						Z80_ZBUS_SEL ? ~Z80_ZBUS_DTACK_N :
 						1'b1;
 
-wire [7:0] T80_DI =	T80_MBUS_SEL ? T80_MBUS_D :
-							T80_ZBUS_SEL ? T80_ZBUS_D :
+wire [7:0] Z80_DI =	Z80_MBUS_SEL ? Z80_MBUS_D :
+							Z80_ZBUS_SEL ? Z80_ZBUS_D :
 							8'hFF;
 
-T80s #(.T2Write(1)) CPU_Z80
+T80s #(.T2Write(1)) Z80
 (
-	.reset_n(T80_RESET_N),
+	.reset_n(Z80_RESET_N),
 	.clk(MCLK),
-	.cen(T80_CLKEN & T80_BUSRQ_N),
-	.wait_n(T80_WAIT_N),
-	.int_n(~T80_VINT),
-	.m1_n(T80_M1_N),
-	.mreq_n(T80_MREQ_N),
-	.iorq_n(T80_IORQ_N),
-	.rd_n(T80_RD_N),
-	.wr_n(T80_WR_N),
-	.a(T80_A),
-	.di(T80_DI),
-	.do(T80_DO)
+	.cen(Z80_CLKEN & Z80_BUSRQ_N),
+	.wait_n(Z80_WAIT_N),
+	.int_n(~Z80_VINT),
+	.m1_n(Z80_M1_N),
+	.mreq_n(Z80_MREQ_N),
+	.iorq_n(Z80_IORQ_N),
+	.rd_n(Z80_RD_N),
+	.wr_n(Z80_WR_N),
+	.a(Z80_A),
+	.di(Z80_DI),
+	.do(Z80_DO)
 );
 
-wire        CTRL_F  = (MBUS_A[11:8] == 1) ? T80_BUSRQ_N : (MBUS_A[11:8] == 2) ? T80_RESET_N : NO_DATA[8];
+wire        CTRL_F  = (MBUS_A[11:8] == 1) ? Z80_BUSRQ_N : (MBUS_A[11:8] == 2) ? Z80_RESET_N : NO_DATA[8];
 wire [15:0] CTRL_DO = {NO_DATA[15:9], CTRL_F, NO_DATA[7:0]};
 reg         CTRL_SEL;
 always @(posedge MCLK) begin
 	if (reset) begin
-		T80_BUSRQ_N <= 1;
-		T80_RESET_N <= 0;
+		Z80_BUSRQ_N <= 1;
+		Z80_RESET_N <= 0;
 	end
 	else if(CTRL_SEL & ~MBUS_RNW & ~MBUS_UDS_N) begin
-		if (MBUS_A[11:8] == 1) T80_BUSRQ_N <= ~MBUS_DO[8];
-		if (MBUS_A[11:8] == 2) T80_RESET_N <=  MBUS_DO[8];
+		if (MBUS_A[11:8] == 1) Z80_BUSRQ_N <= ~MBUS_DO[8];
+		if (MBUS_A[11:8] == 2) Z80_RESET_N <=  MBUS_DO[8];
 	end
 end
 
@@ -245,9 +245,9 @@ wire [23:0] VBUS_A;
 wire        VBUS_SEL;
 wire        VBUS_BUSY;
 
-wire        TG68_HINT;
-wire        TG68_VINT;
-wire        T80_VINT;
+wire        M68K_HINT;
+wire        M68K_VINT;
+wire        Z80_VINT;
 
 wire        vram_req;
 wire        vram_we_u;
@@ -311,12 +311,12 @@ vdp vdp
 	.vram_do(vram_d),
 	.vram_di(vram_q),
 
-	.tg68_hint(TG68_HINT),
-	.tg68_vint(TG68_VINT),
-	.tg68_intack(TG68_INTACK),
+	.tg68_hint(M68K_HINT),
+	.tg68_vint(M68K_VINT),
+	.tg68_intack(M68K_INTACK),
 
-	.t80_vint(T80_VINT),
-	.t80_intack(~T80_M1_N & ~T80_IORQ_N),
+	.t80_vint(Z80_VINT),
+	.t80_intack(~Z80_M1_N & ~Z80_IORQ_N),
 
 	.vbus_addr(VBUS_A),
 	.vbus_data(VBUS_D),
@@ -346,7 +346,7 @@ psg psg
 (
 	.reset(reset),
 	.clk(MCLK),
-	.clken(T80_CLKEN),
+	.clken(Z80_CLKEN),
 
 	.wr_n(MBUS_RNW | ~VDP_SEL | ~MBUS_A[4] | MBUS_A[3]),
 	.d_in(MBUS_DO[15:8]),
@@ -365,7 +365,7 @@ wire       IO_DTACK_N;
 gen_io io
 (
 	.rst_n(~reset),
-	.clk(MCLK & TG68_CLKEN),
+	.clk(MCLK & M68K_CLKEN),
 
 	.j3but(J3BUT),
 
@@ -492,16 +492,16 @@ wire [15:0] ram68k_q;
 //-----------------------------------------------------------------------
 // MBUS Handling
 //-----------------------------------------------------------------------
-wire       TG68_MBUS_SEL = TG68_IO  & ~TG68_ZBUS;
-wire       T80_MBUS_SEL  = T80_IO   & ~T80_ZBUS;
+wire       M68K_MBUS_SEL = M68K_IO  & ~M68K_ZBUS;
+wire       Z80_MBUS_SEL  = Z80_IO   & ~Z80_ZBUS;
 wire       VDP_MBUS_SEL  = VBUS_SEL & ~VDP_ZBUS;
 
-reg        TG68_MBUS_DTACK_N;
-reg        T80_MBUS_DTACK_N;
+reg        M68K_MBUS_DTACK_N;
+reg        Z80_MBUS_DTACK_N;
 reg        VDP_MBUS_DTACK_N;
 
-reg [15:0] TG68_MBUS_D;
-reg  [7:0] T80_MBUS_D;
+reg [15:0] M68K_MBUS_D;
+reg  [7:0] Z80_MBUS_D;
 reg [15:0] VDP_MBUS_D;
 
 reg [23:1] MBUS_A;
@@ -512,21 +512,21 @@ reg        MBUS_UDS_N;
 reg        MBUS_LDS_N;
 
 localparam MSRC_NONE = 0,
-			  MSRC_TG68 = 1,
-			  MSRC_T80  = 2,
+			  MSRC_M68K = 1,
+			  MSRC_Z80  = 2,
 			  MSRC_VDP  = 3;
 
 reg  [1:0] msrc_pre;
 reg [23:1] MBUS_A_SRC;
 
 always @(*) begin
-	if(TG68_MBUS_SEL & TG68_MBUS_DTACK_N & ~VBUS_BUSY) begin
-		msrc_pre   = MSRC_TG68;
-		MBUS_A_SRC = TG68_A[23:1];
+	if(M68K_MBUS_SEL & M68K_MBUS_DTACK_N & ~VBUS_BUSY) begin
+		msrc_pre   = MSRC_M68K;
+		MBUS_A_SRC = M68K_A[23:1];
 	end
-	else if(T80_MBUS_SEL & T80_MBUS_DTACK_N & ~VBUS_BUSY) begin
-		msrc_pre   = MSRC_T80;
-		MBUS_A_SRC = T80_A[15] ? {BAR[23:15],T80_A[14:1]} : {16'hC000, T80_A[7:1]};
+	else if(Z80_MBUS_SEL & Z80_MBUS_DTACK_N & ~VBUS_BUSY) begin
+		msrc_pre   = MSRC_Z80;
+		MBUS_A_SRC = Z80_A[15] ? {BAR[23:15],Z80_A[14:1]} : {16'hC000, Z80_A[7:1]};
 	end
 	else if(VDP_MBUS_SEL & VDP_MBUS_DTACK_N) begin
 		msrc_pre   = MSRC_VDP;
@@ -562,8 +562,8 @@ always @(posedge MCLK) begin
 	RAM_SEL <= 0;
 
 	if (reset) begin
-		TG68_MBUS_DTACK_N <= 1;
-		T80_MBUS_DTACK_N  <= 1;
+		M68K_MBUS_DTACK_N <= 1;
+		Z80_MBUS_DTACK_N  <= 1;
 		VDP_MBUS_DTACK_N  <= 1;
 		VDP_SEL <= 0;
 		IO_SEL <= 0;
@@ -571,8 +571,8 @@ always @(posedge MCLK) begin
 		MBUS_RNW <= 1;
 	end
 	else begin
-		if (TG68_AS_N) TG68_MBUS_DTACK_N <= 1;
-		if (~T80_IO)   T80_MBUS_DTACK_N  <= 1;
+		if (M68K_AS_N) M68K_MBUS_DTACK_N <= 1;
+		if (~Z80_IO)   Z80_MBUS_DTACK_N  <= 1;
 		if (~VBUS_SEL) VDP_MBUS_DTACK_N  <= 1;
 		
 		case(mstate)
@@ -582,19 +582,19 @@ always @(posedge MCLK) begin
 				if(msrc_pre != MSRC_NONE) begin
 					msrc <= msrc_pre;
 					MBUS_A <= MBUS_A_SRC;
-					if(msrc_pre == MSRC_TG68) begin
+					if(msrc_pre == MSRC_M68K) begin
 						data <= NO_DATA;
-						MBUS_DO <= TG68_DO;
-						MBUS_UDS_N <= TG68_UDS_N;
-						MBUS_LDS_N <= TG68_LDS_N;
-						MBUS_RNW <= TG68_RNW;
+						MBUS_DO <= M68K_DO;
+						MBUS_UDS_N <= M68K_UDS_N;
+						MBUS_LDS_N <= M68K_LDS_N;
+						MBUS_RNW <= M68K_RNW;
 					end
-					else if(msrc_pre == MSRC_T80) begin
+					else if(msrc_pre == MSRC_Z80) begin
 						data <= 16'hFFFF;
-						MBUS_DO <= {T80_DO,T80_DO};
-						MBUS_UDS_N <= T80_A[0];
-						MBUS_LDS_N <= ~T80_A[0];
-						MBUS_RNW <= T80_WR_N;
+						MBUS_DO <= {Z80_DO,Z80_DO};
+						MBUS_UDS_N <= Z80_A[0];
+						MBUS_LDS_N <= ~Z80_A[0];
+						MBUS_RNW <= Z80_WR_N;
 					end
 					else if(msrc_pre == MSRC_VDP) begin
 						data <= NO_DATA;
@@ -698,16 +698,16 @@ always @(posedge MCLK) begin
 		MBUS_FINISH:
 			begin
 				case(msrc)
-				MSRC_TG68:
+				MSRC_M68K:
 					begin
-						TG68_MBUS_D <= data;
-						TG68_MBUS_DTACK_N <= 0;
+						M68K_MBUS_D <= data;
+						M68K_MBUS_DTACK_N <= 0;
 					end
 
-				MSRC_T80:
+				MSRC_Z80:
 					begin
-						T80_MBUS_D <= T80_A[0] ? data[7:0] : data[15:8];
-						T80_MBUS_DTACK_N <= 0;
+						Z80_MBUS_D <= Z80_A[0] ? data[7:0] : data[15:8];
+						Z80_MBUS_DTACK_N <= 0;
 					end
 
 				MSRC_VDP:
@@ -730,8 +730,8 @@ end
 // Z80:   0000-7EFF
 // 68000: A00000-A07FFF (A08000-A0FFFF)
 
-wire       T80_ZBUS  = ~T80_A[15] && ~&T80_A[14:8];
-wire       TG68_ZBUS = TG68_A[23:16] == 'hA0;
+wire       Z80_ZBUS  = ~Z80_A[15] && ~&Z80_A[14:8];
+wire       M68K_ZBUS = M68K_A[23:16] == 'hA0;
 wire       VDP_ZBUS  = VBUS_A[23:16] == 'hA0;
 
 reg [14:0] ZBUS_A;
@@ -739,19 +739,19 @@ reg        ZBUS_WE;
 reg  [7:0] ZBUS_DO;
 wire [7:0] ZBUS_DI = ZRAM_SEL ? ZRAM_DO : FM_SEL ? FM_DO : 8'hFF;
 
-reg [15:0] TG68_ZBUS_D;
-reg  [7:0] T80_ZBUS_D;
+reg [15:0] M68K_ZBUS_D;
+reg  [7:0] Z80_ZBUS_D;
 reg [15:0] VDP_ZBUS_D;
 
-reg        TG68_ZBUS_DTACK_N;
-reg        T80_ZBUS_DTACK_N;
+reg        M68K_ZBUS_DTACK_N;
+reg        Z80_ZBUS_DTACK_N;
 reg        VDP_ZBUS_DTACK_N;
 
-wire       TG68_ZBUS_SEL = TG68_IO  & TG68_ZBUS;
-wire       T80_ZBUS_SEL  = T80_IO   & T80_ZBUS;
+wire       M68K_ZBUS_SEL = M68K_IO  & M68K_ZBUS;
+wire       Z80_ZBUS_SEL  = Z80_IO   & Z80_ZBUS;
 wire       VDP_ZBUS_SEL  = VBUS_SEL & VDP_ZBUS;
 
-wire       ZBUS_FREE = ~T80_BUSRQ_N & T80_RESET_N;
+wire       ZBUS_FREE = ~Z80_BUSRQ_N & Z80_RESET_N;
 
 // RAM 0000-1FFF (2000-3FFF)
 wire ZRAM_SEL = ~ZBUS_A[14];
@@ -771,8 +771,8 @@ always @(posedge MCLK) begin
 	reg [1:0] zsrc;
 	reg       we;
 
-	localparam 	ZSRC_TG68 = 0,
-					ZSRC_T80  = 1,
+	localparam 	ZSRC_M68K = 0,
+					ZSRC_Z80  = 1,
 					ZSRC_VDP  = 2;
 
 	localparam	ZBUS_IDLE = 0,
@@ -782,30 +782,30 @@ always @(posedge MCLK) begin
 	ZBUS_WE <= 0;
 	
 	if (reset) begin
-		TG68_ZBUS_DTACK_N <= 1;
-		T80_ZBUS_DTACK_N  <= 1;
+		M68K_ZBUS_DTACK_N <= 1;
+		Z80_ZBUS_DTACK_N  <= 1;
 		VDP_ZBUS_DTACK_N  <= 1;
 		zstate <= ZBUS_IDLE;
 	end
 	else begin
-		if (TG68_AS_N)      TG68_ZBUS_DTACK_N <= 1;
-		if (~T80_ZBUS_SEL)  T80_ZBUS_DTACK_N  <= 1;
+		if (M68K_AS_N)      M68K_ZBUS_DTACK_N <= 1;
+		if (~Z80_ZBUS_SEL)  Z80_ZBUS_DTACK_N  <= 1;
 		if (~VBUS_SEL)      VDP_ZBUS_DTACK_N  <= 1;
 
 		case (zstate)
 		ZBUS_IDLE:
-			if (TG68_ZBUS_SEL & TG68_ZBUS_DTACK_N) begin
-				ZBUS_A <= {TG68_A[14:1], TG68_UDS_N};
-				ZBUS_DO <= (~TG68_UDS_N) ? TG68_DO[15:8] : TG68_DO[7:0];
-				we <= ~TG68_RNW & ZBUS_FREE;
-				zsrc <= ZSRC_TG68;
+			if (M68K_ZBUS_SEL & M68K_ZBUS_DTACK_N) begin
+				ZBUS_A <= {M68K_A[14:1], M68K_UDS_N};
+				ZBUS_DO <= (~M68K_UDS_N) ? M68K_DO[15:8] : M68K_DO[7:0];
+				we <= ~M68K_RNW & ZBUS_FREE;
+				zsrc <= ZSRC_M68K;
 				zstate <= ZBUS_ACC;
 			end
-			else if (T80_ZBUS_SEL & T80_ZBUS_DTACK_N) begin
-				ZBUS_A <= T80_A[14:0];
-				ZBUS_DO <= T80_DO;
-				we <= ~T80_WR_N;
-				zsrc <= ZSRC_T80;
+			else if (Z80_ZBUS_SEL & Z80_ZBUS_DTACK_N) begin
+				ZBUS_A <= Z80_A[14:0];
+				ZBUS_DO <= Z80_DO;
+				we <= ~Z80_WR_N;
+				zsrc <= ZSRC_Z80;
 				zstate <= ZBUS_ACC;
 			end
 			else if (VDP_ZBUS_SEL & VDP_ZBUS_DTACK_N) begin
@@ -827,16 +827,16 @@ always @(posedge MCLK) begin
 		ZBUS_READ:
 			begin
 				case(zsrc)
-				ZSRC_TG68:
+				ZSRC_M68K:
 					begin
-						TG68_ZBUS_D <= ZBUS_FREE ? {ZBUS_DI, ZBUS_DI} : 16'hFFFF;
-						TG68_ZBUS_DTACK_N <= 0;
+						M68K_ZBUS_D <= ZBUS_FREE ? {ZBUS_DI, ZBUS_DI} : 16'hFFFF;
+						M68K_ZBUS_DTACK_N <= 0;
 					end
 
-				ZSRC_T80:
+				ZSRC_Z80:
 					begin
-						T80_ZBUS_D <= ZBUS_DI;
-						T80_ZBUS_DTACK_N <= 0;
+						Z80_ZBUS_D <= ZBUS_DI;
+						Z80_ZBUS_DTACK_N <= 0;
 					end
 
 				ZSRC_VDP:
@@ -878,9 +878,9 @@ wire [11:0] FM_left;
 
 jt12 fm
 (
-	.rst(~T80_RESET_N),
+	.rst(~Z80_RESET_N),
 	.clk(MCLK),
-	.cen(TG68_CLKEN),
+	.cen(M68K_CLKEN),
 
 	.limiter_en(1),
 	.cs_n(0),
@@ -904,7 +904,7 @@ reg [15:0] NO_DATA;
 always @(posedge MCLK) begin
 	reg [16:0] lfsr;
 
-	if (TG68_CLKEN) begin
+	if (M68K_CLKEN) begin
 		lfsr <= {(lfsr[0] ^ lfsr[2] ^ !lfsr), lfsr[16:1]};
 		NO_DATA <= {NO_DATA[14:0], lfsr[0]};
 	end
