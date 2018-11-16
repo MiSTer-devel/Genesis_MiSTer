@@ -78,8 +78,9 @@ wire reset = ~RESET_N | LOADING;
 //--------------------------------------------------------------
 // CLOCK ENABLERS
 //--------------------------------------------------------------
-reg TG68_CLKEN;
-reg T80_CLKEN;
+wire TG68_CLKEN = TG68_CLKENp;
+reg  TG68_CLKENp, TG68_CLKENn;
+reg  T80_CLKEN;
 
 always @(negedge MCLK) begin
 	reg [3:0] VCLKCNT = 0;
@@ -92,11 +93,16 @@ always @(negedge MCLK) begin
 		T80_CLKEN <= 1;
 	end
 
-	TG68_CLKEN <= 0;
+	TG68_CLKENp <= 0;
 	VCLKCNT <= VCLKCNT + 1'b1;
 	if (VCLKCNT == 6) begin
 		VCLKCNT <= 0;
-		TG68_CLKEN <= 1;
+		TG68_CLKENp <= 1;
+	end
+
+	TG68_CLKENn <= 0;
+	if (VCLKCNT == 3) begin
+		TG68_CLKENn <= 1;
 	end
 end
 
@@ -107,73 +113,69 @@ always @(posedge MCLK) ram_rst_a <= ram_rst_a + LOADING;
 //--------------------------------------------------------------
 // CPU 68000
 //--------------------------------------------------------------
-reg   [2:0] TG68_IPL_N;
 wire [23:1] TG68_A;
 wire [15:0] TG68_DO;
-reg         TG68_AS_N;
+wire        TG68_AS_N;
 wire        TG68_UDS_N;
 wire        TG68_LDS_N;
 wire        TG68_RNW;
-wire  [1:0] TG68_STATE;
 wire  [2:0] TG68_FC;
-reg   [1:0] TG68_ENA_DIV;
 
-// a full cpu cycle consists of 4 TG68_CLKEN cycles
-// VCLK = 54 MHz / 7 = 7.7 MHz
+reg   [2:0] TG68_IPL_N;
 always @(posedge MCLK) begin
-	if (TG68_CLKEN) begin
-		// advance counter till last cycle
-		if (TG68_ENA_DIV != 3) TG68_ENA_DIV <= TG68_ENA_DIV + 1'd1;
-
-		// activate AS_N in bus cycle 2 if the cpu wants to do I/O
-		if (TG68_ENA_DIV == 1 && TG68_STATE != 1) TG68_AS_N <= 0;
-
-		// de-activate AS_N in bus cycle 3 if dtack is ok. This happens at the same
-		// time the tg68k is enabled due to dtack and proceeds one clock
-		if (TG68_ENA_DIV == 3 && !TG68_DTACK_N) begin
-			TG68_ENA_DIV <= TG68_ENA_DIV + 1'b1;
-			TG68_AS_N <= 1;
+	reg old_as;
+	
+	if(reset) TG68_IPL_N <= 3'b111;
+	else if (TG68_CLKEN) begin
+		old_as <= TG68_AS_N;
+		if(~old_as & TG68_AS_N) begin
+			if (TG68_VINT) TG68_IPL_N <= 3'b001;
+			else if (TG68_HINT) TG68_IPL_N <= 3'b011;
+			else TG68_IPL_N <= 3'b111;
 		end
-
-		// keep counter at 0 in non-bus cycles.
-		if (TG68_STATE == 1) TG68_ENA_DIV <= 0;
 	end
 end
 
-wire TG68_ENA    = (TG68_CLKEN && (TG68_STATE == 1 || (TG68_ENA_DIV == 3 && ~TG68_DTACK_N)));
-wire TG68_INTACK = ~TG68_AS_N & &TG68_FC;
-wire TG68_IO     = ~TG68_AS_N & (~TG68_UDS_N | ~TG68_LDS_N);
-
-always @(posedge MCLK) begin
-	if (TG68_CLKEN && !TG68_ENA_DIV) begin
-		if (TG68_VINT) TG68_IPL_N <= 3'b001;
-		else if (TG68_HINT) TG68_IPL_N <= 3'b011;
-		else TG68_IPL_N <= 3'b111;
-	end
-end
-
-wire TG68_DTACK_N = (TG68_MBUS_SEL ? TG68_MBUS_DTACK_N :
-							TG68_ZBUS_SEL ? TG68_ZBUS_DTACK_N :
-							1'b0) | VBUS_BUSY;
+wire  TG68_DTACK_N = (TG68_MBUS_SEL ? TG68_MBUS_DTACK_N :
+                     TG68_ZBUS_SEL ? TG68_ZBUS_DTACK_N :
+                     1'b0) | VBUS_BUSY;
 
 wire [15:0] TG68_DI= TG68_MBUS_SEL ? TG68_MBUS_D :
-							TG68_ZBUS_SEL ? TG68_ZBUS_D :
-							NO_DATA;
+                     TG68_ZBUS_SEL ? TG68_ZBUS_D :
+                     NO_DATA;
 
-TG68KdotC_Kernel #(.TASbug(1)) CPU_68K
+wire TG68_INTACK = &TG68_FC;
+wire TG68_IO     = ~TG68_UDS_N | ~TG68_LDS_N;
+
+fx68k fx68k
 (
 	.clk(MCLK),
-	.nreset(~reset),
-	.clkena_in(TG68_ENA),
-	.data_in(TG68_DI),
-	.ipl(TG68_IPL_N),
-	.addr(TG68_A),
-	.data_write(TG68_DO),
-	.nuds(TG68_UDS_N),
-	.nlds(TG68_LDS_N),
-	.nwr(TG68_RNW),
-	.busstate(TG68_STATE),
-	.fc(TG68_FC)
+	.extReset(reset),
+	.pwrUp(reset),
+	.enPhi1(TG68_CLKENp),
+	.enPhi2(TG68_CLKENn),
+
+	.eRWn(TG68_RNW),
+	.ASn(TG68_AS_N),
+	.UDSn(TG68_UDS_N),
+	.LDSn(TG68_LDS_N),
+
+	.FC0(TG68_FC[0]),
+	.FC1(TG68_FC[1]),
+	.FC2(TG68_FC[2]),
+
+	.BGn(),
+	.DTACKn(TG68_DTACK_N),
+	.VPAn(~TG68_INTACK),
+	.BERRn(1),
+	.BRn(1),
+	.BGACKn(1),
+	.IPL0n(TG68_IPL_N[0]),
+	.IPL1n(TG68_IPL_N[1]),
+	.IPL2n(TG68_IPL_N[2]),
+	.iEdb(TG68_DI),
+	.oEdb(TG68_DO),
+	.eab(TG68_A)
 );
 
 
@@ -569,7 +571,7 @@ always @(posedge MCLK) begin
 		MBUS_RNW <= 1;
 	end
 	else begin
-		if (~TG68_IO)  TG68_MBUS_DTACK_N <= 1;
+		if (TG68_AS_N) TG68_MBUS_DTACK_N <= 1;
 		if (~T80_IO)   T80_MBUS_DTACK_N  <= 1;
 		if (~VBUS_SEL) VDP_MBUS_DTACK_N  <= 1;
 		
@@ -786,7 +788,7 @@ always @(posedge MCLK) begin
 		zstate <= ZBUS_IDLE;
 	end
 	else begin
-		if (~TG68_ZBUS_SEL) TG68_ZBUS_DTACK_N <= 1;
+		if (TG68_AS_N)      TG68_ZBUS_DTACK_N <= 1;
 		if (~T80_ZBUS_SEL)  T80_ZBUS_DTACK_N  <= 1;
 		if (~VBUS_SEL)      VDP_ZBUS_DTACK_N  <= 1;
 
