@@ -368,14 +368,14 @@ always @(posedge clk_sys) begin
 		if(ioctl_addr == 'h186) cart_id[31:16] <= {ioctl_data[7:0],ioctl_data[15:8]};
 		if(ioctl_addr == 'h188) cart_id[15:00] <= {ioctl_data[7:0],ioctl_data[15:8]};
 		if(ioctl_addr == 'h18A) begin
-			     if({cart_id,ioctl_data[7:0]} == "-081276") sram_quirk <= 1;
-			else if({cart_id                } == "-81406" ) sram_quirk <= 1;
-			else if({cart_id,ioctl_data[7:0]} == "-081586") sram_quirk <= 1;
-			else if({cart_id                } == "-81576" ) sram_quirk <= 1;
-			else if({cart_id                } == "-81476" ) sram_quirk <= 1;
-			else if({cart_id                } == "K-1215" ) eeprom_quirk <= 1;
-			else if({cart_id                } == "-89016" ) fifo_quirk <= 1;
-			else if({cart_id,ioctl_data[7:0]} == "0001009") fifo_quirk <= 1;
+			     if({cart_id,ioctl_data[7:0]} == "-081276") sram_quirk <= 1;   // NFL Quarterback Club
+			else if({cart_id                } == "-81406" ) sram_quirk <= 1;   // NBA Jam TE
+			else if({cart_id,ioctl_data[7:0]} == "-081586") sram_quirk <= 1;   // NFL Quarterback Club '96
+			else if({cart_id                } == "-81576" ) sram_quirk <= 1;   // College Slam
+			else if({cart_id                } == "-81476" ) sram_quirk <= 1;   // Frank Thomas Big Hurt Baseball
+			else if({cart_id                } == "K-1215" ) eeprom_quirk <= 1; // Evander Real Deal Holyfield's Boxing
+			else if({cart_id                } == "-89016" ) fifo_quirk <= 1;   // Clue
+			else if({cart_id,ioctl_data[7:0]} == "0001009") fifo_quirk <= 1;   // Sonic
 		end
 	end
 end
