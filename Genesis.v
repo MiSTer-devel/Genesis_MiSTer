@@ -145,7 +145,6 @@ wire [15:0] M68K_DI= M68K_MBUS_SEL ? M68K_MBUS_D :
                      NO_DATA;
 
 wire M68K_INTACK = &M68K_FC;
-wire M68K_IO     = ~M68K_UDS_N | ~M68K_LDS_N;
 
 fx68k M68K
 (
@@ -492,9 +491,9 @@ wire [15:0] ram68k_q;
 //-----------------------------------------------------------------------
 // MBUS Handling
 //-----------------------------------------------------------------------
-wire       M68K_MBUS_SEL = M68K_IO  & ~M68K_ZBUS;
-wire       Z80_MBUS_SEL  = Z80_IO   & ~Z80_ZBUS;
-wire       VDP_MBUS_SEL  = VBUS_SEL & ~VDP_ZBUS;
+wire       M68K_MBUS_SEL = ~M68K_AS_N & ~M68K_ZBUS;
+wire       Z80_MBUS_SEL  = Z80_IO     & ~Z80_ZBUS;
+wire       VDP_MBUS_SEL  = VBUS_SEL   & ~VDP_ZBUS;
 
 reg        M68K_MBUS_DTACK_N;
 reg        Z80_MBUS_DTACK_N;
@@ -557,10 +556,6 @@ always @(posedge MCLK) begin
 					MBUS_SRAM_READ= 10,
 					MBUS_FINISH   = 11;
 
-	CTRL_SEL <= 0;
-	SRAM_SEL <= 0;
-	RAM_SEL <= 0;
-
 	if (reset) begin
 		M68K_MBUS_DTACK_N <= 1;
 		Z80_MBUS_DTACK_N  <= 1;
@@ -578,30 +573,28 @@ always @(posedge MCLK) begin
 		case(mstate)
 		MBUS_IDLE:
 			begin
+				CTRL_SEL <= 0;
+				SRAM_SEL <= 0;
+				RAM_SEL <= 0;
 				MBUS_RNW <= 1;
+				MBUS_UDS_N <= 1;
+				MBUS_LDS_N <= 1;
 				if(msrc_pre != MSRC_NONE) begin
 					msrc <= msrc_pre;
 					MBUS_A <= MBUS_A_SRC;
 					if(msrc_pre == MSRC_M68K) begin
 						data <= NO_DATA;
 						MBUS_DO <= M68K_DO;
-						MBUS_UDS_N <= M68K_UDS_N;
-						MBUS_LDS_N <= M68K_LDS_N;
 						MBUS_RNW <= M68K_RNW;
 					end
 					else if(msrc_pre == MSRC_Z80) begin
 						data <= 16'hFFFF;
 						MBUS_DO <= {Z80_DO,Z80_DO};
-						MBUS_UDS_N <= Z80_A[0];
-						MBUS_LDS_N <= ~Z80_A[0];
 						MBUS_RNW <= Z80_WR_N;
 					end
 					else if(msrc_pre == MSRC_VDP) begin
 						data <= NO_DATA;
 						MBUS_DO <= 0;
-						MBUS_UDS_N <= 0;
-						MBUS_LDS_N <= 0;
-						MBUS_RNW <= 1;
 					end
 					
 					//NO DEVICE (usually lockup on real HW)
@@ -702,22 +695,29 @@ always @(posedge MCLK) begin
 					begin
 						M68K_MBUS_D <= data;
 						M68K_MBUS_DTACK_N <= 0;
+						if(M68K_AS_N | MBUS_RNW | ~M68K_UDS_N | ~M68K_LDS_N) begin
+							MBUS_UDS_N <= M68K_UDS_N;
+							MBUS_LDS_N <= M68K_LDS_N;
+							mstate <= MBUS_IDLE;
+						end
 					end
 
 				MSRC_Z80:
 					begin
 						Z80_MBUS_D <= Z80_A[0] ? data[7:0] : data[15:8];
 						Z80_MBUS_DTACK_N <= 0;
+						MBUS_UDS_N <= Z80_A[0];
+						MBUS_LDS_N <= ~Z80_A[0];
+						mstate <= MBUS_IDLE;
 					end
 
 				MSRC_VDP:
 					begin
 						VDP_MBUS_D <= data;
 						VDP_MBUS_DTACK_N <= 0;
+						mstate <= MBUS_IDLE;
 					end
 				endcase;
-				MBUS_RNW <= 1;
-				mstate <= MBUS_IDLE;
 			end
 		endcase;
 	end
@@ -747,9 +747,9 @@ reg        M68K_ZBUS_DTACK_N;
 reg        Z80_ZBUS_DTACK_N;
 reg        VDP_ZBUS_DTACK_N;
 
-wire       M68K_ZBUS_SEL = M68K_IO  & M68K_ZBUS;
-wire       Z80_ZBUS_SEL  = Z80_IO   & Z80_ZBUS;
-wire       VDP_ZBUS_SEL  = VBUS_SEL & VDP_ZBUS;
+wire       M68K_ZBUS_SEL = M68K_ZBUS & ~(M68K_UDS_N & M68K_LDS_N);
+wire       Z80_ZBUS_SEL  = Z80_ZBUS  & Z80_IO;
+wire       VDP_ZBUS_SEL  = VDP_ZBUS  & VBUS_SEL;
 
 wire       ZBUS_FREE = ~Z80_BUSRQ_N & Z80_RESET_N;
 
