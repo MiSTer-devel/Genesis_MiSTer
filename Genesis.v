@@ -49,7 +49,7 @@ module Genesis
 	input         FAST_FIFO,
 	input         SRAM_QUIRK,
 	input         EEPROM_QUIRK,
-
+	
 	output  [3:0] RED,
 	output  [3:0] GREEN,
 	output  [3:0] BLUE,
@@ -124,12 +124,15 @@ wire  [2:0] M68K_FC;
 
 reg   [2:0] M68K_IPL_N;
 always @(posedge MCLK) begin
-	reg old_as;
+	reg       old_as;
+	reg [1:0] scnt;
 	
 	if(reset) M68K_IPL_N <= 3'b111;
 	else if (M68K_CLKEN) begin
 		old_as <= M68K_AS_N;
-		if(~old_as & M68K_AS_N) begin
+		scnt <= scnt + 1'd1;
+		if(~M68K_AS_N) scnt <= 0;
+		if((~old_as & M68K_AS_N) || &scnt) begin
 			if (M68K_VINT) M68K_IPL_N <= 3'b001;
 			else if (M68K_HINT) M68K_IPL_N <= 3'b011;
 			else M68K_IPL_N <= 3'b111;
@@ -529,7 +532,7 @@ always @(posedge MCLK) begin
 				MBUS_LDS_N <= 1;
 				if(~M68K_AS_N & M68K_MBUS_DTACK_N & ~VBUS_BUSY) begin
 					msrc <= MSRC_M68K;
-					MBUS_A = M68K_A[23:1];
+					MBUS_A <= M68K_A[23:1];
 					data <= NO_DATA;
 					MBUS_DO <= M68K_DO;
 					MBUS_RNW <= M68K_RNW;
@@ -734,7 +737,7 @@ reg        MBUS_ZBUS_DTACK_N;
 reg        Z80_ZBUS_DTACK_N;
 
 wire       Z80_ZBUS_SEL  = Z80_ZBUS & Z80_IO;
-wire       ZBUS_FREE = ~Z80_BUSRQ_N & Z80_RESET_N;
+wire       ZBUS_FREE = /*~Z80_BUSRQ_N &*/ Z80_RESET_N;
 
 // RAM 0000-1FFF (2000-3FFF)
 wire ZRAM_SEL = ~ZBUS_A[14];
