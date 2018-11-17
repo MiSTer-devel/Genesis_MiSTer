@@ -357,25 +357,28 @@ reg sram_quirk = 0;
 reg eeprom_quirk = 0;
 reg fifo_quirk = 0;
 always @(posedge clk_sys) begin
-	reg [47:0] cart_id;
+	reg [55:0] cart_id;
 	reg old_download, old_reset;
 	old_download <= ioctl_download;
 
 	if(~old_download && ioctl_download) {fifo_quirk,eeprom_quirk,sram_quirk} <= 0;
 
 	if(ioctl_wr) begin
+		if(ioctl_addr == 'h182) cart_id[55:48] <= {ioctl_data[15:8]};
 		if(ioctl_addr == 'h184) cart_id[47:32] <= {ioctl_data[7:0],ioctl_data[15:8]};
 		if(ioctl_addr == 'h186) cart_id[31:16] <= {ioctl_data[7:0],ioctl_data[15:8]};
 		if(ioctl_addr == 'h188) cart_id[15:00] <= {ioctl_data[7:0],ioctl_data[15:8]};
 		if(ioctl_addr == 'h18A) begin
-			     if({cart_id,ioctl_data[7:0]} == "-081276") sram_quirk <= 1;   // NFL Quarterback Club
-			else if({cart_id                } == "-81406" ) sram_quirk <= 1;   // NBA Jam TE
-			else if({cart_id,ioctl_data[7:0]} == "-081586") sram_quirk <= 1;   // NFL Quarterback Club '96
-			else if({cart_id                } == "-81576" ) sram_quirk <= 1;   // College Slam
-			else if({cart_id                } == "-81476" ) sram_quirk <= 1;   // Frank Thomas Big Hurt Baseball
-			else if({cart_id                } == "K-1215" ) eeprom_quirk <= 1; // Evander Real Deal Holyfield's Boxing
-			else if({cart_id                } == "-89016" ) fifo_quirk <= 1;   // Clue
-			else if({cart_id,ioctl_data[7:0]} == "0001009") fifo_quirk <= 1;   // Sonic
+			     if({cart_id,ioctl_data[7:0]} == "T-081276") sram_quirk <= 1;   // NFL Quarterback Club
+			else if({cart_id,ioctl_data[7:0]} == "T-81406 ") sram_quirk <= 1;   // NBA Jam TE
+			else if({cart_id,ioctl_data[7:0]} == "T-081586") sram_quirk <= 1;   // NFL Quarterback Club '96
+			else if({cart_id,ioctl_data[7:0]} == "T-81576 ") sram_quirk <= 1;   // College Slam
+			else if({cart_id,ioctl_data[7:0]} == "T-81476 ") sram_quirk <= 1;   // Frank Thomas Big Hurt Baseball
+			else if({cart_id,ioctl_data[7:0]} == "MK-1215 ") eeprom_quirk <= 1; // Evander Real Deal Holyfield's Boxing
+			else if({cart_id,ioctl_data[7:0]} == "G-4060  ") eeprom_quirk <= 1; // Wonder Boy
+			else if({cart_id,ioctl_data[7:0]} == "T-89016 ") fifo_quirk <= 1;   // Clue
+			else if({cart_id,ioctl_data[7:0]} == "00001009") fifo_quirk <= 1;   // Sonic
+			else if({cart_id,ioctl_data[7:0]} == "00004049") fifo_quirk <= 1;   // Sonic JP
 		end
 	end
 end

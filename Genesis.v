@@ -563,13 +563,22 @@ always @(posedge MCLK) begin
 						data <= 0;
 						mstate <= MBUS_FINISH;
 					end
-					else if ((MBUS_A >= ROMSZ && MBUS_A[23:21] == 1) || (SRAM_QUIRK && {MBUS_A,1'b0} == 'h200000)) begin
+					else if (SRAM_QUIRK && {MBUS_A,1'b0} == 'h200000) begin
+						SRAM_SEL <= 1;
+						mstate <= MBUS_SRAM_READ;
+					end
+					else if (MBUS_A < ROMSZ) begin
+						ROM_REQ <= ~ROM_ACK;
+						mstate <= MBUS_ROM_READ;
+					end
+					else if(MBUS_A[22:21] == 1 && ~&MBUS_A[20:19]) begin
+						// 200000-37FFFF
 						SRAM_SEL <= 1;
 						mstate <= MBUS_SRAM_READ;
 					end
 					else begin
-						ROM_REQ <= ~ROM_ACK;
-						mstate <= MBUS_ROM_READ;
+						data <= 0;
+						mstate <= MBUS_FINISH;
 					end
 				end
 				
