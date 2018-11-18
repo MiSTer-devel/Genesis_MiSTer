@@ -376,6 +376,13 @@ always @(posedge clk_sys) begin
 			else if({cart_id,ioctl_data[7:0]} == "T-81476 ") sram_quirk <= 1;   // Frank Thomas Big Hurt Baseball
 			else if({cart_id,ioctl_data[7:0]} == "MK-1215 ") eeprom_quirk <= 1; // Evander Real Deal Holyfield's Boxing
 			else if({cart_id,ioctl_data[7:0]} == "G-4060  ") eeprom_quirk <= 1; // Wonder Boy
+			else if({cart_id,ioctl_data[7:0]} == "00001211") eeprom_quirk <= 1; // Sports Talk Baseball
+			else if({cart_id,ioctl_data[7:0]} == "MK-1228 ") eeprom_quirk <= 1; // Greatest Heavyweights
+			else if({cart_id,ioctl_data[7:0]} == "G-5538  ") eeprom_quirk <= 1; // Greatest Heavyweights JP
+			else if({cart_id,ioctl_data[7:0]} == "00004076") eeprom_quirk <= 1; // Honoo no Toukyuuji Dodge Danpei
+			else if({cart_id,ioctl_data[7:0]} == "T-12046 ") eeprom_quirk <= 1; // Mega Man - The Wily Wars 
+			else if({cart_id,ioctl_data[7:0]} == "T-12053 ") eeprom_quirk <= 1; // Rockman Mega World 
+			else if({cart_id,ioctl_data[7:0]} == "G-4524  ") eeprom_quirk <= 1; // Ninja Burai Densetsu
 			else if({cart_id,ioctl_data[7:0]} == "T-89016 ") fifo_quirk <= 1;   // Clue
 			else if({cart_id,ioctl_data[7:0]} == "00001009") fifo_quirk <= 1;   // Sonic
 			else if({cart_id,ioctl_data[7:0]} == "00004049") fifo_quirk <= 1;   // Sonic JP
