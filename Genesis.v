@@ -49,6 +49,7 @@ module Genesis
 	input         FAST_FIFO,
 	input         SRAM_QUIRK,
 	input         EEPROM_QUIRK,
+	input         ZBUS_QUIRK,
 	
 	output  [3:0] RED,
 	output  [3:0] GREEN,
@@ -737,7 +738,7 @@ reg        MBUS_ZBUS_DTACK_N;
 reg        Z80_ZBUS_DTACK_N;
 
 wire       Z80_ZBUS_SEL  = Z80_ZBUS & Z80_IO;
-wire       ZBUS_FREE = /*~Z80_BUSRQ_N &*/ Z80_RESET_N;
+wire       ZBUS_FREE = (~Z80_BUSRQ_N | ~ZBUS_QUIRK) & Z80_RESET_N;
 
 // RAM 0000-1FFF (2000-3FFF)
 wire ZRAM_SEL = ~ZBUS_A[14];
