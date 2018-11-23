@@ -101,6 +101,8 @@ signal SCTA		: std_logic_vector(7 downto 0);
 signal SCTB		: std_logic_vector(7 downto 0);
 signal SCTC		: std_logic_vector(7 downto 0);
 
+signal THA,THB	: std_logic;
+
 signal JCNT1   : integer range 0 to 3;
 signal JCNT2   : integer range 0 to 3;
 
@@ -153,6 +155,12 @@ begin
 			JTMR2 <= JTMR2 + 1;
 		end if;
 
+		THA <= DATA(6) or not CTLA(6);
+		if THA = '0' and (DATA(6) or not CTLA(6)) = '1' then JTMR1 <= 0; JCNT1 <= JCNT1 + 1; end if;
+
+		THB <= DATB(6) or not CTLB(6);
+		if THB = '0' and (DATB(6) or not CTLB(6)) = '1' then JTMR2 <= 0; JCNT2 <= JCNT2 + 1; end if;
+
 		if SEL = '0' then
 			FF_DTACK_N <= '1';
 		elsif SEL = '1' and FF_DTACK_N = '1' then
@@ -161,38 +169,11 @@ begin
 				-- Write
 				case A is
 				when x"1" =>
-					DATA(7) <= DI(7);
-					if CTLA(6) = '1' then 
-						DATA(6) <= DI(6);
-						if(DATA(6)='0' and DI(6)='1') then JTMR1 <= 0; JCNT1 <= JCNT1 + 1; end if;
-					end if;
-					if CTLA(5) = '1' then DATA(5) <= DI(5); end if;
-					if CTLA(4) = '1' then DATA(4) <= DI(4); end if;
-					if CTLA(3) = '1' then DATA(3) <= DI(3); end if;
-					if CTLA(2) = '1' then DATA(2) <= DI(2); end if;
-					if CTLA(1) = '1' then DATA(1) <= DI(1); end if;
-					if CTLA(0) = '1' then DATA(0) <= DI(0); end if;
+					DATA <= DI;
 				when x"2" =>
-					DATB(7) <= DI(7);
-					if CTLB(6) = '1' then
-						DATB(6) <= DI(6);
-						if(DATB(6)='0' and DI(6)='1') then JTMR2 <= 0; JCNT2 <= JCNT2 + 1; end if;
-					end if;
-					if CTLB(5) = '1' then DATB(5) <= DI(5); end if;
-					if CTLB(4) = '1' then DATB(4) <= DI(4); end if;
-					if CTLB(3) = '1' then DATB(3) <= DI(3); end if;
-					if CTLB(2) = '1' then DATB(2) <= DI(2); end if;
-					if CTLB(1) = '1' then DATB(1) <= DI(1); end if;
-					if CTLB(0) = '1' then DATB(0) <= DI(0); end if;
+					DATB <= DI;
 				when x"3" =>
-					DATC(7) <= DI(7);
-					if CTLC(6) = '1' then DATC(6) <= DI(6); end if;
-					if CTLC(5) = '1' then DATC(5) <= DI(5); end if;
-					if CTLC(4) = '1' then DATC(4) <= DI(4); end if;
-					if CTLC(3) = '1' then DATC(3) <= DI(3); end if;
-					if CTLC(2) = '1' then DATC(2) <= DI(2); end if;
-					if CTLC(1) = '1' then DATC(1) <= DI(1); end if;
-					if CTLC(0) = '1' then DATC(0) <= DI(0); end if;
+					DATC <= DI;
 				when x"4" =>
 					CTLA <= DI;
 				when x"5" =>
