@@ -531,7 +531,7 @@ always @(posedge MCLK) begin
 				MBUS_RNW <= 1;
 				MBUS_UDS_N <= 1;
 				MBUS_LDS_N <= 1;
-				if(~M68K_AS_N & M68K_MBUS_DTACK_N & ~VBUS_BUSY) begin
+				if(~M68K_AS_N & M68K_MBUS_DTACK_N & M68K_CLKENn & ~VBUS_BUSY) begin
 					msrc <= MSRC_M68K;
 					MBUS_A <= M68K_A[23:1];
 					data <= NO_DATA;
@@ -754,16 +754,15 @@ dpram #(13) ramZ80
 );
 
 always @(posedge MCLK) begin
-	reg [2:0] zstate;
+	reg [1:0] zstate;
 	reg [1:0] zsrc;
-	reg       we;
 
 	localparam 	ZSRC_MBUS = 0,
 					ZSRC_Z80  = 1;
 
-	localparam	ZBUS_IDLE = 0,
-					ZBUS_ACC  = 1,
-					ZBUS_READ = 2;
+	localparam	ZBUS_IDLE   = 0,
+					ZBUS_READ   = 1,
+					ZBUS_FINISH = 2;
 
 	ZBUS_WE <= 0;
 	
@@ -781,27 +780,22 @@ always @(posedge MCLK) begin
 			if (ZBUS_SEL & MBUS_ZBUS_DTACK_N) begin
 				ZBUS_A <= {MBUS_A[14:1], MBUS_UDS_N};
 				ZBUS_DO <= (~MBUS_UDS_N) ? MBUS_DO[15:8] : MBUS_DO[7:0];
-				we <= ~MBUS_RNW & ZBUS_FREE;
+				ZBUS_WE <= ~MBUS_RNW & ZBUS_FREE;
 				zsrc <= ZSRC_MBUS;
-				zstate <= ZBUS_ACC;
+				zstate <= ZBUS_READ;
 			end
 			else if (Z80_ZBUS_SEL & Z80_ZBUS_DTACK_N) begin
 				ZBUS_A <= Z80_A[14:0];
 				ZBUS_DO <= Z80_DO;
-				we <= ~Z80_WR_N;
+				ZBUS_WE <= ~Z80_WR_N;
 				zsrc <= ZSRC_Z80;
-				zstate <= ZBUS_ACC;
-			end
-
-		ZBUS_ACC:
-			begin
-				if(~FM_SEL || ~we || !FM_DO[7]) begin
-					ZBUS_WE <= we;
-					zstate <= ZBUS_READ;
-				end
+				zstate <= ZBUS_READ;
 			end
 
 		ZBUS_READ:
+			zstate <= ZBUS_FINISH;
+
+		ZBUS_FINISH:
 			begin
 				case(zsrc)
 				ZSRC_MBUS:
@@ -844,8 +838,8 @@ end
 
 wire        FM_SEL = ZBUS_A[14:13] == 2'b10;
 wire  [7:0] FM_DO;
-wire [11:0] FM_right;
-wire [11:0] FM_left;
+wire [15:0] FM_right;
+wire [15:0] FM_left;
 
 jt12 fm
 (
@@ -853,7 +847,6 @@ jt12 fm
 	.clk(MCLK),
 	.cen(M68K_CLKEN),
 
-	.limiter_en(1),
 	.cs_n(0),
 	.addr(ZBUS_A[1:0]),
 	.wr_n(~(FM_SEL & ZBUS_WE)),
@@ -864,8 +857,8 @@ jt12 fm
 	.snd_right(FM_right)
 );
 
-assign DAC_LDATA = ({12{ENABLE_FM}} & FM_left)  + ({12{ENABLE_PSG}} & {PSG_SND, 3'b00});
-assign DAC_RDATA = ({12{ENABLE_FM}} & FM_right) + ({12{ENABLE_PSG}} & {PSG_SND, 3'b00});
+assign DAC_LDATA = ({12{ENABLE_FM}} & FM_left[15:4])  + ({12{ENABLE_PSG}} & {PSG_SND, 3'b00});
+assign DAC_RDATA = ({12{ENABLE_FM}} & FM_right[15:4]) + ({12{ENABLE_PSG}} & {PSG_SND, 3'b00});
 
 
 //-----------------------------------------------------------------------
