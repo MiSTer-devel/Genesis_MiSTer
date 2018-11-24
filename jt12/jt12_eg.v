@@ -20,9 +20,6 @@
     */
 
 module jt12_eg (
-    `ifdef TEST_SUPPORT
-    input               test_eg,
-    `endif
     input               rst,
     input               clk,
     input               clk_en,

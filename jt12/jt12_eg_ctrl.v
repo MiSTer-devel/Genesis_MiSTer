@@ -47,7 +47,7 @@ localparam 	ATTACK = 3'b001,
 			HOLD   = 3'b100,
 			RELEASE= 3'b000; // default state is release 
 
-//wire is_decaying = state_in[1] | state_in[2];
+// wire is_decaying = state_in[1] | state_in[2];
 
 reg		[4:0]	sustain;
 
