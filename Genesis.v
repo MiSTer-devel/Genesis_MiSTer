@@ -51,6 +51,11 @@ module Genesis
 	input         EEPROM_QUIRK,
 	input         ZBUS_QUIRK,
 	
+	input  [14:0] BRAM_A,
+	input  [15:0] BRAM_DI,
+	output [15:0] BRAM_DO,
+	input         BRAM_WE,
+
 	output  [3:0] RED,
 	output  [3:0] GREEN,
 	output  [3:0] BLUE,
@@ -419,8 +424,10 @@ dpram #(15) sram_u
 	.wren_a(SRAM_SEL & ~MBUS_RNW & ~MBUS_UDS_N),
 	.q_a(sram_q[15:8]),
 
-	.address_b(ram_rst_a),
-	.wren_b(LOADING)
+	.address_b(LOADING ? ram_rst_a : BRAM_A[14:0]),
+	.data_b(LOADING ? 8'h00 : BRAM_DI[15:8]),
+	.wren_b(LOADING | BRAM_WE),
+	.q_b(BRAM_DO[15:8])
 );
 
 dpram #(15) sram_l
@@ -431,8 +438,10 @@ dpram #(15) sram_l
 	.wren_a(SRAM_SEL & ~MBUS_RNW & ~MBUS_LDS_N),
 	.q_a(sram_q[7:0]),
 
-	.address_b(ram_rst_a),
-	.wren_b(LOADING)
+	.address_b(LOADING ? ram_rst_a : BRAM_A[14:0]),
+	.data_b(LOADING ? 8'h00 : BRAM_DI[7:0]),
+	.wren_b(LOADING | BRAM_WE),
+	.q_b(BRAM_DO[7:0])
 );
 wire [15:0] sram_q;
 
