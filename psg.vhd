@@ -120,7 +120,7 @@ begin
 						when "000" => tone0(9 downto 4) <= D_in(5 downto 0);
 						when "010" => tone1(9 downto 4) <= D_in(5 downto 0);
 						when "100" => tone2(9 downto 4) <= D_in(5 downto 0);
-						when "110" => 
+						when "110" => ctrl3 <= D_in(2 downto 0);
 						when "001" => volume0 <= D_in(3 downto 0);
 						when "011" => volume1 <= D_in(3 downto 0);
 						when "101" => volume2 <= D_in(3 downto 0);
@@ -167,8 +167,13 @@ begin
 		if rising_edge(clk) then
 			if clk_en = '1' then 
 				if counter = 0 then
-					v <= not v;
-					counter <= tone;
+					if tone <= 1 then
+						v <= '1';
+						counter <= (others => '0');
+					else
+						v <= not v;
+						counter <= tone - 1;
+					end if;
 				else
 					counter <= counter-1;
 				end if;
