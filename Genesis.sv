@@ -245,7 +245,7 @@ wire reset = RESET | status[0] | buttons[1] | region_set | bk_loading;
 
 wire [11:0] audio_l, audio_r;
 
-Genesis Genesis
+system system
 (
 	.RESET_N(~reset),
 	.MCLK(clk_sys),

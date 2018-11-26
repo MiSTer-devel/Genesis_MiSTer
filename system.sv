@@ -33,7 +33,7 @@
 // make sure that this is not a derivative work and that
 // you have the latest version of this file.
 
-module Genesis
+module system
 (
 	input         RESET_N,
 	input         MCLK,
@@ -196,19 +196,19 @@ wire        Z80_IO = ~Z80_MREQ_N & (~Z80_RD_N | ~Z80_WR_N);
 
 T80s #(.T2Write(1)) Z80
 (
-	.reset_n(Z80_RESET_N),
-	.clk(MCLK),
-	.cen(Z80_CLKEN & Z80_BUSRQ_N),
-	.wait_n(~Z80_MBUS_DTACK_N | ~Z80_ZBUS_DTACK_N | ~Z80_IO),
-	.int_n(~Z80_VINT),
-	.m1_n(Z80_M1_N),
-	.mreq_n(Z80_MREQ_N),
-	.iorq_n(Z80_IORQ_N),
-	.rd_n(Z80_RD_N),
-	.wr_n(Z80_WR_N),
-	.a(Z80_A),
-	.di((~Z80_ZBUS_DTACK_N) ? Z80_ZBUS_D : Z80_MBUS_D),
-	.do(Z80_DO)
+	.RESET_n(Z80_RESET_N),
+	.CLK(MCLK),
+	.CEN(Z80_CLKEN & Z80_BUSRQ_N),
+	.WAIT_n(~Z80_MBUS_DTACK_N | ~Z80_ZBUS_DTACK_N | ~Z80_IO),
+	.INT_n(~Z80_VINT),
+	.M1_n(Z80_M1_N),
+	.MREQ_n(Z80_MREQ_N),
+	.IORQ_n(Z80_IORQ_N),
+	.RD_n(Z80_RD_N),
+	.WR_n(Z80_WR_N),
+	.A(Z80_A),
+	.DI((~Z80_ZBUS_DTACK_N) ? Z80_ZBUS_D : Z80_MBUS_D),
+	.DO(Z80_DO)
 );
 
 wire        CTRL_F  = (MBUS_A[11:8] == 1) ? Z80_BUSRQ_N : (MBUS_A[11:8] == 2) ? Z80_RESET_N : NO_DATA[8];
@@ -277,51 +277,51 @@ always @(posedge MCLK) vram_ack <= vram_req;
 
 vdp vdp
 (
-	.rst_n(~reset),
-	.clk(MCLK),
+	.RST_n(~reset),
+	.CLK(MCLK),
 
-	.sel(VDP_SEL),
-	.a(MBUS_A[4:1]),
-	.rnw(MBUS_RNW),
-	.di(MBUS_DO),
-	.do(VDP_DO),
-	.dtack_n(VDP_DTACK_N),
+	.SEL(VDP_SEL),
+	.A(MBUS_A[4:1]),
+	.RNW(MBUS_RNW),
+	.DI(MBUS_DO),
+	.DO(VDP_DO),
+	.DTACK_n(VDP_DTACK_N),
 
-	.vram_req(vram_req),
-	.vram_ack(vram_ack),
-	.vram_we_u(vram_we_u),
-	.vram_we_l(vram_we_l),
-	.vram_a(vram_a),
-	.vram_do(vram_d),
-	.vram_di(vram_q),
+	.VRAM_req(vram_req),
+	.VRAM_ack(vram_ack),
+	.VRAM_we_u(vram_we_u),
+	.VRAM_we_l(vram_we_l),
+	.VRAM_a(vram_a),
+	.VRAM_do(vram_d),
+	.VRAM_di(vram_q),
 
-	.tg68_hint(M68K_HINT),
-	.tg68_vint(M68K_VINT),
-	.tg68_intack(M68K_INTACK),
+	.TG68_hint(M68K_HINT),
+	.TG68_vint(M68K_VINT),
+	.TG68_intack(M68K_INTACK),
 
-	.t80_vint(Z80_VINT),
-	.t80_intack(~Z80_M1_N & ~Z80_IORQ_N),
+	.T80_vint(Z80_VINT),
+	.T80_intack(~Z80_M1_N & ~Z80_IORQ_N),
 
-	.vbus_addr(VBUS_A),
-	.vbus_data(VDP_MBUS_D),
-	.vbus_sel(VBUS_SEL),
-	.vbus_dtack_n(VDP_MBUS_DTACK_N),
-	.vbus_busy(VBUS_BUSY),
+	.VBUS_addr(VBUS_A),
+	.VBUS_data(VDP_MBUS_D),
+	.VBUS_sel(VBUS_SEL),
+	.VBUS_dtack_n(VDP_MBUS_DTACK_N),
+	.VBUS_busy(VBUS_BUSY),
 
-	.fast_fifo(FAST_FIFO),
+	.FAST_FIFO(FAST_FIFO),
 
-	.field(FIELD),
-	.interlace(INTERLACE),
+	.FIELD(FIELD),
+	.INTERLACE(INTERLACE),
 
-	.pal(PAL),
-	.r(RED),
-	.g(GREEN),
-	.b(BLUE),
-	.hs(HS),
-	.vs(VS),
-	.ce_pix(CE_PIX),
-	.hbl(HBL),
-	.vbl(VBL)
+	.PAL(PAL),
+	.R(RED),
+	.G(GREEN),
+	.B(BLUE),
+	.HS(HS),
+	.VS(VS),
+	.CE_PIX(CE_PIX),
+	.HBL(HBL),
+	.VBL(VBL)
 );
 
 // PSG 0x10-0x17 in VDP space
@@ -348,46 +348,46 @@ wire       IO_DTACK_N;
 
 gen_io io
 (
-	.rst_n(~reset),
-	.clk(MCLK & M68K_CLKEN),
+	.RST_n(~reset),
+	.CLK(MCLK & M68K_CLKEN),
 
-	.j3but(J3BUT),
+	.J3BUT(J3BUT),
 
-	.p1_up(~JOY_1[3]),
-	.p1_down(~JOY_1[2]),
-	.p1_left(~JOY_1[1]),
-	.p1_right(~JOY_1[0]),
-	.p1_a(~JOY_1[4]),
-	.p1_b(~JOY_1[5]),
-	.p1_c(~JOY_1[6]),
-	.p1_start(~JOY_1[7]),
-	.p1_mode(~JOY_1[8]),
-	.p1_x(~JOY_1[9]),
-	.p1_y(~JOY_1[10]),
-	.p1_z(~JOY_1[11]),
+	.P1_up(~JOY_1[3]),
+	.P1_down(~JOY_1[2]),
+	.P1_left(~JOY_1[1]),
+	.P1_right(~JOY_1[0]),
+	.P1_a(~JOY_1[4]),
+	.P1_b(~JOY_1[5]),
+	.P1_c(~JOY_1[6]),
+	.P1_start(~JOY_1[7]),
+	.P1_mode(~JOY_1[8]),
+	.P1_x(~JOY_1[9]),
+	.P1_y(~JOY_1[10]),
+	.P1_z(~JOY_1[11]),
 
-	.p2_up(~JOY_2[3]),
-	.p2_down(~JOY_2[2]),
-	.p2_left(~JOY_2[1]),
-	.p2_right(~JOY_2[0]),
-	.p2_a(~JOY_2[4]),
-	.p2_b(~JOY_2[5]),
-	.p2_c(~JOY_2[6]),
-	.p2_start(~JOY_2[7]),
-	.p2_mode(~JOY_2[8]),
-	.p2_x(~JOY_2[9]),
-	.p2_y(~JOY_2[10]),
-	.p2_z(~JOY_2[11]),
+	.P2_up(~JOY_2[3]),
+	.P2_down(~JOY_2[2]),
+	.P2_left(~JOY_2[1]),
+	.P2_right(~JOY_2[0]),
+	.P2_a(~JOY_2[4]),
+	.P2_b(~JOY_2[5]),
+	.P2_c(~JOY_2[6]),
+	.P2_start(~JOY_2[7]),
+	.P2_mode(~JOY_2[8]),
+	.P2_x(~JOY_2[9]),
+	.P2_y(~JOY_2[10]),
+	.P2_z(~JOY_2[11]),
 
-	.sel(IO_SEL),
-	.a(MBUS_A[4:1]),
-	.rnw(MBUS_RNW),
-	.di(MBUS_DO[7:0]),
-	.do(IO_DO),
-	.dtack_n(IO_DTACK_N),
+	.SEL(IO_SEL),
+	.A(MBUS_A[4:1]),
+	.RNW(MBUS_RNW),
+	.DI(MBUS_DO[7:0]),
+	.DO(IO_DO),
+	.DTACK_n(IO_DTACK_N),
 
-	.pal(PAL),
-	.export(EXPORT)
+	.PAL(PAL),
+	.EXPORT(EXPORT)
 );
 
 
@@ -401,7 +401,7 @@ reg [5:0] map[8];
 reg       use_map = 0;
 always @(posedge MCLK) begin
 	if(reset) begin
-		map[0] <= 0; map[1] <= 1; map[2] <= 2;	map[3] <= 3; map[4] <= 4; map[5] <= 5; map[6] <= 6; map[7] <= 7;
+		map <= '{0,1,2,3,4,5,6,7};
 		use_map <= 0;
 	end
 	else if(~MBUS_RNW && MBUS_A[23:4] == 20'hA130F && MBUS_A[3:1]) begin
