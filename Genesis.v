@@ -394,7 +394,7 @@ gen_io io
 //-----------------------------------------------------------------------
 // ROM
 //-----------------------------------------------------------------------
-assign ROM_ADDR = use_map ? {map[MBUS_A[21:19]], MBUS_A[18:1]} : MBUS_A[22:1];
+assign ROM_ADDR = use_map ? {map[MBUS_A[21:19]], MBUS_A[18:1]} : MBUS_A;
 
 //SSF2 mapper
 reg [5:0] map[8];
@@ -571,7 +571,7 @@ always @(posedge MCLK) begin
 				mstate <= MBUS_FINISH;
 
 				//ROM: 000000-7FFFFF
-				if(~MBUS_A[23]) begin
+				if(MBUS_A[23:20]<'hA) begin
 					if (EEPROM_QUIRK && {MBUS_A,1'b0} == 'h200000) begin
 						data <= 0;
 						mstate <= MBUS_FINISH;
@@ -584,7 +584,7 @@ always @(posedge MCLK) begin
 						ROM_REQ <= ~ROM_ACK;
 						mstate <= MBUS_ROM_READ;
 					end
-					else if(MBUS_A[22:21] == 1 && ~&MBUS_A[20:19]) begin
+					else if(MBUS_A[23:21] == 1 && ~&MBUS_A[20:19]) begin
 						// 200000-37FFFF
 						SRAM_SEL <= 1;
 						mstate <= MBUS_SRAM_READ;
