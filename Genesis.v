@@ -570,8 +570,8 @@ always @(posedge MCLK) begin
 				//NO DEVICE (usually lockup on real HW)
 				mstate <= MBUS_FINISH;
 
-				//ROM: 000000-7FFFFF
-				if(MBUS_A[23:20]<'hA) begin
+				//ROM: 000000-9FFFFF (A00000-DFFFFF)
+				if(MBUS_A[23:20]<'hA || (msrc == MSRC_Z80 && MBUS_A[23:20]<'hE && ROMSZ[24:20]>='hA)) begin
 					if (EEPROM_QUIRK && {MBUS_A,1'b0} == 'h200000) begin
 						data <= 0;
 						mstate <= MBUS_FINISH;
@@ -594,28 +594,30 @@ always @(posedge MCLK) begin
 						mstate <= MBUS_FINISH;
 					end
 				end
-				
-				//ZBUS: A00000-A07FFF (A08000-A0FFFF)
-				if(MBUS_A[23:16] == 'hA0) mstate <= MBUS_ZBUS_PRE;
+				else begin
+					//ZBUS: A00000-A07FFF (A08000-A0FFFF)
+					if(MBUS_A[23:16] == 'hA0) mstate <= MBUS_ZBUS_PRE;
 
-				//I/O: A10000-A1001F (+mirrors)
-				if(MBUS_A[23:5] == {16'hA100, 3'b000}) begin
-					IO_SEL <= 1;
-					mstate <= MBUS_IO_READ;
+					//I/O: A10000-A1001F (+mirrors)
+					if(MBUS_A[23:5] == {16'hA100, 3'b000}) begin
+						IO_SEL <= 1;
+						mstate <= MBUS_IO_READ;
+					end
+
+					//CTL: A11100, A11200
+					if(MBUS_A[23:12] == 12'hA11 && !MBUS_A[7:1]) begin
+						CTRL_SEL <= 1;
+						data <= CTRL_DO;
+						mstate <= MBUS_FINISH;
+					end
+
+					//VDP: C00000-C0001F (+mirrors)
+					if(MBUS_A[23:21] == 3'b110 && !MBUS_A[18:16] && !MBUS_A[7:5]) begin
+						VDP_SEL <= 1;
+						mstate <= MBUS_VDP_READ;
+					end
 				end
 
-				//CTL: A11100, A11200
-				if(MBUS_A[23:12] == 12'hA11 && !MBUS_A[7:1]) begin
-					CTRL_SEL <= 1;
-					data <= CTRL_DO;
-					mstate <= MBUS_FINISH;
-				end
-
-				//VDP: C00000-C0001F (+mirrors)
-				if(MBUS_A[23:21] == 3'b110 && !MBUS_A[18:16] && !MBUS_A[7:5]) begin
-					VDP_SEL <= 1;
-					mstate <= MBUS_VDP_READ;
-				end
 
 				//RAM: E00000-FFFFFF
 				if(&MBUS_A[23:21]) begin
