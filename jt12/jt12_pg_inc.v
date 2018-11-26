@@ -27,14 +27,14 @@ http://gendev.spritesmind.net/forum/viewtopic.php?t=386&postdays=0&postorder=asc
 module jt12_pg_inc (
     input       [ 2:0] block,
     input       [10:0] fnum,
-    input signed [7:0] pm_offset,
+    input signed [8:0] pm_offset,
     output reg  [16:0] phinc_pure
 );
 
 reg [11:0] fnum_mod;
 
 always @(*) begin 
-    fnum_mod = {fnum,1'b0} + {{4{pm_offset[7]}},pm_offset};
+    fnum_mod = {fnum,1'b0} + {{3{pm_offset[8]}},pm_offset};
     case ( block )
         3'd0: phinc_pure = { 7'd0, fnum_mod[11:2] };
         3'd1: phinc_pure = { 6'd0, fnum_mod[11:1] };

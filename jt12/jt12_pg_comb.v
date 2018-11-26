@@ -20,7 +20,7 @@
     Based on information posted by Nemesis on:
 http://gendev.spritesmind.net/forum/viewtopic.php?t=386&postdays=0&postorder=asc&start=167
 
-    Based on jt51_phasegen.v, from JT51 
+    100% compared with Alexey Khokholov (Nuke.YKT) work with identical results.
 */
 
 module jt12_pg_comb(
@@ -50,7 +50,7 @@ module jt12_pg_comb(
     output  [ 9:0]  phase_op
 );
 
-wire signed [7:0] pm_offset;
+wire signed [8:0] pm_offset;
 
 /*  pm, pg_dt and pg_inc operate in parallel */ 
 jt12_pm u_pm(
