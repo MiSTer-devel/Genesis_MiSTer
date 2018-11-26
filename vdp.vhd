@@ -1085,10 +1085,12 @@ begin
 				WIN_H := not WIN_H;
 				BGAC <= BGC_VSRAM_RD;
 			elsif BGA_POS(9) = '0' and WIN_H = '1' and WRIGT = '0'
-				and BGA_POS(3 downto 0) = "0000" and BGA_POS(8 downto 4) = WHP
+				and BGA_X(2 downto 0) = "000" and BGA_POS(8 downto 4) = WHP
 			then
 				WIN_H := not WIN_H;
-				BGAC <= BGC_VSRAM_RD;
+				if WIN_V = '0' then
+					BGAC <= BGC_VSRAM_RD;
+				end if;
 			elsif BGA_POS(1 downto 0) = "00" and BGA_SEL = '0' and (WIN_H = '1' or WIN_V = '1') then
 				BGA_VRAM_ADDR <= BGA_TILEBASE(15 downto 2) & (BGA_POS(2) xor BGA_HF);
 				BGA_SEL <= '1';
