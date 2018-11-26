@@ -18,6 +18,8 @@
 	Date: 14-10-2018
 	*/
 
+// altera message_off 10030
+
 `timescale 1ns / 1ps
 
 // This implementation follows that of Alexey Khokholov (Nuke.YKT) in C language.
@@ -36,8 +38,8 @@ reg [9:0] pm_shifted;
 
 wire [2:0] index = lfo_mod[3] ? (~lfo_mod[2:0]) : lfo_mod[2:0];
 
-reg [2:0] lfo_sh1_lut [0:63];
-reg [2:0] lfo_sh2_lut [0:63];
+reg [3:0] lfo_sh1_lut [0:63];
+reg [3:0] lfo_sh2_lut [0:63];
 reg [2:0] lfo_sh1, lfo_sh2;
 
 initial begin
@@ -46,8 +48,8 @@ initial begin
 end
 
 always @(*) begin
-	lfo_sh1 = lfo_sh1_lut[{pms,index}];
-	lfo_sh2 = lfo_sh2_lut[{pms,index}];
+	lfo_sh1 = lfo_sh1_lut[{pms,index}][2:0];
+	lfo_sh2 = lfo_sh2_lut[{pms,index}][2:0];
 	pm_base = ({1'b0,fnum[10:4]}>>lfo_sh1) + ({1'b0,fnum[10:4]}>>lfo_sh2);
 	case( pms )
 		default: pm_shifted = { 2'b0, pm_base };
