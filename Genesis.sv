@@ -117,7 +117,7 @@ assign VIDEO_ARY = status[9] ? 8'd9  : 8'd3;
 assign AUDIO_S = 1;
 assign AUDIO_MIX = 0;
 
-assign LED_DISK  = bk_state;
+assign LED_DISK  = 0;
 assign LED_POWER = 0;
 assign LED_USER  = ioctl_download;
 
