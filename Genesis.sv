@@ -117,19 +117,30 @@ assign VIDEO_ARY = status[9] ? 8'd9  : 8'd3;
 assign AUDIO_S = 1;
 assign AUDIO_MIX = 0;
 
-assign LED_DISK  = 0;
+assign LED_DISK  = bk_state;
 assign LED_POWER = 0;
 assign LED_USER  = ioctl_download;
 
 `include "build_id.v"
-localparam CONF_STR = {
+localparam CONF_STR1 = {
 	"Genesis;;",
 	"-;",
-	"F,BINGENMD ;",
+	"FS,BINGENMD ;",
 	"-;",
 	"O67,Region,JP,US,EU;",
 	"O8,Auto Region,No,Yes;",
 	"-;",
+};
+localparam CONF_STR2 = {
+	"DE,Save Slot,1,2,3,4;"
+};
+
+localparam CONF_STR3 = {
+	"G,Load Backup RAM;"
+};
+
+localparam CONF_STR4 = {
+	"H,Save Backup RAM;",
 	"O9,Aspect ratio,4:3,16:9;",
 	"O13,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
 	"-;",
@@ -156,15 +167,28 @@ wire [24:0] ioctl_addr;
 wire [15:0] ioctl_data;
 wire  [7:0] ioctl_index;
 reg         ioctl_wait;
+
+reg  [31:0] sd_lba;
+reg         sd_rd = 0;
+reg         sd_wr = 0;
+wire        sd_ack;
+wire  [7:0] sd_buff_addr;
+wire  [15:0] sd_buff_dout;
+wire  [15:0] sd_buff_din;
+wire        sd_buff_wr;
+wire        img_mounted;
+wire        img_readonly;
+wire [63:0] img_size;
+
 wire        forced_scandoubler;
 wire [10:0] ps2_key;
 
-hps_io #(.STRLEN($size(CONF_STR)>>3), .PS2DIV(1000), .WIDE(1)) hps_io
+hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR3)>>3) + ($size(CONF_STR4)>>3) + 3), .PS2DIV(1000), .WIDE(1)) hps_io
 (
 	.clk_sys(clk_sys),
 	.HPS_BUS(HPS_BUS),
 
-	.conf_str(CONF_STR),
+	.conf_str({CONF_STR1,bk_ena ? "O" : "+",CONF_STR2,bk_ena ? "R" : "+",CONF_STR3,bk_ena ? "R" : "+",CONF_STR4}),
 	.joystick_0(joystick_0),
 	.joystick_1(joystick_1),
 	.buttons(buttons),
@@ -180,6 +204,18 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .PS2DIV(1000), .WIDE(1)) hps_io
 	.ioctl_addr(ioctl_addr),
 	.ioctl_dout(ioctl_data),
 	.ioctl_wait(ioctl_wait),
+
+	.sd_lba(sd_lba),
+	.sd_rd(sd_rd),
+	.sd_wr(sd_wr),
+	.sd_ack(sd_ack),
+	.sd_buff_addr(sd_buff_addr),
+	.sd_buff_dout(sd_buff_dout),
+	.sd_buff_din(sd_buff_din),
+	.sd_buff_wr(sd_buff_wr),
+	.img_mounted(img_mounted),
+	.img_readonly(img_readonly),
+	.img_size(img_size),
 
 	.ps2_key(ps2_key)
 );
@@ -205,7 +241,7 @@ wire hblank, vblank;
 wire interlace;
 
 assign DDRAM_CLK = clk_ram;
-wire reset = RESET | status[0] | buttons[1] | region_set;
+wire reset = RESET | status[0] | buttons[1] | region_set | bk_loading;
 
 wire [11:0] audio_l, audio_r;
 
@@ -247,6 +283,11 @@ Genesis Genesis
 	.ENABLE_FM(1),
 	.ENABLE_PSG(1),
 `endif
+
+	.BRAM_A({sd_lba[6:0],sd_buff_addr}),
+	.BRAM_DI(sd_buff_dout),
+	.BRAM_DO(sd_buff_din),
+	.BRAM_WE(sd_buff_wr & sd_ack),
 
 	.ROMSZ(ioctl_addr[24:1]),
 	.ROM_ADDR(rom_addr),
@@ -400,5 +441,57 @@ always @(posedge clk_sys) begin
 		end
 	end
 end
+
+/////////////////////////  BRAM SAVE/LOAD  /////////////////////////////
+
+wire downloading = ioctl_download;
+
+reg bk_ena = 0;
+always @(posedge clk_sys) begin
+	reg old_downloading = 0;
+
+	old_downloading <= downloading;
+	if(~old_downloading & downloading) bk_ena <= 0;
+
+	//Save file always mounted in the end of downloading state.
+	if(downloading && img_mounted && img_size && !img_readonly) bk_ena <= 1;
+end
+
+wire bk_load    = status[16];
+wire bk_save    = status[17];
+reg  bk_loading = 0;
+reg  bk_state   = 0;
+
+always @(posedge clk_sys) begin
+	reg old_load = 0, old_save = 0, old_ack;
+
+	old_load <= bk_load;
+	old_save <= bk_save;
+	old_ack  <= sd_ack;
+
+	if(~old_ack & sd_ack) {sd_rd, sd_wr} <= 0;
+
+	if(!bk_state) begin
+		if(bk_ena & ((~old_load & bk_load) | (~old_save & bk_save))) begin
+			bk_state <= 1;
+			bk_loading <= bk_load;
+			sd_lba <= {23'd0,status[14:13],7'd0};
+			sd_rd <=  bk_load;
+			sd_wr <= ~bk_load;
+		end
+	end else begin
+		if(old_ack & ~sd_ack) begin
+			if(&sd_lba[6:0]) begin
+				bk_loading <= 0;
+				bk_state <= 0;
+			end else begin
+				sd_lba <= sd_lba + 1'd1;
+				sd_rd  <=  bk_loading;
+				sd_wr  <= ~bk_loading;
+			end
+		end
+	end
+end
+
 
 endmodule
