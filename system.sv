@@ -72,7 +72,7 @@ module system
 	input  [11:0] JOY_1,
 	input  [11:0] JOY_2,
 	input  [24:0] MOUSE,
-	input   [1:0] MOUSE_PORT,
+	input   [2:0] MOUSE_OPT,
 
 	input  [24:1] ROMSZ,
 	output [24:1] ROM_ADDR,
@@ -383,7 +383,7 @@ gen_io io
 	.P2_Z(~JOY_2[11]),
 
 	.MOUSE(MOUSE),
-	.MOUSE_PORT(MOUSE_PORT),
+	.MOUSE_OPT(MOUSE_OPT),
 
 	.SEL(IO_SEL),
 	.A(MBUS_A[4:1]),

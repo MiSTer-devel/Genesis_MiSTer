@@ -107,6 +107,8 @@ module emu
 	input         UART_DSR
 );
 
+//`define SOUND_DBG
+
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 assign {SDRAM_DQ, SDRAM_A, SDRAM_BA, SDRAM_CLK, SDRAM_CKE, SDRAM_DQML, SDRAM_DQMH, SDRAM_nWE, SDRAM_nCAS, SDRAM_nRAS, SDRAM_nCS} = 'Z;
@@ -146,12 +148,13 @@ localparam CONF_STR4 = {
 	"-;",
 	"O4,Swap joysticks,No,Yes;",
 	"O5,6 buttons mode,No,Yes;",
-	"OIK,Mouse,None,Port1,Port2;",
+	"OIJ,Mouse,None,Port1,Port2;",
+	"OK,Mouse Flip Y,No,Yes;",
 	"-;",
-//`ifdef LITE
-//	"OB,Enable FM,Yes,No;",
-//	"OC,Enable PSG,Yes,No;",
-//`endif	
+`ifdef SOUND_DBG
+	"OB,Enable FM,Yes,No;",
+	"OC,Enable PSG,Yes,No;",
+`endif	
 	"R0,Reset;",
 	"J1,A,B,C,Start,Mode,X,Y,Z;",
 	"V,v2.00.",`BUILD_DATE
@@ -279,15 +282,15 @@ system system
 	.JOY_1((status[4] ? joystick_1[11:0] : joystick_0[11:0])),
 	.JOY_2((status[4] ? joystick_0[11:0] : joystick_1[11:0])),
 	.MOUSE(ps2_mouse),
-	.MOUSE_PORT(status[19:18]),
+	.MOUSE_OPT(status[20:18]),
 
-//`ifdef LITE
-//	.ENABLE_FM(~status[11]),
-//	.ENABLE_PSG(~status[12]),
-//`else
+`ifdef SOUND_DBG
+	.ENABLE_FM(~status[11]),
+	.ENABLE_PSG(~status[12]),
+`else
 	.ENABLE_FM(1),
 	.ENABLE_PSG(1),
-//`endif
+`endif
 
 	.BRAM_A({sd_lba[6:0],sd_buff_addr}),
 	.BRAM_DI(sd_buff_dout),
