@@ -124,7 +124,6 @@ assign LED_USER  = ioctl_download;
 `include "build_id.v"
 localparam CONF_STR1 = {
 	"Genesis;;",
-	"-;",
 	"FS,BINGENMD ;",
 	"-;",
 	"O67,Region,JP,US,EU;",
@@ -141,10 +140,12 @@ localparam CONF_STR3 = {
 
 localparam CONF_STR4 = {
 	"H,Save Backup RAM;",
+	"-;",
 	"O9,Aspect ratio,4:3,16:9;",
 	"O13,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
 	"-;",
 	"O4,Swap joysticks,No,Yes;",
+	"OIK,Mouse,None,Port1,Port2;",
 	"O5,6 buttons mode,No,Yes;",
 	"-;",
 `ifdef LITE
@@ -182,6 +183,7 @@ wire [63:0] img_size;
 
 wire        forced_scandoubler;
 wire [10:0] ps2_key;
+wire [24:0] ps2_mouse;
 
 hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR3)>>3) + ($size(CONF_STR4)>>3) + 3), .PS2DIV(1000), .WIDE(1)) hps_io
 (
@@ -217,7 +219,8 @@ hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR
 	.img_readonly(img_readonly),
 	.img_size(img_size),
 
-	.ps2_key(ps2_key)
+	.ps2_key(ps2_key),
+	.ps2_mouse(ps2_mouse)
 );
 
 
@@ -275,6 +278,8 @@ system system
 	.J3BUT(~status[5]),
 	.JOY_1((status[4] ? joystick_1[11:0] : joystick_0[11:0])),
 	.JOY_2((status[4] ? joystick_0[11:0] : joystick_1[11:0])),
+	.MOUSE(ps2_mouse),
+	.MOUSE_PORT(status[19:18]),
 
 `ifdef LITE
 	.ENABLE_FM(~status[11]),

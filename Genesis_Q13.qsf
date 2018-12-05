@@ -369,7 +369,7 @@ set_global_assignment -name QIP_FILE jt12/jt12.qip
 set_global_assignment -name VHDL_FILE psg.vhd
 set_global_assignment -name SYSTEMVERILOG_FILE compressor.sv
 set_global_assignment -name VHDL_FILE vdp.vhd
-set_global_assignment -name VHDL_FILE gen_io.vhd
+set_global_assignment -name VERILOG_FILE gen_io.v
 set_global_assignment -name VHDL_FILE dpram.vhd
 set_global_assignment -name SYSTEMVERILOG_FILE ddram.sv
 set_global_assignment -name SYSTEMVERILOG_FILE system.sv
