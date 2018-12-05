@@ -145,13 +145,13 @@ localparam CONF_STR4 = {
 	"O13,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
 	"-;",
 	"O4,Swap joysticks,No,Yes;",
-	"OIK,Mouse,None,Port1,Port2;",
 	"O5,6 buttons mode,No,Yes;",
+	"OIK,Mouse,None,Port1,Port2;",
 	"-;",
-`ifdef LITE
-	"OB,Enable FM,Yes,No;",
-	"OC,Enable PSG,Yes,No;",
-`endif	
+//`ifdef LITE
+//	"OB,Enable FM,Yes,No;",
+//	"OC,Enable PSG,Yes,No;",
+//`endif	
 	"R0,Reset;",
 	"J1,A,B,C,Start,Mode,X,Y,Z;",
 	"V,v2.00.",`BUILD_DATE
@@ -281,13 +281,13 @@ system system
 	.MOUSE(ps2_mouse),
 	.MOUSE_PORT(status[19:18]),
 
-`ifdef LITE
-	.ENABLE_FM(~status[11]),
-	.ENABLE_PSG(~status[12]),
-`else
+//`ifdef LITE
+//	.ENABLE_FM(~status[11]),
+//	.ENABLE_PSG(~status[12]),
+//`else
 	.ENABLE_FM(1),
 	.ENABLE_PSG(1),
-`endif
+//`endif
 
 	.BRAM_A({sd_lba[6:0],sd_buff_addr}),
 	.BRAM_DI(sd_buff_dout),
