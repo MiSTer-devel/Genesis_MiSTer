@@ -2224,7 +2224,9 @@ BEGIN
         o_pe0<=to_std_logic(o_hcpt>=o_hmin AND o_hcpt<=o_hmax AND
                             o_vcpt>=o_vmin AND o_vcpt<=o_vmax);
         o_hs0<=to_std_logic(o_hcpt>=o_hsstart AND o_hcpt<o_hsend);
-        o_vs0<=to_std_logic(o_vcpt>=o_vsstart AND o_vcpt<o_vsend);
+        o_vs0<=to_std_logic((o_vcpt=o_vsstart AND o_hcpt>=o_hsstart) OR
+		                       (o_vcpt>o_vsstart AND o_vcpt<o_vsend) OR
+									  (o_vcpt=o_vsend AND o_hcpt<o_hsstart));
         
         IF o_run='0' THEN
           o_de0<='0';
