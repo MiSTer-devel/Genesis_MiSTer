@@ -802,13 +802,14 @@ process( RST_N, CLK )
 	variable V_BGB_BASE		: std_logic_vector(15 downto 0);
 	variable BGB_X				: std_logic_vector(9 downto 0);
 	variable BGB_POS			: std_logic_vector(9 downto 0);
-	variable BGB_Y				: std_logic_vector(9 downto 0);
+	variable BGB_Y				: std_logic_vector(10 downto 0);
 	variable T_BGB_PRI		: std_logic;
 	variable T_BGB_PAL		: std_logic_vector(1 downto 0);
 	variable BGB_TILEBASE	: std_logic_vector(15 downto 0);
 	variable BGB_HF			: std_logic;
-	variable TEMP2				: std_logic_vector(13 downto 0);
-	variable VS					: std_logic_vector(9 downto 0);
+	variable VS					: std_logic_vector(10 downto 0);
+	variable CELLY				: std_logic_vector(6 downto 0);
+	variable Y					: std_logic_vector(8 downto 0);
 begin
 	if RST_N = '0' then
 		BGB_SEL <= '0';
@@ -826,7 +827,14 @@ begin
 				when "10" => BGB_VRAM_ADDR <= HSCB & BG_Y(7 downto 3) & "0001";
 				when "11" => BGB_VRAM_ADDR <= HSCB & BG_Y(7 downto 0) & '1';
 				when others => null;
+
 				end case;
+				if INTERLACE_FF = '1' then
+					Y := BG_Y(7 downto 0) & ODD;
+				else
+					Y := '0'&BG_Y(7 downto 0);
+				end if;
+
 				BGB_SEL <= '1';
 				BGBC <= BGC_HS_RD;
 			end if;
@@ -845,31 +853,31 @@ begin
 			BGBC <= BGC_CALC_Y;
 
 		when BGC_CALC_Y =>
-			--if PIXDIV = 0 and H_CNT(2 downto 0) = 6 then
- 				if BGB_POS(9) = '1' or VSCR = '0' then
-					VS := BGB_VSRAM1_LATCH(9 downto 0);
-				else
-					VS := VSRAM_BGB(9 downto 0);
-				end if;
+			if BGB_POS(9) = '1' or VSCR = '0' then
+				VS := BGB_VSRAM1_LATCH;
+			else
+				VS := VSRAM_BGB;
+			end if;
 
-				if INTERLACE_FF = '0' then
-					BGB_Y := (VS(9 downto 0) + BG_Y) and VMASK;
-				else
-					BGB_Y := (VS(9 downto 1) + BG_Y) and VMASK;
-				end if;
+			if INTERLACE_FF = '1' then
+				BGB_Y := (VS(10 downto 0) + Y) and (VMASK&'1');
+				CELLY := BGB_Y(10 downto 4);
+			else
+				BGB_Y := '0'&((VS(9 downto 0) + Y) and VMASK);
+				CELLY := BGB_Y(9 downto 3);
+			end if;
 
-				case HSIZE is
-				when "00"|"10" => -- HS 32 cells
-					V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + (BGB_Y(9 downto 3) & "00000" & "0");
-				when "01" => -- HS 64 cells
-					V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + (BGB_Y(9 downto 3) & "000000" & "0");
-				when "11" => -- HS 128 cells
-					V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + (BGB_Y(9 downto 3) & "0000000" & "0");
-				end case;
-				BGB_VRAM_ADDR <= V_BGB_BASE(15 downto 1);
-				BGB_SEL <= '1';
-				BGBC <= BGC_BASE_RD;
-			--end if;
+			case HSIZE is
+			when "00"|"10" => -- HS 32 cells
+				V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + (CELLY & "00000" & "0");
+			when "01" => -- HS 64 cells
+				V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + (CELLY & "000000" & "0");
+			when "11" => -- HS 128 cells
+				V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + (CELLY & "0000000" & "0");
+			end case;
+			BGB_VRAM_ADDR <= V_BGB_BASE(15 downto 1);
+			BGB_SEL <= '1';
+			BGBC <= BGC_BASE_RD;
 
 		when BGC_BASE_RD =>
 			if BGB_ACK_N='0' then
@@ -877,18 +885,19 @@ begin
 				T_BGB_PRI := BGB_VRAM_DO(15);
 				T_BGB_PAL := BGB_VRAM_DO(14 downto 13);
 				BGB_HF := BGB_VRAM_DO(11);
-				if BGB_VRAM_DO(12) = '1' then	-- VF
-					TEMP2 := BGB_VRAM_DO(10 downto 0) & not(BGB_Y(2 downto 0));
+				if INTERLACE_FF = '1' then
+					if BGB_VRAM_DO(12) = '1' then	-- VF
+						BGB_TILEBASE := BGB_VRAM_DO(9 downto 0) & not(BGB_Y(3 downto 0)) & "00";
+					else
+						BGB_TILEBASE := BGB_VRAM_DO(9 downto 0) & BGB_Y(3 downto 0) & "00";
+					end if;
 				else
-					TEMP2 := BGB_VRAM_DO(10 downto 0) & (BGB_Y(2 downto 0));
+					if BGB_VRAM_DO(12) = '1' then	-- VF
+						BGB_TILEBASE := BGB_VRAM_DO(10 downto 0) & not(BGB_Y(2 downto 0)) & "00";
+					else
+						BGB_TILEBASE := BGB_VRAM_DO(10 downto 0) & BGB_Y(2 downto 0) & "00";
+					end if;
 				end if;
-
-				if INTERLACE_FF = '0' then
-					BGB_TILEBASE := TEMP2(13 downto 0) & "00";
-				else
-					BGB_TILEBASE := TEMP2(12 downto 0) & (ODD xor BGB_VRAM_DO(12)) & "00";
-				end if;
-
 				BGBC <= BGC_LOOP;
 			end if;
 
@@ -953,7 +962,7 @@ process( RST_N, CLK )
 	variable V_BGA_BASE		: std_logic_vector(15 downto 0);
 	variable BGA_X				: std_logic_vector(9 downto 0);
 	variable BGA_POS			: std_logic_vector(9 downto 0);
-	variable BGA_Y				: std_logic_vector(9 downto 0);
+	variable BGA_Y				: std_logic_vector(10 downto 0);
 	variable T_BGA_PRI		: std_logic;
 	variable T_BGA_PAL		: std_logic_vector(1 downto 0);
 	variable T_BGA_COLNO		: std_logic_vector(3 downto 0);
@@ -963,7 +972,9 @@ process( RST_N, CLK )
 	variable WIN_V				: std_logic;
 	variable WIN_H				: std_logic;
 	variable TEMP2				: std_logic_vector(13 downto 0);
-	variable VS					: std_logic_vector(9 downto 0);
+	variable VS					: std_logic_vector(10 downto 0);
+	variable CELLY				: std_logic_vector(6 downto 0);
+	variable Y					: std_logic_vector(8 downto 0);
 begin
 	if RST_N = '0' then
 		BGA_SEL <= '0';
@@ -997,6 +1008,13 @@ begin
 				when "11" => BGA_VRAM_ADDR <= HSCB & BG_Y(7 downto 0) & '0';
 				when others => null;
 				end case;
+				
+				if INTERLACE_FF = '1' then
+					Y := BG_Y(7 downto 0) & ODD;
+				else
+					Y := '0'&BG_Y(7 downto 0);
+				end if;
+				
 				BGA_SEL <= '1';
 				BGAC <= BGC_HS_RD;
 			end if;
@@ -1015,47 +1033,51 @@ begin
 			BGAC <= BGC_CALC_Y;
 
 		when BGC_CALC_Y =>
-			--if PIXDIV = 0 and H_CNT(2 downto 0) = 4 then
-				if WIN_H = '1' or WIN_V = '1' then
-					BGA_Y := '0' & BG_Y;
+			if WIN_H = '1' or WIN_V = '1' then
+				BGA_Y := "00" & Y;
+			else
+				if BGA_POS(9) = '1' or VSCR = '0' then
+					VS := BGA_VSRAM0_LATCH;
 				else
-					if BGA_POS(9) = '1' or VSCR = '0' then
-						VS := BGA_VSRAM0_LATCH(9 downto 0);
-					else
-						VS := VSRAM_BGA(9 downto 0);
-					end if;
-
-					if INTERLACE_FF = '0' then
-						BGA_Y := (VS(9 downto 0) + BG_Y) and VMASK;
-					else
-						BGA_Y := (VS(9 downto 1) + BG_Y) and VMASK;
-					end if;
+					VS := VSRAM_BGA;
 				end if;
 
-				if WIN_H = '1' or WIN_V = '1' then
-					V_BGA_BASE := (NTWB & "00000000000") + (BGA_POS(9 downto 3) & "0");
-					if H40 = '0' then -- WIN is 32 tiles wide in H32 mode
-						V_BGA_BASE := V_BGA_BASE + (BGA_Y(9 downto 3) & "00000" & "0");
-					else              -- WIN is 64 tiles wide in H40 mode
-						V_BGA_BASE := V_BGA_BASE + (BGA_Y(9 downto 3) & "000000" & "0");
-					end if;
+				if INTERLACE_FF = '0' then
+					BGA_Y := '0'&((VS(9 downto 0) + Y) and VMASK);
 				else
-					V_BGA_BASE := (NTAB & "0000000000000") + (BGA_X(9 downto 3) & "0");
-
-					case HSIZE is
-					when "00"|"10" => -- HS 32 cells
-						V_BGA_BASE := V_BGA_BASE + (BGA_Y(9 downto 3) & "00000" & "0");
-					when "01" => -- HS 64 cells
-						V_BGA_BASE := V_BGA_BASE + (BGA_Y(9 downto 3) & "000000" & "0");
-					when "11" => -- HS 128 cells
-						V_BGA_BASE := V_BGA_BASE + (BGA_Y(9 downto 3) & "0000000" & "0");
-					end case;
+					BGA_Y := (VS(10 downto 0) + Y) and (VMASK&'1');
 				end if;
+			end if;
 
-				BGA_VRAM_ADDR <= V_BGA_BASE(15 downto 1);
-				BGA_SEL <= '1';
-				BGAC <= BGC_BASE_RD;
-			--end if;
+			if INTERLACE_FF = '0' then
+				CELLY := BGA_Y(9 downto 3);
+			else
+				CELLY := BGA_Y(10 downto 4);
+			end if;
+
+			if WIN_H = '1' or WIN_V = '1' then
+				V_BGA_BASE := (NTWB & "00000000000") + (BGA_POS(9 downto 3) & "0");
+				if H40 = '0' then -- WIN is 32 tiles wide in H32 mode
+					V_BGA_BASE := V_BGA_BASE + (CELLY & "00000" & "0");
+				else              -- WIN is 64 tiles wide in H40 mode
+					V_BGA_BASE := V_BGA_BASE + (CELLY & "000000" & "0");
+				end if;
+			else
+				V_BGA_BASE := (NTAB & "0000000000000") + (BGA_X(9 downto 3) & "0");
+
+				case HSIZE is
+				when "00"|"10" => -- HS 32 cells
+					V_BGA_BASE := V_BGA_BASE + (CELLY & "00000" & "0");
+				when "01" => -- HS 64 cells
+					V_BGA_BASE := V_BGA_BASE + (CELLY & "000000" & "0");
+				when "11" => -- HS 128 cells
+					V_BGA_BASE := V_BGA_BASE + (CELLY & "0000000" & "0");
+				end case;
+			end if;
+
+			BGA_VRAM_ADDR <= V_BGA_BASE(15 downto 1);
+			BGA_SEL <= '1';
+			BGAC <= BGC_BASE_RD;
 
 		when BGC_BASE_RD =>
 			if BGA_ACK_N='0' then
@@ -1063,19 +1085,19 @@ begin
 				T_BGA_PRI := BGA_VRAM_DO(15);
 				T_BGA_PAL := BGA_VRAM_DO(14 downto 13);
 				BGA_HF := BGA_VRAM_DO(11);
-
-				if BGA_VRAM_DO(12) = '1' then	-- VF
-					TEMP2 := BGA_VRAM_DO(10 downto 0) & not(BGA_Y(2 downto 0));
+				if INTERLACE_FF = '1' then
+					if BGA_VRAM_DO(12) = '1' then	-- VF
+						BGA_TILEBASE := BGA_VRAM_DO(9 downto 0) & not(BGA_Y(3 downto 0)) & "00";
+					else
+						BGA_TILEBASE := BGA_VRAM_DO(9 downto 0) & BGA_Y(3 downto 0) & "00";
+					end if;
 				else
-					TEMP2 := BGA_VRAM_DO(10 downto 0) & (BGA_Y(2 downto 0));
+					if BGA_VRAM_DO(12) = '1' then	-- VF
+						BGA_TILEBASE := BGA_VRAM_DO(10 downto 0) & not(BGA_Y(2 downto 0)) & "00";
+					else
+						BGA_TILEBASE := BGA_VRAM_DO(10 downto 0) & BGA_Y(2 downto 0) & "00";
+					end if;
 				end if;
-
-				if INTERLACE_FF = '0' then
-					BGA_TILEBASE := TEMP2(13 downto 0) & "00";
-				else
-					BGA_TILEBASE := TEMP2(12 downto 0) & (ODD xor BGA_VRAM_DO(12)) & "00";
-				end if;
-
 				BGAC <= BGC_LOOP;
 			end if;
 
@@ -1205,10 +1227,11 @@ process( RST_N, CLK )
 	variable OBJ_TOT		: std_logic_vector(6 downto 0);
 	variable OBJ_NEXT		: std_logic_vector(6 downto 0);
 	variable OBJ_NB_CLR	: std_logic_vector(4 downto 0);
-	variable OBJ_Y_OFS	: std_logic_vector(8 downto 0);
+	variable OBJ_Y_OFS	: std_logic_vector(9 downto 0);
 	variable OBJ_VS		: std_logic_vector(1 downto 0);
 	variable OBJ_LINK		: std_logic_vector(6 downto 0);
 	variable STOP			: std_logic;
+	variable Y				: std_logic_vector(8 downto 0);
 begin
 	if RST_N = '0' then
 		SP1C <= SP1C_DONE;
@@ -1226,6 +1249,11 @@ begin
 				OBJ_NEXT := (others => '0');
 				OBJ_NB <= (others => '0');
 				STOP := '0';
+				if INTERLACE_FF = '1' then
+					Y := SP_Y(7 downto 0) & ODD;
+				else
+					Y := '0'&SP_Y(7 downto 0);
+				end if;
 				SP1C <= SP1C_Y_RD;
 
 			when SP1C_Y_RD =>
@@ -1242,9 +1270,10 @@ begin
 
 			when SP1C_Y_TST =>
 				if INTERLACE_FF = '0' then
-					OBJ_Y_OFS := "010000000" + SP_Y - OBJ_CACHE_Y_Q(8 downto 0);
+					OBJ_Y_OFS := "0010000000" + Y - OBJ_CACHE_Y_Q(8 downto 0);
 				else
-					OBJ_Y_OFS := "010000000" + SP_Y - OBJ_CACHE_Y_Q(9 downto 1);
+					OBJ_Y_OFS := "0100000000" + Y - OBJ_CACHE_Y_Q(9 downto 0);
+					OBJ_Y_OFS := '0'&OBJ_Y_OFS(9 downto 1);
 				end if;
 				OBJ_VS := OBJ_CACHE_SL_Q(9 downto 8);
 				OBJ_LINK := OBJ_CACHE_SL_Q(6 downto 0);
@@ -1305,7 +1334,7 @@ end process;
 --fetch X and size info for visible sprites
 process( RST_N, CLK )
 	variable OBJ_VS		: std_logic_vector(1 downto 0);
-	variable OBJ_Y_OFS	: std_logic_vector(4 downto 0);
+	variable OBJ_Y_OFS	: std_logic_vector(5 downto 0);
 	variable OBJ_TILEBASE: std_logic_vector(14 downto 0);
 	variable OBJ_PIX		: std_logic_vector(8 downto 0);
 	variable OBJ_NO		: std_logic_vector(4 downto 0);
@@ -1321,6 +1350,7 @@ process( RST_N, CLK )
 	variable OBJ_POS		: std_logic_vector(8 downto 0);
 	variable OBJ_COLNO	: std_logic_vector(3 downto 0);
 	variable OBJ_IDX		: std_logic_vector(4 downto 0);
+	variable Y				: std_logic_vector(5 downto 0);
 
 begin
 	if RST_N = '0' then
@@ -1351,6 +1381,12 @@ begin
 					OBJ_IDX := (others => '0');
 				end if;
 				OBJ_VISINFO_ADDR_RD <= OBJ_IDX;
+
+				if INTERLACE_FF = '1' then
+					Y := SP_Y(4 downto 0) & ODD;
+				else
+					Y := '0'&SP_Y(4 downto 0);
+				end if;
 
 				SP2C <= SP2C_Y_RD;
 
@@ -1395,35 +1431,50 @@ begin
 
 					--use only the least 5 bits of the Y offset in part 2
 					--Titan 2 textured cube (ab)uses this
-
 					if INTERLACE_FF = '0' then
-						OBJ_Y_OFS := SP_Y(4 downto 0) - OBJ_CACHE_Y_Q(4 downto 0);
-					else
-						OBJ_Y_OFS := SP_Y(4 downto 0) - OBJ_CACHE_Y_Q(5 downto 1);
-					end if;
-
-					if SP2_VRAM_DO(12) = '1' then
-						case OBJ_VS is
-						when "00" =>	-- 8 pixels
-							OBJ_Y_OFS := "00" & not OBJ_Y_OFS(2 downto 0);
-						when "01" =>	-- 16 pixels
-							OBJ_Y_OFS := "0" & not OBJ_Y_OFS(3 downto 0);
-						when "11" =>	-- 32 pixels
-							OBJ_Y_OFS := not OBJ_Y_OFS;
-						when others =>	-- 24 pixels
-							OBJ_Y_OFS(2 downto 0) := not(OBJ_Y_OFS(2 downto 0));
-							case OBJ_Y_OFS(4 downto 3) is
-							when "00" =>   OBJ_Y_OFS(4 downto 3) := "10";
-							when "10" =>   OBJ_Y_OFS(4 downto 3) := "00";
-							when others => OBJ_Y_OFS(4 downto 3) := "01";
+						OBJ_Y_OFS := '0'&(Y(4 downto 0) - OBJ_CACHE_Y_Q(4 downto 0));
+						if SP2_VRAM_DO(12) = '1' then
+							case OBJ_VS is
+							when "00" =>	-- 8 pixels
+								OBJ_Y_OFS := "000" & not OBJ_Y_OFS(2 downto 0);
+							when "01" =>	-- 16 pixels
+								OBJ_Y_OFS := "00" & not OBJ_Y_OFS(3 downto 0);
+							when "11" =>	-- 32 pixels
+								OBJ_Y_OFS := "0" & not OBJ_Y_OFS(4 downto 0);
+							when others =>	-- 24 pixels
+								OBJ_Y_OFS(2 downto 0) := not(OBJ_Y_OFS(2 downto 0));
+								case OBJ_Y_OFS(4 downto 3) is
+								when "00" =>   OBJ_Y_OFS(4 downto 3) := "10";
+								when "10" =>   OBJ_Y_OFS(4 downto 3) := "00";
+								when others => OBJ_Y_OFS(4 downto 3) := "01";
+								end case;
 							end case;
-						end case;
+						end if;
+					else
+						OBJ_Y_OFS := Y(5 downto 0) - OBJ_CACHE_Y_Q(5 downto 0);
+						if SP2_VRAM_DO(12) = '1' then
+							case OBJ_VS is
+							when "00" =>	-- 8 pixels
+								OBJ_Y_OFS := "00" & not OBJ_Y_OFS(3 downto 0);
+							when "01" =>	-- 16 pixels
+								OBJ_Y_OFS := "0" & not OBJ_Y_OFS(4 downto 0);
+							when "11" =>	-- 32 pixels
+								OBJ_Y_OFS := not OBJ_Y_OFS;
+							when others =>	-- 24 pixels
+								OBJ_Y_OFS(3 downto 0) := not(OBJ_Y_OFS(3 downto 0));
+								case OBJ_Y_OFS(5 downto 4) is
+								when "00" =>   OBJ_Y_OFS(5 downto 4) := "10";
+								when "10" =>   OBJ_Y_OFS(5 downto 4) := "00";
+								when others => OBJ_Y_OFS(5 downto 4) := "01";
+								end case;
+							end case;
+						end if;
 					end if;
 
 					if INTERLACE_FF = '0' then
 						OBJ_TILEBASE := (SP2_VRAM_DO(10 downto 0) & "0000") + (OBJ_Y_OFS & '0');
 					else
-						OBJ_TILEBASE := (SP2_VRAM_DO(9 downto 0) & "00000") + (OBJ_Y_OFS & ODD & '0');
+						OBJ_TILEBASE := (SP2_VRAM_DO(9 downto 0) & "00000") + (OBJ_Y_OFS & '0');
 					end if;
 
 					OBJ_HS := OBJ_CACHE_SL_Q(11 downto 10);
@@ -1673,7 +1724,7 @@ begin
 
 			if H_CNT = HDISP_START-18-1 then
 				if V_CNT >= VDISP_START and V_CNT < VDISP_END then
-					BG_Y  <= V_CNT - VDISP_START;
+					BG_Y <= V_CNT - VDISP_START;
 					BGEN_ACTIVE <= '1';
 				end if;
 			end if;
@@ -1741,8 +1792,8 @@ begin
 					IN_VBL_F <= '1';
 				end if;
 
-				BGB_VSRAM1_LATCH <= VSRAM_BGB(10 downto 0);
-				BGA_VSRAM0_LATCH <= VSRAM_BGA(10 downto 0);
+				BGB_VSRAM1_LATCH <= VSRAM_BGB;
+				BGA_VSRAM0_LATCH <= VSRAM_BGA;
 			end if;
 
 			if H_CNT = HDISP_START+HDISP_SIZE+6-1 then
