@@ -350,7 +350,7 @@ signal DMA_SOURCE			: std_logic_vector(15 downto 0);
 ----------------------------------------------------------------
 signal H_CNT		: std_logic_vector(8 downto 0);
 signal V_CNT		: std_logic_vector(8 downto 0);
-signal ODD			: std_logic;
+signal ODD,ODD_FF	: std_logic;
 signal PIXDIV		: std_logic_vector(3 downto 0);
 
 ----------------------------------------------------------------
@@ -701,6 +701,7 @@ WDOWN <= REG(18)(7);
 
 INTERLACE_FF <= LSM(1) and LSM(0);
 INTERLACE <= INTERLACE_FF;
+ODD <= ODD_FF and LSM(0);
 
 STATUS <= "111111"
 			& FIFO_EMPTY
@@ -1598,7 +1599,7 @@ process( RST_N, CLK )
 	variable hint_en     : std_logic;
 begin
 	if RST_N = '0' then
-		ODD <= '0';
+		ODD_FF <= '0';
 
 		PIXDIV <= (others => '0');
 		V_CNT <= (others => '0');
@@ -1683,7 +1684,7 @@ begin
 				if V_CNT = VDISP_END then
 					TG68_VINT_PENDING <= '1';
 					T80_VINT <= '1';
-					ODD <= not ODD and LSM(0);
+					ODD_FF <= not ODD_FF;
 				end if;
 
 				if V_CNT = VDISP_END+1 then
@@ -1768,7 +1769,9 @@ begin
 			-- HV Counter
 			if M3 = '0' then
 				HV <= vcnt(7 downto 0) & hcnt(8 downto 1);
-				if INTERLACE_FF = '1' then HV(8) <= vcnt(8); end if;
+				if INTERLACE_FF = '1' then
+					HV(15 downto 8) <= vcnt(6 downto 0) & vcnt(7);
+				end if;
 			end if;
 
 			-- FIFO throttle logic
