@@ -1683,6 +1683,7 @@ begin
 				if V_CNT = VDISP_END then
 					TG68_VINT_PENDING <= '1';
 					T80_VINT <= '1';
+					ODD <= not ODD and LSM(0);
 				end if;
 
 				if V_CNT = VDISP_END+1 then
@@ -1737,7 +1738,6 @@ begin
 				if V_CNT = VDISP_END-1 then
 					IN_VBL <= '1';
 					IN_VBL_F <= '1';
-					ODD <= not ODD and LSM(0);
 				end if;
 
 				BGB_VSRAM1_LATCH <= VSRAM_BGB(10 downto 0);
