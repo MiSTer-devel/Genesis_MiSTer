@@ -198,6 +198,7 @@ hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR
 	.joystick_1(joystick_1),
 	.buttons(buttons),
 	.forced_scandoubler(forced_scandoubler),
+	.new_vmode(new_vmode),
 
 	.status(status),
 	.status_in({status[31:8],region_req,status[5:0]}),
@@ -258,7 +259,7 @@ system system
 
 	.LOADING(ioctl_download),
 	.EXPORT(|status[7:6]),
-	.PAL(status[7]),
+	.PAL(PAL),
 	.SRAM_QUIRK(sram_quirk),
 	.EEPROM_QUIRK(eeprom_quirk),
 	.ZBUS_QUIRK(zbus_quirk),
@@ -303,6 +304,25 @@ system system
 	.ROM_REQ(rom_rd),
 	.ROM_ACK(rom_rdack)
 );
+
+wire PAL = status[7];
+
+reg new_vmode;
+always @(posedge clk_sys) begin
+	reg old_pal;
+	int to;
+	
+	if(~(reset | ioctl_download)) begin
+		old_pal <= PAL;
+		if(old_pal != PAL) to <= 5000000;
+	end
+	else to <= 5000000;
+	
+	if(to) begin
+		to <= to - 1;
+		if(to == 1) new_vmode <= ~new_vmode;
+	end
+end
 
 wire [2:0] scale = status[3:1];
 wire [2:0] sl = scale ? scale - 1'd1 : 3'd0;
