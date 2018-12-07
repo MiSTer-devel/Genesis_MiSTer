@@ -157,7 +157,7 @@ localparam CONF_STR4 = {
 `endif	
 	"R0,Reset;",
 	"J1,A,B,C,Start,Mode,X,Y,Z;",
-	"V,v2.00.",`BUILD_DATE
+	"V,v",`BUILD_DATE
 };
 
 
