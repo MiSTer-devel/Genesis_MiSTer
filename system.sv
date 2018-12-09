@@ -327,17 +327,17 @@ vdp vdp
 );
 
 // PSG 0x10-0x17 in VDP space
-wire [5:0] PSG_SND;
-psg psg
+wire [10:0] PSG_SND;
+jt89 psg
 (
-	.reset(reset),
+	.rst(reset),
 	.clk(MCLK),
-	.clken(Z80_CLKEN),
+	.clk_en(Z80_CLKEN),
 
 	.wr_n(MBUS_RNW | ~VDP_SEL | ~MBUS_A[4] | MBUS_A[3]),
-	.d_in(MBUS_DO[15:8]),
+	.din(MBUS_DO[15:8]),
 
-	.snd(PSG_SND)
+	.sound(PSG_SND)
 );
 
 
@@ -874,8 +874,8 @@ jt12 fm
 	.snd_right(FM_right)
 );
 
-assign DAC_LDATA = ({12{ENABLE_FM}} & FM_left[15:4])  + ({12{ENABLE_PSG}} & {PSG_SND, 3'b00});
-assign DAC_RDATA = ({12{ENABLE_FM}} & FM_right[15:4]) + ({12{ENABLE_PSG}} & {PSG_SND, 3'b00});
+assign DAC_LDATA = ({12{ENABLE_FM}} & FM_left[15:4])  + ({12{ENABLE_PSG}} & {PSG_SND[10],PSG_SND});
+assign DAC_RDATA = ({12{ENABLE_FM}} & FM_right[15:4]) + ({12{ENABLE_PSG}} & {PSG_SND[10],PSG_SND});
 
 
 //-----------------------------------------------------------------------

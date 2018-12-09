@@ -1,0 +1,6 @@
+set_global_assignment -name VHDL_FILE    [file join $::quartus(qip_path) jt89.vhd ]
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) jt89.v   ]
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) jt89_noise.v   ]
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) jt89_vol.v   ]
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) jt89_mixer.v   ]
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) jt89_tone.v   ]
