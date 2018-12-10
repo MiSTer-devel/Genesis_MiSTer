@@ -874,8 +874,8 @@ jt12 fm
 	.snd_right(FM_right)
 );
 
-assign DAC_LDATA = ({12{ENABLE_FM}} & FM_left[15:4])  + ({12{ENABLE_PSG}} & {PSG_SND[10],PSG_SND});
-assign DAC_RDATA = ({12{ENABLE_FM}} & FM_right[15:4]) + ({12{ENABLE_PSG}} & {PSG_SND[10],PSG_SND});
+assign DAC_LDATA = ({12{ENABLE_FM}} & FM_left[15:4])  + ({12{ENABLE_PSG}} & {PSG_SND[10],PSG_SND[10],PSG_SND[10:1]});
+assign DAC_RDATA = ({12{ENABLE_FM}} & FM_right[15:4]) + ({12{ENABLE_PSG}} & {PSG_SND[10],PSG_SND[10],PSG_SND[10:1]});
 
 
 //-----------------------------------------------------------------------
