@@ -23,35 +23,24 @@ module jt89_mixer #(parameter bw=9)(
     input            rst,
     input            clk,
     input            clk_en,
+    input            cen_16,
     input     [bw-1:0] ch0,
     input     [bw-1:0] ch1,
     input     [bw-1:0] ch2,
     input     [bw-1:0] noise,
-    output    [bw+1:0] sound
+    output reg signed [bw+1:0] sound
 );
 
-reg signed [bw+2:0] a,b,c;
 reg signed [bw+1:0] fresh;
 
 always @(*)
-    fresh = {2'b0,  ch0} +
-            {2'b0,  ch1} +
-            {2'b0,  ch2} +
-            {2'b0,noise};
+    fresh = 
+        { {2{ch0[bw-1]}}, ch0   }+
+        { {2{ch1[bw-1]}}, ch1   }+
+        { {2{ch2[bw-1]}}, ch2   }+
+        { {2{noise[bw-1]}}, noise };
 
-assign sound = a[bw+2:1];
-
-// Low pass filter to avoid sharp edges
-// settles in 16 clock cycles
-always @(posedge clk) 
-    if(rst) begin
-        a <= {(bw+3){1'b0}};
-        b <= {(bw+3){1'b0}};
-        c <= {(bw+3){1'b0}};
-    end else if(clk_en) begin
-        a <= (a + {b[bw+2:1],1'b1})>>1;
-        b <= (b + {c[bw+2:1],1'b1})>>1;
-        c <= (c + {fresh,  1'b1})>>1;
-    end
+always @(posedge clk)
+    sound <= fresh;
 
 endmodule

@@ -28,36 +28,36 @@ module jt89_vol(
     input         rst,
     input         din,
     input  [3:0]  vol,
-    output reg [8:0]  snd   
+    output reg signed [8:0]  snd   
 );
 
 
-reg [8:0] max;
+reg [7:0] max;
 
 always @(*)
     case ( vol ) // 2dB per LSB (20*log10)
-        4'd0:  max = 9'd511;
-        4'd1:  max = 9'd406;
-        4'd2:  max = 9'd322;
-        4'd3:  max = 9'd256;
-        4'd4:  max = 9'd203;
-        4'd5:  max = 9'd162;
-        4'd6:  max = 9'd128;
-        4'd7:  max = 9'd102;
-        4'd8:  max = 9'd81;
-        4'd9:  max = 9'd64;
-        4'd10: max = 9'd51;
-        4'd11: max = 9'd41;
-        4'd12: max = 9'd32;
-        4'd13: max = 9'd26;
-        4'd14: max = 9'd20;
-        4'd15: max = 9'd0;
+        4'd0:  max = 8'd255;
+        4'd1:  max = 8'd203;
+        4'd2:  max = 8'd161;
+        4'd3:  max = 8'd128;
+        4'd4:  max = 8'd102;
+        4'd5:  max = 8'd81;
+        4'd6:  max = 8'd64;
+        4'd7:  max = 8'd51;
+        4'd8:  max = 8'd40;
+        4'd9:  max = 8'd32;
+        4'd10: max = 8'd26;
+        4'd11: max = 8'd20;
+        4'd12: max = 8'd16;
+        4'd13: max = 8'd13;
+        4'd14: max = 8'd10;
+        4'd15: max = 8'd0;
     endcase
 
 always @(posedge clk)
     if( rst )
         snd <= 9'd0;
     else if( clk_en )
-        snd <= din ? max : 9'd0;
+        snd <= din ? {1'b0,max} : -{1'b0,max};
 
 endmodule

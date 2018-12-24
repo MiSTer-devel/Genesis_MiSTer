@@ -250,7 +250,7 @@ wire interlace;
 assign DDRAM_CLK = clk_ram;
 wire reset = RESET | status[0] | buttons[1] | region_set | bk_loading;
 
-wire [11:0] audio_l, audio_r;
+wire [15:0] audio_l, audio_r;
 
 system system
 (
@@ -362,8 +362,8 @@ video_mixer #(.LINE_LENGTH(320), .HALF_DEPTH(1)) video_mixer
 compressor compressor
 (
 	clk_sys,
-	audio_l, audio_r,
-	AUDIO_L, AUDIO_R
+	audio_l[15:4], audio_r[15:4],
+	AUDIO_L,       AUDIO_R
 );
 
 ///////////////////////////////////////////////////

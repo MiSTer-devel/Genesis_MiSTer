@@ -40,8 +40,8 @@ module system
 
 	input         ENABLE_FM,
 	input         ENABLE_PSG,
-	output [11:0] DAC_LDATA,
-	output [11:0] DAC_RDATA,
+	output [15:0] DAC_LDATA,
+	output [15:0] DAC_RDATA,
 
 	input         LOADING,
 	input         PAL,
@@ -874,8 +874,19 @@ jt12 fm
 	.snd_right(FM_right)
 );
 
-assign DAC_LDATA = ({12{ENABLE_FM}} & FM_left[15:4])  + ({12{ENABLE_PSG}} & {PSG_SND[10],PSG_SND[10],PSG_SND[10:1]});
-assign DAC_RDATA = ({12{ENABLE_FM}} & FM_right[15:4]) + ({12{ENABLE_PSG}} & {PSG_SND[10],PSG_SND[10],PSG_SND[10:1]});
+jt12_genmix genmix
+(
+	.rst(~Z80_RESET_N),
+	.clk(MCLK),
+	.fm_left(FM_left),
+	.fm_right(FM_right),
+	.psg_snd(PSG_SND),
+	.fm_en(ENABLE_FM),
+	.psg_en(ENABLE_PSG),
+
+	.snd_left(DAC_LDATA),
+	.snd_right(DAC_RDATA)
+);
 
 
 //-----------------------------------------------------------------------

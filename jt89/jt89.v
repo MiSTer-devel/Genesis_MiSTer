@@ -36,7 +36,7 @@ module jt89(
     input          rst,
     input          wr_n,
     input    [7:0] din,
-    output  [10:0] sound,
+    output  signed [10:0] sound,
     output         ready
 );
 
@@ -47,6 +47,7 @@ assign ready = 1'b1;
 jt89_mixer mix(
     .clk    ( clk   ),
     .clk_en ( clk_en), // uses main clock enable
+    .cen_16 ( cen_16),
     .rst    ( rst   ),
     .ch0    ( ch0   ),
     .ch1    ( ch1   ),

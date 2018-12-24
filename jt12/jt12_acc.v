@@ -33,8 +33,7 @@
  JT12 always has a limiter enabled
  */
 
-module jt12_acc
-(
+module jt12_acc(
     input               rst,
     input               clk,
     input               clk_en,
@@ -48,7 +47,7 @@ module jt12_acc
     input               ch6op,
     input   [2:0]       alg,
     input               pcm_en, // only enabled for channel 6
-    input   [8:0]       pcm,
+    input   signed [8:0] pcm,
     // combined output
     output reg signed   [11:0]  left,
     output reg signed   [11:0]  right
@@ -67,20 +66,17 @@ always @(*) begin
     endcase
 end
 
-reg [8:0] pcm_data;
 reg pcm_sum;
 
 always @(posedge clk) if(clk_en)
     if( zero ) pcm_sum <= 1'b1;
     else if( ch6op ) pcm_sum <= 1'b0;
 
-always @(*)
-    pcm_data = pcm_sum ? { ~pcm[8], pcm[7:0] } : 9'd0;
-
 wire use_pcm = ch6op && pcm_en;
 wire sum_or_pcm = sum_en | use_pcm;
 wire left_en = rl[1];
 wire right_en= rl[0];
+wire signed [8:0] pcm_data = pcm_sum ? pcm : 9'd0;
 wire [8:0] acc_input =  use_pcm ? pcm_data : op_result;
 
 // Continuous output

@@ -91,7 +91,7 @@ wire    [ 2:0]  alg_I;
 wire    [ 2:0]  pms_I;
 wire    [ 1:0]  ams_IV;
 // PCM
-wire            pcm_en;
+wire            pcm_en, pcm_wr;
 wire    [ 8:0]  pcm;
 // Test
 wire            pg_stop, eg_stop;
@@ -142,6 +142,7 @@ jt12_mmr #(.use_ssg(use_ssg),.num_ch(num_ch),.use_pcm(use_pcm))
     // PCM
     .pcm        ( pcm           ),
     .pcm_en     ( pcm_en        ),
+    .pcm_wr     ( pcm_wr        ),
 
     // Operator
     .use_prevprev1  ( use_prevprev1     ),
@@ -348,6 +349,21 @@ generate
         assign fm_snd_right[3:0] = 4'd0;
         assign fm_snd_left [3:0] = 4'd0;
         assign snd_sample        = zero;
+        wire signed [8:0] pcm2;
+
+        // interpolate PCM samples with automatic sample rate detection
+        // this feature is not present in original YM2612
+        // this improves PCM sample sound greatly
+        jt12_pcm u_pcm(
+            .rst        ( rst       ),
+            .clk        ( clk       ),
+            .clk_en     ( clk_en    ),
+            .zero       ( zero      ),
+            .pcm        ( pcm       ),
+            .pcm_wr     ( pcm_wr    ),
+            .pcm_resampled ( pcm2   )
+        );
+
         jt12_acc #(.num_ch(num_ch)) u_acc(
             .rst        ( rst       ),
             .clk        ( clk       ),
@@ -363,7 +379,7 @@ generate
             .s4_enters  ( s3_enters ),
             .ch6op      ( ch6op     ),
             .pcm_en     ( pcm_en    ),  // only enabled for channel 6
-            .pcm        ( pcm       ),
+            .pcm        ( pcm2      ),
             .alg        ( alg_I     ),
             // combined output
             .left       ( fm_snd_left [15:4]  ),
