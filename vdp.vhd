@@ -97,7 +97,7 @@ architecture rtl of vdp is
 constant HDISP_START_256 : integer := 46;
 constant HDISP_SIZE_256  : integer := 256;
 constant HSYNC_START_256 : integer := 322;
-constant HSYNC_SZ_256    : integer := 32;
+constant HSYNC_SZ_256    : integer := 26;
 constant HTOTAL_256      : integer := 342;
 constant HDISP_END_256   : integer := HDISP_START_256+HDISP_SIZE_256;
 constant HBLANK_DMA1_256 : integer := (HDISP_END_256     ) mod HTOTAL_256;
@@ -110,7 +110,7 @@ constant OBJ_MAX_256     : integer := 64;
 constant HDISP_START_320 : integer := 46;
 constant HDISP_SIZE_320  : integer := 320;
 constant HSYNC_START_320 : integer := 390;
-constant HSYNC_SZ_320    : integer := 26;
+constant HSYNC_SZ_320    : integer := 32;
 constant HTOTAL_320      : integer := 428;
 constant HDISP_END_320   : integer := HDISP_START_320+HDISP_SIZE_320;
 constant HBLANK_DMA1_320 : integer := (HDISP_END_320     ) mod HTOTAL_320;
