@@ -71,6 +71,10 @@ module system
 	input         J3BUT,
 	input  [11:0] JOY_1,
 	input  [11:0] JOY_2,
+	input  [11:0] JOY_3,
+	input  [11:0] JOY_4,
+	input   [1:0] MULTITAP,
+
 	input  [24:0] MOUSE,
 	input   [2:0] MOUSE_OPT,
 
@@ -344,11 +348,15 @@ jt89 psg
 //--------------------------------------------------------------
 // I/O
 //--------------------------------------------------------------
-reg        IO_SEL;
-wire [7:0] IO_DO;
-wire       IO_DTACK_N;
+reg         IO_SEL;
+wire  [7:0] IO_DO;
+wire        IO_DTACK_N;
 
-gen_io io
+reg         JCART_SEL;
+wire [15:0] JCART_DO;
+wire        JCART_DTACK_N;
+
+multitap multitap
 (
 	.RESET(reset),
 	.CLK(MCLK),
@@ -382,8 +390,40 @@ gen_io io
 	.P2_Y(~JOY_2[10]),
 	.P2_Z(~JOY_2[11]),
 
+	.P3_UP(~JOY_3[3]),
+	.P3_DOWN(~JOY_3[2]),
+	.P3_LEFT(~JOY_3[1]),
+	.P3_RIGHT(~JOY_3[0]),
+	.P3_A(~JOY_3[4]),
+	.P3_B(~JOY_3[5]),
+	.P3_C(~JOY_3[6]),
+	.P3_START(~JOY_3[7]),
+	.P3_MODE(~JOY_3[8]),
+	.P3_X(~JOY_3[9]),
+	.P3_Y(~JOY_3[10]),
+	.P3_Z(~JOY_3[11]),
+
+	.P4_UP(~JOY_4[3]),
+	.P4_DOWN(~JOY_4[2]),
+	.P4_LEFT(~JOY_4[1]),
+	.P4_RIGHT(~JOY_4[0]),
+	.P4_A(~JOY_4[4]),
+	.P4_B(~JOY_4[5]),
+	.P4_C(~JOY_4[6]),
+	.P4_START(~JOY_4[7]),
+	.P4_MODE(~JOY_4[8]),
+	.P4_X(~JOY_4[9]),
+	.P4_Y(~JOY_4[10]),
+	.P4_Z(~JOY_4[11]),
+	
+	.FOURWAY_EN(MULTITAP == 1),
+	.TEAMPLAYER_EN(MULTITAP == 2),
+
 	.MOUSE(MOUSE),
 	.MOUSE_OPT(MOUSE_OPT),
+
+	.PAL(PAL),
+	.EXPORT(EXPORT),
 
 	.SEL(IO_SEL),
 	.A(MBUS_A[4:1]),
@@ -392,8 +432,9 @@ gen_io io
 	.DO(IO_DO),
 	.DTACK_N(IO_DTACK_N),
 
-	.PAL(PAL),
-	.EXPORT(EXPORT)
+	.JCART_SEL(JCART_SEL),
+	.JCART_DO(JCART_DO),
+	.JCART_DTACK_N(JCART_DTACK_N)
 );
 
 
@@ -517,10 +558,11 @@ always @(posedge MCLK) begin
 					MBUS_ROM_READ = 3,
 					MBUS_VDP_READ = 4,
 					MBUS_IO_READ  = 5,
-					MBUS_SRAM_READ= 6,
-					MBUS_ZBUS_PRE = 7,
-					MBUS_ZBUS_READ= 8,
-					MBUS_FINISH   = 9;
+					MBUS_JCRT_READ= 6,
+					MBUS_SRAM_READ= 7,
+					MBUS_ZBUS_PRE = 8,
+					MBUS_ZBUS_READ= 9,
+					MBUS_FINISH   = 10;
 
 	if (reset) begin
 		M68K_MBUS_DTACK_N <= 1;
@@ -576,8 +618,13 @@ always @(posedge MCLK) begin
 				//NO DEVICE (usually lockup on real HW)
 				mstate <= MBUS_FINISH;
 
-				//ROM: 000000-9FFFFF (A00000-DFFFFF)
-				if(MBUS_A[23:20]<'hA || (msrc == MSRC_Z80 && MBUS_A[23:20]<'hE && ROMSZ[24:20]>='hA)) begin
+				if ((MULTITAP == 3) && ({MBUS_A,1'b0} == 'h3FFFFE || {MBUS_A,1'b0} == 'h38FFFE)) begin
+					JCART_SEL <= 1;
+					mstate <= MBUS_JCRT_READ;
+				end
+				else if(MBUS_A[23:20]<'hA || (msrc == MSRC_Z80 && MBUS_A[23:20]<'hE && ROMSZ[24:20]>='hA)) begin
+					//ROM: 000000-9FFFFF (A00000-DFFFFF)
+
 					if (EEPROM_QUIRK && {MBUS_A,1'b0} == 'h200000) begin
 						data <= 0;
 						mstate <= MBUS_FINISH;
@@ -695,6 +742,13 @@ always @(posedge MCLK) begin
 			if(~IO_DTACK_N) begin
 				IO_SEL <= 0;
 				data <= {IO_DO, IO_DO};
+				mstate <= MBUS_FINISH;
+			end
+
+		MBUS_JCRT_READ:
+			if(~JCART_DTACK_N) begin
+				JCART_SEL <= 0;
+				data <= JCART_DO & 16'h3F7F;
 				mstate <= MBUS_FINISH;
 			end
 

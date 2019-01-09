@@ -370,6 +370,9 @@ set_global_assignment -name QIP_FILE jt89/jt89.qip
 set_global_assignment -name SYSTEMVERILOG_FILE compressor.sv
 set_global_assignment -name VHDL_FILE vdp.vhd
 set_global_assignment -name VERILOG_FILE gen_io.v
+set_global_assignment -name SYSTEMVERILOG_FILE teamplayer.sv
+set_global_assignment -name VERILOG_FILE fourway.v
+set_global_assignment -name SYSTEMVERILOG_FILE multitap.sv
 set_global_assignment -name VHDL_FILE dpram.vhd
 set_global_assignment -name SYSTEMVERILOG_FILE ddram.sv
 set_global_assignment -name SYSTEMVERILOG_FILE system.sv
