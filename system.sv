@@ -463,35 +463,21 @@ end
 //-----------------------------------------------------------------------
 reg SRAM_SEL;
 
-dpram #(15) sram_u
+dpram_dif #(16,8,15,16) sram
 (
 	.clock(MCLK),
-	.address_a(MBUS_A[15:1]),
-	.data_a(MBUS_DO[15:8]),
-	.wren_a(SRAM_SEL & ~MBUS_RNW & ~MBUS_UDS_N),
-	.q_a(sram_q[15:8]),
-
-	.address_b(LOADING ? ram_rst_a : BRAM_A[14:0]),
-	.data_b(LOADING ? 8'h00 : BRAM_DI[15:8]),
-	.wren_b(LOADING | BRAM_WE),
-	.q_b(BRAM_DO[15:8])
-);
-
-dpram #(15) sram_l
-(
-	.clock(MCLK),
-	.address_a(MBUS_A[15:1]),
+	.address_a(MBUS_A[16:1]),
 	.data_a(MBUS_DO[7:0]),
-	.wren_a(SRAM_SEL & ~MBUS_RNW & ~MBUS_LDS_N),
+	.wren_a(SRAM_SEL & ~MBUS_RNW),
 	.q_a(sram_q[7:0]),
 
-	.address_b(LOADING ? ram_rst_a : BRAM_A[14:0]),
-	.data_b(LOADING ? 8'h00 : BRAM_DI[7:0]),
+	.address_b(LOADING ? ram_rst_a : BRAM_A),
+	.data_b(LOADING ? 16'h0000 : BRAM_DI),
 	.wren_b(LOADING | BRAM_WE),
-	.q_b(BRAM_DO[7:0])
+	.q_b(BRAM_DO)
 );
-wire [15:0] sram_q;
 
+wire [7:0] sram_q;
 
 //-----------------------------------------------------------------------
 // 68K RAM
@@ -618,11 +604,7 @@ always @(posedge MCLK) begin
 				//NO DEVICE (usually lockup on real HW)
 				mstate <= MBUS_FINISH;
 
-				if ((MULTITAP == 3) && ({MBUS_A,1'b0} == 'h3FFFFE || {MBUS_A,1'b0} == 'h38FFFE)) begin
-					JCART_SEL <= 1;
-					mstate <= MBUS_JCRT_READ;
-				end
-				else if(MBUS_A[23:20]<'hA || (msrc == MSRC_Z80 && MBUS_A[23:20]<'hE && ROMSZ[24:20]>='hA)) begin
+				if(MBUS_A[23:20]<'hA || (msrc == MSRC_Z80 && MBUS_A[23:20]<'hE && ROMSZ[24:20]>='hA)) begin
 					//ROM: 000000-9FFFFF (A00000-DFFFFF)
 
 					if (EEPROM_QUIRK && {MBUS_A,1'b0} == 'h200000) begin
@@ -636,6 +618,10 @@ always @(posedge MCLK) begin
 					else if (MBUS_A < ROMSZ) begin
 						ROM_REQ <= ~ROM_ACK;
 						mstate <= MBUS_ROM_READ;
+					end
+					else if ((MULTITAP == 3) && ({MBUS_A,1'b0} == 'h3FFFFE || {MBUS_A,1'b0} == 'h38FFFE)) begin
+						JCART_SEL <= 1;
+						mstate <= MBUS_JCRT_READ;
 					end
 					else if(MBUS_A[23:21] == 1 && ~&MBUS_A[20:19]) begin
 						// 200000-37FFFF
@@ -727,7 +713,7 @@ always @(posedge MCLK) begin
 
 		MBUS_SRAM_READ:
 			begin
-				data <= sram_q;
+				data <= {sram_q,sram_q};
 				mstate <= MBUS_FINISH;
 			end
 

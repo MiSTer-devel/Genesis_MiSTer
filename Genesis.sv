@@ -133,14 +133,10 @@ localparam CONF_STR1 = {
 	"-;",
 };
 localparam CONF_STR2 = {
-	"DE,Save Slot,1,2,3,4;"
-};
-
-localparam CONF_STR3 = {
 	"G,Load Backup RAM;"
 };
 
-localparam CONF_STR4 = {
+localparam CONF_STR3 = {
 	"H,Save Backup RAM;",
 	"-;",
 	"O9,Aspect ratio,4:3,16:9;",
@@ -188,12 +184,12 @@ wire        forced_scandoubler;
 wire [10:0] ps2_key;
 wire [24:0] ps2_mouse;
 
-hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR3)>>3) + ($size(CONF_STR4)>>3) + 3), .PS2DIV(1000), .WIDE(1)) hps_io
+hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR3)>>3) + 2), .PS2DIV(1000), .WIDE(1)) hps_io
 (
 	.clk_sys(clk_sys),
 	.HPS_BUS(HPS_BUS),
 
-	.conf_str({CONF_STR1,bk_ena ? "O" : "+",CONF_STR2,bk_ena ? "R" : "+",CONF_STR3,bk_ena ? "R" : "+",CONF_STR4}),
+	.conf_str({CONF_STR1,bk_ena ? "R" : "+",CONF_STR2,bk_ena ? "R" : "+",CONF_STR3}),
 	.joystick_0(joystick_0),
 	.joystick_1(joystick_1),
 	.joystick_2(joystick_2),
@@ -497,7 +493,10 @@ reg  bk_loading = 0;
 reg  bk_state   = 0;
 
 always @(posedge clk_sys) begin
+	reg old_downloading = 0;
 	reg old_load = 0, old_save = 0, old_ack;
+
+	old_downloading <= downloading;
 
 	old_load <= bk_load;
 	old_save <= bk_save;
@@ -509,9 +508,16 @@ always @(posedge clk_sys) begin
 		if(bk_ena & ((~old_load & bk_load) | (~old_save & bk_save))) begin
 			bk_state <= 1;
 			bk_loading <= bk_load;
-			sd_lba <= {23'd0,status[14:13],7'd0};
+			sd_lba <= 0;
 			sd_rd <=  bk_load;
 			sd_wr <= ~bk_load;
+		end
+		if(old_downloading & ~ioctl_download & bk_ena) begin
+			bk_state <= 1;
+			bk_loading <= 1;
+			sd_lba <= 0;
+			sd_rd <= 1;
+			sd_wr <= 0;
 		end
 	end else begin
 		if(old_ack & ~sd_ack) begin
