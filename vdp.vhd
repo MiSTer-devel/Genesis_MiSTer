@@ -93,6 +93,7 @@ architecture rtl of vdp is
 ----------------------------------------------------------------
 -- Video parameters
 ----------------------------------------------------------------
+constant HTOTAL_MCLKS_SZ : integer := 3420;
 
 constant HDISP_START_256 : integer := 46;
 constant HDISP_SIZE_256  : integer := 256;
@@ -139,9 +140,9 @@ constant VSYNC_SIZE      : integer := 3;
 constant VSYNC_START_256i: integer := (HSYNC_START_256 + (HTOTAL_256/2)) mod HTOTAL_256;
 constant VSYNC_START_320i: integer := (HSYNC_START_320 + (HTOTAL_320/2)) mod HTOTAL_320;
 
+signal H_MCLKS_COUNT     : std_logic_vector(11 downto 0);
 signal HDISP_START 		 : std_logic_vector(8 downto 0);
 signal HDISP_SIZE   		 : std_logic_vector(8 downto 0);
-signal HTOTAL    	 		 : std_logic_vector(8 downto 0);
 signal HSYNC_START 		 : std_logic_vector(8 downto 0);
 signal HSYNC_SZ    		 : std_logic_vector(8 downto 0);
 
@@ -1613,7 +1614,6 @@ end process;
 ----------------------------------------------------------------
 HDISP_START <= conv_std_logic_vector(HDISP_START_320,9)  when H40='1'  else conv_std_logic_vector(HDISP_START_256,9);
 HDISP_SIZE  <= conv_std_logic_vector(HDISP_SIZE_320,9)   when H40='1'  else conv_std_logic_vector(HDISP_SIZE_256,9);
-HTOTAL      <= conv_std_logic_vector(HTOTAL_320,9)       when H40='1'  else conv_std_logic_vector(HTOTAL_256,9);
 HSYNC_START <= conv_std_logic_vector(HSYNC_START_320,9)  when H40='1'  else conv_std_logic_vector(HSYNC_START_256,9);
 HSYNC_SZ    <= conv_std_logic_vector(HSYNC_SZ_320,9)     when H40='1'  else conv_std_logic_vector(HSYNC_SZ_256,9);
 
@@ -1655,6 +1655,7 @@ begin
 		PIXDIV <= (others => '0');
 		V_CNT <= (others => '0');
 		H_CNT <= (others => '0');
+        H_MCLKS_COUNT <= (others => '0');
 
 		T80_VINT <= '0';
 		TG68_VINT_PENDING <= '0';
@@ -1702,9 +1703,6 @@ begin
 			CE_PIX <= '1';
 
 			H_CNT <= H_CNT + 1;
-			if H_CNT >= HTOTAL-1 then
-				H_CNT <= (others => '0');
-			end if;
 
 			if (LSM(0) /= ODD and H_CNT = VSYNC_STARTi) or -- interlace even
 			   (LSM(0)  = ODD and H_CNT = 0) then          -- interlace odd / progressive
@@ -1847,6 +1845,14 @@ begin
 				SP2_EN <= '1'; --Sprite mapping slots in every two cells
 			end if;
 		end if;
+
+        H_MCLKS_COUNT <= H_MCLKS_COUNT + 1;
+        if H_MCLKS_COUNT = HTOTAL_MCLKS_SZ-1 then -- end of line reached
+            H_MCLKS_COUNT <= (others => '0');
+            PIXDIV <= (others => '0');
+            H_CNT <= (others => '0');
+        end if;
+
 	end if;
 end process;
 
