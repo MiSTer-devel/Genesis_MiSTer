@@ -441,21 +441,7 @@ multitap multitap
 //-----------------------------------------------------------------------
 // ROM
 //-----------------------------------------------------------------------
-assign ROM_ADDR = use_map ? {map[MBUS_A[21:19]], MBUS_A[18:1]} : MBUS_A;
-
-//SSF2 mapper
-reg [5:0] map[8];
-reg       use_map = 0;
-always @(posedge MCLK) begin
-	if(reset) begin
-		map <= '{0,1,2,3,4,5,6,7};
-		use_map <= 0;
-	end
-	else if(~MBUS_RNW && MBUS_A[23:4] == 20'hA130F && MBUS_A[3:1]) begin
-		map[MBUS_A[3:1]] <= MBUS_DO[5:0];
-		use_map <= 1;
-	end
-end
+assign ROM_ADDR = (BANK_MODE == 2'h2) ? {BANK_REG[MBUS_A[21:19]], MBUS_A[18:1]} : MBUS_A;
 
 
 //-----------------------------------------------------------------------
@@ -528,6 +514,9 @@ reg        MBUS_RNW;
 reg        MBUS_UDS_N;
 reg        MBUS_LDS_N;
 
+reg [5:0]  BANK_REG[8];
+reg [1:0]  BANK_MODE; //0 = none, 1 = BANK SRAM, 2 = BANK ROM
+
 always @(posedge MCLK) begin
 	reg  [3:0] mstate;
 	reg  [1:0] msrc;
@@ -557,6 +546,8 @@ always @(posedge MCLK) begin
 		VDP_SEL <= 0;
 		IO_SEL <= 0;
 		ZBUS_SEL <= 0;
+		BANK_MODE <= 0;
+		BANK_REG <= '{0,1,2,3,4,5,6,7};
 		mstate <= MBUS_IDLE;
 		MBUS_RNW <= 1;
 	end
@@ -606,8 +597,12 @@ always @(posedge MCLK) begin
 
 				if(MBUS_A[23:20]<'hA || (msrc == MSRC_Z80 && MBUS_A[23:20]<'hE && ROMSZ[24:20]>='hA)) begin
 					//ROM: 000000-9FFFFF (A00000-DFFFFF)
-
-					if (EEPROM_QUIRK && {MBUS_A,1'b0} == 'h200000) begin
+					if (BANK_MODE == 2'h1 && MBUS_A[23:21] == 1) begin
+						// 200000-3FFFFF SRAM overrides ROM when bank is selected
+						SRAM_SEL <= 1;
+						mstate <= MBUS_SRAM_READ;
+					end
+					else if (EEPROM_QUIRK && {MBUS_A,1'b0} == 'h200000) begin
 						data <= 0;
 						mstate <= MBUS_FINISH;
 					end
@@ -647,6 +642,19 @@ always @(posedge MCLK) begin
 					if(MBUS_A[23:12] == 12'hA11 && !MBUS_A[7:1]) begin
 						CTRL_SEL <= 1;
 						data <= CTRL_DO;
+						mstate <= MBUS_FINISH;
+					end
+
+					// BANK Register A130FX
+					if (MBUS_A[23:4] == 'hA130F && ~MBUS_RNW) begin
+						if (ROMSZ > 'h200000) begin // SSF2 ROM banking
+							if (MBUS_A[3:1]) begin
+								BANK_REG[MBUS_A[3:1]] <= MBUS_DO[5:0];
+								BANK_MODE <= 2'h2;
+							end
+						end else begin // SRAM Banking
+							BANK_MODE <= {1'b0, MBUS_DO[0]};
+						end
 						mstate <= MBUS_FINISH;
 					end
 
