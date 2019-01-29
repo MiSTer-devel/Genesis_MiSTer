@@ -104,7 +104,9 @@ module emu
 	input         UART_RXD,
 	output        UART_TXD,
 	output        UART_DTR,
-	input         UART_DSR
+	input         UART_DSR,
+
+	input         OSD_STATUS
 );
 
 //`define SOUND_DBG
