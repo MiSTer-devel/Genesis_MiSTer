@@ -18,14 +18,14 @@ module  pll_0002(
 );
 
 	altera_pll #(
-		.fractional_vco_multiplier("false"),
+		.fractional_vco_multiplier("true"),
 		.reference_clock_frequency("50.0 MHz"),
 		.operation_mode("direct"),
 		.number_of_clocks(2),
-		.output_clock_frequency0("54.000000 MHz"),
+		.output_clock_frequency0("53.693175 MHz"),
 		.phase_shift0("0 ps"),
 		.duty_cycle0(50),
-		.output_clock_frequency1("108.000000 MHz"),
+		.output_clock_frequency1("107.386350 MHz"),
 		.phase_shift1("0 ps"),
 		.duty_cycle1(50),
 		.output_clock_frequency2("0 MHz"),
