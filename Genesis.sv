@@ -123,7 +123,7 @@ assign AUDIO_MIX = 0;
 
 assign LED_DISK  = 0;
 assign LED_POWER = 0;
-assign LED_USER  = ioctl_download;
+assign LED_USER  = ioctl_download | sav_pending;
 
 `include "build_id.v"
 localparam CONF_STR1 = {
@@ -140,6 +140,7 @@ localparam CONF_STR2 = {
 
 localparam CONF_STR3 = {
 	"H,Save Backup RAM;",
+	"OD,Autosave,No,Yes;",
 	"-;",
 	"O9,Aspect ratio,4:3,16:9;",
 	"O13,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
@@ -263,6 +264,7 @@ system system
 	.SRAM_QUIRK(sram_quirk),
 	.EEPROM_QUIRK(eeprom_quirk),
 	.ZBUS_QUIRK(zbus_quirk),
+	.NORAM_QUIRK(noram_quirk),
 
 	.DAC_LDATA(audio_l),
 	.DAC_RDATA(audio_r),
@@ -301,6 +303,7 @@ system system
 	.BRAM_DI(sd_buff_dout),
 	.BRAM_DO(sd_buff_din),
 	.BRAM_WE(sd_buff_wr & sd_ack),
+	.BRAM_CHANGE(bk_change),
 
 	.ROMSZ(ioctl_addr[24:1]),
 	.ROM_ADDR(rom_addr),
@@ -439,12 +442,13 @@ reg sram_quirk = 0;
 reg eeprom_quirk = 0;
 reg fifo_quirk = 0;
 reg zbus_quirk = 0;
+reg noram_quirk = 0;
 always @(posedge clk_sys) begin
 	reg [55:0] cart_id;
 	reg old_download, old_reset;
 	old_download <= ioctl_download;
 
-	if(~old_download && ioctl_download) {zbus_quirk,fifo_quirk,eeprom_quirk,sram_quirk} <= 0;
+	if(~old_download && ioctl_download) {zbus_quirk,fifo_quirk,eeprom_quirk,sram_quirk,noram_quirk} <= 0;
 
 	if(ioctl_wr) begin
 		if(ioctl_addr == 'h182) cart_id[55:48] <= {ioctl_data[15:8]};
@@ -466,6 +470,7 @@ always @(posedge clk_sys) begin
 			else if({cart_id,ioctl_data[7:0]} == "T-12046 ") eeprom_quirk <= 1; // Mega Man - The Wily Wars 
 			else if({cart_id,ioctl_data[7:0]} == "T-12053 ") eeprom_quirk <= 1; // Rockman Mega World 
 			else if({cart_id,ioctl_data[7:0]} == "G-4524  ") eeprom_quirk <= 1; // Ninja Burai Densetsu
+			else if({cart_id,ioctl_data[7:0]} == "T-113016") noram_quirk <= 1;  // Puggsy fake ram check
 			else if({cart_id,ioctl_data[7:0]} == "T-89016 ") fifo_quirk <= 1;   // Clue
 			else if({cart_id,ioctl_data[7:0]} == "00001009") fifo_quirk <= 1;   // Sonic
 			else if({cart_id,ioctl_data[7:0]} == "00004049") fifo_quirk <= 1;   // Sonic JP
@@ -476,9 +481,13 @@ end
 
 /////////////////////////  BRAM SAVE/LOAD  /////////////////////////////
 
+
 wire downloading = ioctl_download;
 
 reg bk_ena = 0;
+reg sav_pending = 0;
+wire bk_change;
+
 always @(posedge clk_sys) begin
 	reg old_downloading = 0;
 
@@ -487,10 +496,15 @@ always @(posedge clk_sys) begin
 
 	//Save file always mounted in the end of downloading state.
 	if(downloading && img_mounted && img_size && !img_readonly) bk_ena <= 1;
+
+	if (bk_change & ~OSD_STATUS)
+		sav_pending <= 1'b1;
+	else if (bk_state)
+		sav_pending <= 1'b0;
 end
 
 wire bk_load    = status[16];
-wire bk_save    = status[17];
+wire bk_save    = status[17] | (sav_pending & OSD_STATUS & status[13]);
 reg  bk_loading = 0;
 reg  bk_state   = 0;
 
