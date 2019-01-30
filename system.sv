@@ -50,11 +50,13 @@ module system
 	input         SRAM_QUIRK,
 	input         EEPROM_QUIRK,
 	input         ZBUS_QUIRK,
-	
+	input         NORAM_QUIRK,
+
 	input  [14:0] BRAM_A,
 	input  [15:0] BRAM_DI,
 	output [15:0] BRAM_DO,
 	input         BRAM_WE,
+	output        BRAM_CHANGE,
 
 	output  [3:0] RED,
 	output  [3:0] GREEN,
@@ -464,6 +466,7 @@ dpram_dif #(16,8,15,16) sram
 );
 
 wire [7:0] sram_q;
+assign BRAM_CHANGE = (SRAM_SEL & ~MBUS_RNW);
 
 //-----------------------------------------------------------------------
 // 68K RAM
@@ -618,7 +621,7 @@ always @(posedge MCLK) begin
 						JCART_SEL <= 1;
 						mstate <= MBUS_JCRT_READ;
 					end
-					else if(MBUS_A[23:21] == 1 && ~&MBUS_A[20:19]) begin
+					else if(MBUS_A[23:21] == 1 && ~&MBUS_A[20:19] && ~NORAM_QUIRK) begin
 						// 200000-37FFFF
 						SRAM_SEL <= 1;
 						mstate <= MBUS_SRAM_READ;
