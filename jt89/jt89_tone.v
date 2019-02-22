@@ -52,8 +52,8 @@ always @(posedge clk)
         if( tone==10'd0 || tone==10'd1 )    // special case. This is used for sample playing.
             out <= 1'b1;
         else begin
-            if( cnt[9:0]==10'd0 ) begin 
-                cnt[9:0] <= tone;
+            if( cnt[9:0]==10'd1 ) begin 
+                cnt[9:0] <= (tone==10'd0) ? 10'd1 : tone;
                 out <= ~out;
             end
             else cnt <= cnt-10'b1;

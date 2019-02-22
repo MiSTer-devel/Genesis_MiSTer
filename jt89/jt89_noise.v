@@ -34,7 +34,7 @@ module jt89_noise(
 );
 
 reg [15:0] shift;
-reg [ 9:0] cnt;
+reg [10:0] cnt;
 reg        update;
 
 jt89_vol u_vol(
@@ -50,19 +50,17 @@ reg v;
 
 always @(posedge clk) 
     if( rst ) begin
-        cnt <= 10'd0;
-        v   <= 1'b1;
+        cnt <= 11'd0;
     end else if( clk_en ) begin
-        if( cnt==10'd1 ) begin
+        if( cnt==11'd1 ) begin
             case( ctrl3[1:0] )
-                2'd0: cnt <= 10'h10; // clk_en already divides by 16
-                2'd1: cnt <= 10'h20;
-                2'd2: cnt <= 10'h40;
-                2'd3: cnt <= tone2;
+                2'd0: cnt <= 11'h20; // clk_en already divides by 16
+                2'd1: cnt <= 11'h40;
+                2'd2: cnt <= 11'h80;
+                2'd3: cnt <= (tone2 == 11'd0) ? 11'h02 : {tone2, 1'b0};
             endcase
-            v <= ~v;
         end else begin
-            cnt <= cnt-10'b1;
+            cnt <= cnt-11'b1;
         end
     end
 
@@ -72,7 +70,7 @@ always @(posedge clk)
     if( rst || clr )
         shift <= { 1'b1, 15'd0 };
     else if( clk_en ) begin
-        if( !v ) begin
+        if( cnt==11'd1 ) begin
             shift <= (|shift == 1'b0) ? {1'b1, 15'd0 } : {fb, shift[15:1]};
         end
     end

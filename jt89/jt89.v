@@ -97,7 +97,7 @@ always @(posedge clk)
                 3'b00_0: if( din[7] ) tone0[3:0]<=din[3:0]; else tone0[9:4]<=din[5:0];
                 3'b01_0: if( din[7] ) tone1[3:0]<=din[3:0]; else tone1[9:4]<=din[5:0];
                 3'b10_0: if( din[7] ) tone2[3:0]<=din[3:0]; else tone2[9:4]<=din[5:0];
-                3'b11_0: if( din[7] ) ctrl3 <= din[2:0];
+                3'b11_0: ctrl3 <= din[2:0]; //Need to update these every time.
                 3'b00_1: vol0  <= din[3:0];
                 3'b01_1: vol1  <= din[3:0];
                 3'b10_1: vol2  <= din[3:0];
