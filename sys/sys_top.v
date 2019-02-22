@@ -90,7 +90,10 @@ module sys_top
 	input   [3:0] SW,
 
 	////////// MB LED ///////////
-	output  [7:0] LED
+	output  [7:0] LED,
+
+	////////// USBIO ////////////
+	inout [15:10] ARDUINO_IO
 );
 
 
@@ -928,6 +931,24 @@ alsa alsa
 	.pcm_r(alsa_r)
 );
 
+
+////////////////  User I/O (USB 3.0 connector) /////////////////////////
+
+assign ARDUINO_IO[15] =                       !user_out[0]  ? 1'b0 : 1'bZ;
+assign ARDUINO_IO[14] =                       !user_out[1]  ? 1'b0 : 1'bZ;
+assign ARDUINO_IO[13] = !(SW[1] ? HDMI_I2S   : user_out[2]) ? 1'b0 : 1'bZ;
+assign ARDUINO_IO[12] =                       !user_out[3]  ? 1'b0 : 1'bZ;
+assign ARDUINO_IO[11] = !(SW[1] ? HDMI_SCLK  : user_out[4]) ? 1'b0 : 1'bZ;
+assign ARDUINO_IO[10] = !(SW[1] ? HDMI_LRCLK : user_out[5]) ? 1'b0 : 1'bZ;
+
+assign user_in[0] =         ARDUINO_IO[15];
+assign user_in[1] =         ARDUINO_IO[14];
+assign user_in[2] = SW[1] | ARDUINO_IO[13];
+assign user_in[3] =         ARDUINO_IO[12];
+assign user_in[4] = SW[1] | ARDUINO_IO[11];
+assign user_in[5] = SW[1] | ARDUINO_IO[10];
+
+
 ///////////////////  User module connection ////////////////////////////
 
 wire [15:0] audio_ls, audio_rs;
@@ -964,6 +985,8 @@ wire        uart_rts;
 wire        uart_rxd;
 wire        uart_txd;
 wire        osd_status;
+
+wire  [5:0] user_out, user_in;
 
 emu emu
 (
@@ -1031,6 +1054,9 @@ emu emu
 	.UART_TXD(uart_rxd),
 	.UART_DTR(uart_dsr),
 	.UART_DSR(uart_dtr),
+
+	.USER_OUT(user_out),
+	.USER_IN(user_in),
 
 	.OSD_STATUS(osd_status)
 );

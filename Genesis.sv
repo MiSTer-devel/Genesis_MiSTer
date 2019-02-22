@@ -106,11 +106,18 @@ module emu
 	output        UART_DTR,
 	input         UART_DSR,
 
+	// Open-drain User port.
+	// 0 - D+/RX
+	// 1 - D-/TX
+	// 2..5 - USR1..USR4
+	// Set USER_OUT to 1 to read from USER_IN.
+	input   [5:0] USER_IN,
+	output  [5:0] USER_OUT,
+
 	input         OSD_STATUS
 );
 
-//`define SOUND_DBG
-
+assign USER_OUT = '1;
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 assign {SDRAM_DQ, SDRAM_A, SDRAM_BA, SDRAM_CLK, SDRAM_CKE, SDRAM_DQML, SDRAM_DQMH, SDRAM_nWE, SDRAM_nCAS, SDRAM_nRAS, SDRAM_nCS} = 'Z;
@@ -124,6 +131,9 @@ assign AUDIO_MIX = 0;
 assign LED_DISK  = 0;
 assign LED_POWER = 0;
 assign LED_USER  = ioctl_download | sav_pending;
+
+
+//`define SOUND_DBG
 
 `include "build_id.v"
 localparam CONF_STR1 = {
