@@ -104,8 +104,8 @@ reg [1:0]  JCNT2;
 reg [16:0] JTMR1;
 reg [16:0] JTMR2;
 
-wire [7:0] TDATA = {DATA[7:6] | ~CTLA[7:6], DATA[5:0] & CTLA[5:0]};
-wire [7:0] TDATB = {DATB[7:6] | ~CTLB[7:6], DATB[5:0] & CTLB[5:0]};
+wire [7:0] TDATA = CTLA & DATA;
+wire [7:0] TDATB = CTLB & DATB;
 
 wire THA = DATA[6] | ~CTLA[6];
 wire TRA = DATA[5] | ~CTLA[5];
@@ -143,10 +143,10 @@ always @(posedge RESET or posedge CLK) begin
 		JCNT2 <= 0;
 	end
 	else if(CE) begin
-		if(JTMR1 > 123000) JCNT1 <= 0;
+		if(JTMR1 > 11600 || J3BUT) JCNT1 <= 0;
 		else if(DATA[6]) JTMR1 <= JTMR1 + 1'd1;
 
-		if(JTMR2 > 123000) JCNT2 <= 0;
+		if(JTMR2 > 11600 || J3BUT) JCNT2 <= 0;
 		else if(DATB[6]) JTMR2 <= JTMR2 + 1'd1;
 
 		THAd <= THA;
@@ -160,7 +160,7 @@ always @(posedge RESET or posedge CLK) begin
 			JTMR2 <= 0;
 			JCNT2 <= JCNT2 + 1'd1;
 		end
-
+		
 		if(~SEL) DTACK_N <= 1;
 		else if(SEL & DTACK_N) begin
 			if(~RNW) begin
@@ -187,22 +187,22 @@ always @(posedge RESET or posedge CLK) begin
 				// Read
 				case(A)
 					4'h0: DO <= {EXPORT, PAL, 6'h20};
-					4'h1: if(MOUSE_OPT[0])             DO <= {DATA[7:5] | ~CTLA[7:5], TDATA[4:0]} | (~CTLA[4:0] & mdata);
+					4'h1: if(MOUSE_OPT[0])     DO <= TDATA | (~CTLA[4:0] & mdata);
 							else if(THA)
-								if (J3BUT || JCNT1 != 3)  DO <= TDATA | (~CTLA[5:0] & {P1_C,P1_B,P1_RIGHT,P1_LEFT,P1_DOWN,P1_UP});
-								else                      DO <= TDATA | (~CTLA[5:0] & {P1_C,P1_B,P1_MODE,P1_X,P1_Y,P1_Z});
-							else if (J3BUT || JCNT1 < 2) DO <= TDATA | (~CTLA[5:0] & {P1_START,P1_A,2'b00,P1_DOWN,P1_UP});
-							else if (JCNT1 == 2)         DO <= TDATA | (~CTLA[5:0] & {P1_START,P1_A,4'b0000});
-							else                         DO <= TDATA | (~CTLA[5:0] & {P1_START,P1_A,4'b1111});
+								if (JCNT1 != 3)   DO <= TDATA | (~CTLA[5:0] & {P1_C,P1_B,P1_RIGHT,P1_LEFT,P1_DOWN,P1_UP});
+								else              DO <= TDATA | (~CTLA[5:0] & {P1_C,P1_B,P1_MODE,P1_X,P1_Y,P1_Z});
+							else if (JCNT1 < 2)  DO <= TDATA | (~CTLA[5:0] & {P1_START,P1_A,2'b00,P1_DOWN,P1_UP});
+							else if (JCNT1 == 2) DO <= TDATA | (~CTLA[5:0] & {P1_START,P1_A,4'b0000});
+							else                 DO <= TDATA | (~CTLA[5:0] & {P1_START,P1_A,4'b1111});
 
-					4'h2: if(MOUSE_OPT[1])             DO <= {DATB[7:5] | ~CTLB[7:5], TDATB[4:0]} | (~CTLB[4:0] & mdata);
+					4'h2: if(MOUSE_OPT[1])     DO <= TDATB | (~CTLB[4:0] & mdata);
 							else if(THB)
-								if (J3BUT || JCNT2 != 3)  DO <= TDATB | (~CTLB[5:0] & {P2_C,P2_B,P2_RIGHT,P2_LEFT,P2_DOWN,P2_UP});
-								else                      DO <= TDATB | (~CTLB[5:0] & {P2_C,P2_B,P2_MODE,P2_X,P2_Y,P2_Z});
-							else if (J3BUT || JCNT2 < 2) DO <= TDATB | (~CTLB[5:0] & {P2_START,P2_A,2'b00,P2_DOWN,P2_UP});
-							else if (JCNT2 == 2)         DO <= TDATB | (~CTLB[5:0] & {P2_START,P2_A,4'b0000});
-							else                         DO <= TDATB | (~CTLB[5:0] & {P2_START,P2_A,4'b1111});
-					4'h3: DO <= DATC | ~CTLC; // Unconnected port
+								if (JCNT2 != 3)   DO <= TDATB | (~CTLB[5:0] & {P2_C,P2_B,P2_RIGHT,P2_LEFT,P2_DOWN,P2_UP});
+								else              DO <= TDATB | (~CTLB[5:0] & {P2_C,P2_B,P2_MODE,P2_X,P2_Y,P2_Z});
+							else if (JCNT2 < 2)  DO <= TDATB | (~CTLB[5:0] & {P2_START,P2_A,2'b00,P2_DOWN,P2_UP});
+							else if (JCNT2 == 2) DO <= TDATB | (~CTLB[5:0] & {P2_START,P2_A,4'b0000});
+							else                 DO <= TDATB | (~CTLB[5:0] & {P2_START,P2_A,4'b1111});
+					4'h3: DO <= DATC & CTLC; // Unconnected port
 					4'h4: DO <= CTLA;
 					4'h5: DO <= CTLB;
 					4'h6: DO <= CTLC;

@@ -72,7 +72,7 @@ always @(posedge RESET or posedge CLK) begin
 		JCNT <= 0;
 	end
 	else if(CE) begin
-		if(JTMR > 123000) JCNT <= 0;
+		if(JTMR > 11600 || J3BUT) JCNT <= 0;
 		else if(TH) JTMR <= JTMR + 1'd1;
 
 		if(~SEL) DTACK_N <= 1;
@@ -88,11 +88,11 @@ always @(posedge RESET or posedge CLK) begin
 			else begin
 				// Read
 				if(TH)
-					if (J3BUT || JCNT != 3)  DO <= {1'b0,TH,P_C,P_B,P_RIGHT,P_LEFT,P_DOWN,P_UP};
-					else                     DO <= {1'b0,TH,P_C,P_B,P_MODE,P_X,P_Y,P_Z};
-				else if (J3BUT || JCNT < 2) DO <= {1'b0,TH,P_START,P_A,2'b00,P_DOWN,P_UP};
-				else if (JCNT == 2)         DO <= {1'b0,TH,P_START,P_A,4'b0000};
-				else                        DO <= {1'b0,TH,P_START,P_A,4'b1111};
+					if (JCNT != 3)   DO <= {1'b0,TH,P_C,P_B,P_RIGHT,P_LEFT,P_DOWN,P_UP};
+					else             DO <= {1'b0,TH,P_C,P_B,P_MODE,P_X,P_Y,P_Z};
+				else if (JCNT < 2)  DO <= {1'b0,TH,P_START,P_A,2'b00,P_DOWN,P_UP};
+				else if (JCNT == 2) DO <= {1'b0,TH,P_START,P_A,4'b0000};
+				else                DO <= {1'b0,TH,P_START,P_A,4'b1111};
 			end
 			DTACK_N <= 0;
 		end 
