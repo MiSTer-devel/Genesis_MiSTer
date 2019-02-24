@@ -112,7 +112,7 @@ constant HDISP_START_320 : integer := 46;
 constant HDISP_SIZE_320  : integer := 320;
 constant HSYNC_START_320 : integer := 393;
 constant HSYNC_SZ_320    : integer := 32;
-constant HTOTAL_320      : integer := 428;
+constant HTOTAL_320      : integer := 427;
 constant HDISP_END_320   : integer := HDISP_START_320+HDISP_SIZE_320;
 constant HBLANK_DMA1_320 : integer := (HDISP_END_320     ) mod HTOTAL_320;
 constant HBLANK_DMA2_320 : integer := (HBLANK_DMA1_320   ) mod HTOTAL_320;
@@ -638,6 +638,8 @@ port map(
 	q_a			=> VSRAM_Q0,
 
 	address_b	=> VSRAM_NUMA,
+	data_b		=> (others => '0'),
+	wren_b		=> not RST_N,
 	q_b			=> VSRAM_BGA
 );
 
@@ -650,6 +652,8 @@ port map(
 	q_a			=> VSRAM_Q1,
 
 	address_b	=> VSRAM_NUMB,
+	data_b		=> (others => '0'),
+	wren_b		=> not RST_N,
 	q_b			=> VSRAM_BGB
 );
 
@@ -812,145 +816,148 @@ process( RST_N, CLK )
 	variable CELLY				: std_logic_vector(6 downto 0);
 	variable Y					: std_logic_vector(8 downto 0);
 begin
-	if RST_N = '0' then
-		BGB_SEL <= '0';
-		BGBC <= BGC_INIT;
-		BGB_COLINFO_WE_A <= '0';
-	elsif rising_edge(CLK) then
-		BGB_COLINFO_WE_A <= '0';
-
-		case BGBC is
-		when BGC_INIT =>
-			if BGEN_ACTIVE = '1' then
-				case HSCR is -- Horizontal scroll mode
-				when "00" => BGB_VRAM_ADDR <= HSCB & "000000001";
-				when "01" => BGB_VRAM_ADDR <= HSCB & "00000" & BG_Y(2 downto 0) & '1';
-				when "10" => BGB_VRAM_ADDR <= HSCB & BG_Y(7 downto 3) & "0001";
-				when "11" => BGB_VRAM_ADDR <= HSCB & BG_Y(7 downto 0) & '1';
-				when others => null;
-
-				end case;
-				if INTERLACE_FF = '1' then
-					Y := BG_Y(7 downto 0) & ODD;
-				else
-					Y := '0'&BG_Y(7 downto 0);
-				end if;
-
-				BGB_SEL <= '1';
-				BGBC <= BGC_HS_RD;
-			end if;
-
-		when BGC_HS_RD =>
-			if BGB_ACK_N = '0' then
-				V_BGB_XSTART := "0000000000" - BGB_VRAM_DO(9 downto 0);
-				BGB_SEL <= '0';
-				BGB_X := ( V_BGB_XSTART(9 downto 3) & "000" ) and HMASK;
-				BGB_POS := "0000000000" - ( "0000000" & V_BGB_XSTART(2 downto 0) );
-				VSRAM_NUMB <= BGB_POS(8 downto 4);
-				BGBC <= BGC_VSRAM_RD;
-			end if;
-
-		when BGC_VSRAM_RD =>
-			BGBC <= BGC_CALC_Y;
-
-		when BGC_CALC_Y =>
-			if BGB_POS(9) = '1' or VSCR = '0' then
-				VS := BGB_VSRAM1_LATCH;
-			else
-				VS := VSRAM_BGB;
-			end if;
-
-			if INTERLACE_FF = '1' then
-				BGB_Y := (VS(10 downto 0) + Y) and (VMASK&'1');
-				CELLY := BGB_Y(10 downto 4);
-			else
-				BGB_Y := '0'&((VS(9 downto 0) + Y) and VMASK);
-				CELLY := BGB_Y(9 downto 3);
-			end if;
-
-			case HSIZE is
-			when "00"|"10" => -- HS 32 cells
-				V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + (CELLY & "00000" & "0");
-			when "01" => -- HS 64 cells
-				V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + (CELLY & "000000" & "0");
-			when "11" => -- HS 128 cells
-				V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + (CELLY & "0000000" & "0");
-			end case;
-			BGB_VRAM_ADDR <= V_BGB_BASE(15 downto 1);
-			BGB_SEL <= '1';
-			BGBC <= BGC_BASE_RD;
-
-		when BGC_BASE_RD =>
-			if BGB_ACK_N='0' then
-				BGB_SEL <= '0';
-				T_BGB_PRI := BGB_VRAM_DO(15);
-				T_BGB_PAL := BGB_VRAM_DO(14 downto 13);
-				BGB_HF := BGB_VRAM_DO(11);
-				if INTERLACE_FF = '1' then
-					if BGB_VRAM_DO(12) = '1' then	-- VF
-						BGB_TILEBASE := BGB_VRAM_DO(9 downto 0) & not(BGB_Y(3 downto 0)) & "00";
-					else
-						BGB_TILEBASE := BGB_VRAM_DO(9 downto 0) & BGB_Y(3 downto 0) & "00";
-					end if;
-				else
-					if BGB_VRAM_DO(12) = '1' then	-- VF
-						BGB_TILEBASE := BGB_VRAM_DO(10 downto 0) & not(BGB_Y(2 downto 0)) & "00";
-					else
-						BGB_TILEBASE := BGB_VRAM_DO(10 downto 0) & BGB_Y(2 downto 0) & "00";
-					end if;
-				end if;
-				BGBC <= BGC_LOOP;
-			end if;
-
-		when BGC_LOOP =>
-			if BGB_X(1 downto 0) = "00" and BGB_SEL = '0' then
-				BGB_VRAM_ADDR <= BGB_TILEBASE(15 downto 2) & (BGB_X(2) xor BGB_HF);
-				BGB_SEL <= '1';
-				BGBC <= BGC_TILE_RD;
-			else
-				if BGB_POS(9) = '0' then
-					BGBC <= BGC_LOOP_WR;
-					BGB_COLINFO_WE_A <= '1';
-					BGB_COLINFO_ADDR_A <= BGB_POS(8 downto 0);
-					case BGB_X(1 downto 0) xor (BGB_HF&BGB_HF) is
-					when "00" =>
-						BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(15 downto 12);
-					when "01" =>
-						BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(11 downto 8);
-					when "10" =>
-						BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(7 downto 4);
-					when others =>
-						BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(3 downto 0);
-					end case;
-				end if;
-				if BGB_POS = HDISP_SIZE - 1 then
-					BGBC <= BGC_DONE;
-				else
-					BGB_POS := BGB_POS + 1;
-					if BGB_X(2 downto 0) = "111" then
-						BGBC <= BGC_VSRAM_RD;
-					end if;
-				end if;
-				BGB_X := (BGB_X + 1) and HMASK;
-				BGB_SEL <= '0';
-			end if;
-			VSRAM_NUMB <= BGB_POS(8 downto 4);
-
-		when BGC_LOOP_WR =>
-			BGBC <= BGC_LOOP;
-
-		when BGC_TILE_RD =>
-			if BGB_ACK_N = '0' then
-				BGBC <= BGC_LOOP;
-			end if;
-
-		when others =>	-- BGBC_DONE
-			VSRAM_NUMB <= (others => '0');
+	if rising_edge(CLK) then
+		if RST_N = '0' then
 			BGB_SEL <= '0';
-			if BGEN_ACTIVE = '0' then
-				BGBC <= BGC_INIT;
-			end if;
-		end case;
+			BGBC <= BGC_INIT;
+			BGB_COLINFO_WE_A <= '0';
+			VSRAM_NUMB <= VSRAM_NUMB + 1;
+		else
+			BGB_COLINFO_WE_A <= '0';
+
+			case BGBC is
+			when BGC_INIT =>
+				if BGEN_ACTIVE = '1' then
+					case HSCR is -- Horizontal scroll mode
+					when "00" => BGB_VRAM_ADDR <= HSCB & "000000001";
+					when "01" => BGB_VRAM_ADDR <= HSCB & "00000" & BG_Y(2 downto 0) & '1';
+					when "10" => BGB_VRAM_ADDR <= HSCB & BG_Y(7 downto 3) & "0001";
+					when "11" => BGB_VRAM_ADDR <= HSCB & BG_Y(7 downto 0) & '1';
+					when others => null;
+
+					end case;
+					if INTERLACE_FF = '1' then
+						Y := BG_Y(7 downto 0) & ODD;
+					else
+						Y := '0'&BG_Y(7 downto 0);
+					end if;
+
+					BGB_SEL <= '1';
+					BGBC <= BGC_HS_RD;
+				end if;
+
+			when BGC_HS_RD =>
+				if BGB_ACK_N = '0' then
+					V_BGB_XSTART := "0000000000" - BGB_VRAM_DO(9 downto 0);
+					BGB_SEL <= '0';
+					BGB_X := ( V_BGB_XSTART(9 downto 3) & "000" ) and HMASK;
+					BGB_POS := "0000000000" - ( "0000000" & V_BGB_XSTART(2 downto 0) );
+					VSRAM_NUMB <= BGB_POS(8 downto 4);
+					BGBC <= BGC_VSRAM_RD;
+				end if;
+
+			when BGC_VSRAM_RD =>
+				BGBC <= BGC_CALC_Y;
+
+			when BGC_CALC_Y =>
+				if BGB_POS(9) = '1' or VSCR = '0' then
+					VS := BGB_VSRAM1_LATCH;
+				else
+					VS := VSRAM_BGB;
+				end if;
+
+				if INTERLACE_FF = '1' then
+					BGB_Y := (VS(10 downto 0) + Y) and (VMASK&'1');
+					CELLY := BGB_Y(10 downto 4);
+				else
+					BGB_Y := '0'&((VS(9 downto 0) + Y) and VMASK);
+					CELLY := BGB_Y(9 downto 3);
+				end if;
+
+				case HSIZE is
+				when "00"|"10" => -- HS 32 cells
+					V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + (CELLY & "00000" & "0");
+				when "01" => -- HS 64 cells
+					V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + (CELLY & "000000" & "0");
+				when "11" => -- HS 128 cells
+					V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + (CELLY & "0000000" & "0");
+				end case;
+				BGB_VRAM_ADDR <= V_BGB_BASE(15 downto 1);
+				BGB_SEL <= '1';
+				BGBC <= BGC_BASE_RD;
+
+			when BGC_BASE_RD =>
+				if BGB_ACK_N='0' then
+					BGB_SEL <= '0';
+					T_BGB_PRI := BGB_VRAM_DO(15);
+					T_BGB_PAL := BGB_VRAM_DO(14 downto 13);
+					BGB_HF := BGB_VRAM_DO(11);
+					if INTERLACE_FF = '1' then
+						if BGB_VRAM_DO(12) = '1' then	-- VF
+							BGB_TILEBASE := BGB_VRAM_DO(9 downto 0) & not(BGB_Y(3 downto 0)) & "00";
+						else
+							BGB_TILEBASE := BGB_VRAM_DO(9 downto 0) & BGB_Y(3 downto 0) & "00";
+						end if;
+					else
+						if BGB_VRAM_DO(12) = '1' then	-- VF
+							BGB_TILEBASE := BGB_VRAM_DO(10 downto 0) & not(BGB_Y(2 downto 0)) & "00";
+						else
+							BGB_TILEBASE := BGB_VRAM_DO(10 downto 0) & BGB_Y(2 downto 0) & "00";
+						end if;
+					end if;
+					BGBC <= BGC_LOOP;
+				end if;
+
+			when BGC_LOOP =>
+				if BGB_X(1 downto 0) = "00" and BGB_SEL = '0' then
+					BGB_VRAM_ADDR <= BGB_TILEBASE(15 downto 2) & (BGB_X(2) xor BGB_HF);
+					BGB_SEL <= '1';
+					BGBC <= BGC_TILE_RD;
+				else
+					if BGB_POS(9) = '0' then
+						BGBC <= BGC_LOOP_WR;
+						BGB_COLINFO_WE_A <= '1';
+						BGB_COLINFO_ADDR_A <= BGB_POS(8 downto 0);
+						case BGB_X(1 downto 0) xor (BGB_HF&BGB_HF) is
+						when "00" =>
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(15 downto 12);
+						when "01" =>
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(11 downto 8);
+						when "10" =>
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(7 downto 4);
+						when others =>
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(3 downto 0);
+						end case;
+					end if;
+					if BGB_POS = HDISP_SIZE - 1 then
+						BGBC <= BGC_DONE;
+					else
+						BGB_POS := BGB_POS + 1;
+						if BGB_X(2 downto 0) = "111" then
+							BGBC <= BGC_VSRAM_RD;
+						end if;
+					end if;
+					BGB_X := (BGB_X + 1) and HMASK;
+					BGB_SEL <= '0';
+				end if;
+				VSRAM_NUMB <= BGB_POS(8 downto 4);
+
+			when BGC_LOOP_WR =>
+				BGBC <= BGC_LOOP;
+
+			when BGC_TILE_RD =>
+				if BGB_ACK_N = '0' then
+					BGBC <= BGC_LOOP;
+				end if;
+
+			when others =>	-- BGBC_DONE
+				VSRAM_NUMB <= (others => '0');
+				BGB_SEL <= '0';
+				if BGEN_ACTIVE = '0' then
+					BGBC <= BGC_INIT;
+				end if;
+			end case;
+		end if;
 	end if;
 end process;
 
@@ -977,211 +984,214 @@ process( RST_N, CLK )
 	variable CELLY				: std_logic_vector(6 downto 0);
 	variable Y					: std_logic_vector(8 downto 0);
 begin
-	if RST_N = '0' then
-		BGA_SEL <= '0';
-		BGAC <= BGC_INIT;
-		BGA_COLINFO_WE_A <= '0';
-	elsif rising_edge(CLK) then
-		BGA_COLINFO_WE_A <= '0';
+	if rising_edge(CLK) then
+		if RST_N = '0' then
+			BGA_SEL <= '0';
+			BGAC <= BGC_INIT;
+			BGA_COLINFO_WE_A <= '0';
+			VSRAM_NUMA <= VSRAM_NUMA + 1;
+		else
+			BGA_COLINFO_WE_A <= '0';
 
-		case BGAC is
-		when BGC_INIT =>
-			if BGEN_ACTIVE = '1' then
-				if BG_Y(2 downto 0) = "000" then
-					if BG_Y(7 downto 3) < WVP then
-						WIN_V := not WDOWN;
-					else
-						WIN_V := WDOWN;
+			case BGAC is
+			when BGC_INIT =>
+				if BGEN_ACTIVE = '1' then
+					if BG_Y(2 downto 0) = "000" then
+						if BG_Y(7 downto 3) < WVP then
+							WIN_V := not WDOWN;
+						else
+							WIN_V := WDOWN;
+						end if;
 					end if;
+					if WHP = "00000" then
+						WIN_H := WRIGT;
+					else
+						WIN_H := not WRIGT;
+					end if;
+
+					BGA_Y := (others => '0');
+
+					case HSCR is -- Horizontal scroll mode
+					when "00" => BGA_VRAM_ADDR <= HSCB & "000000000";
+					when "01" => BGA_VRAM_ADDR <= HSCB & "00000" & BG_Y(2 downto 0) & '0';
+					when "10" => BGA_VRAM_ADDR <= HSCB & BG_Y(7 downto 3) & "0000";
+					when "11" => BGA_VRAM_ADDR <= HSCB & BG_Y(7 downto 0) & '0';
+					when others => null;
+					end case;
+					
+					if INTERLACE_FF = '1' then
+						Y := BG_Y(7 downto 0) & ODD;
+					else
+						Y := '0'&BG_Y(7 downto 0);
+					end if;
+					
+					BGA_SEL <= '1';
+					BGAC <= BGC_HS_RD;
 				end if;
-				if WHP = "00000" then
-					WIN_H := WRIGT;
-				else
-					WIN_H := not WRIGT;
+
+			when BGC_HS_RD =>
+				if BGA_ACK_N='0' then
+					V_BGA_XSTART := "0000000000" - BGA_VRAM_DO(9 downto 0);
+					BGA_SEL <= '0';
+					BGA_X := ( V_BGA_XSTART(9 downto 3) & "000" ) and HMASK;
+					BGA_POS := "0000000000" - ( "0000000" & V_BGA_XSTART(2 downto 0) );
+					VSRAM_NUMA <= BGA_POS(8 downto 4);
+					BGAC <= BGC_VSRAM_RD;
 				end if;
 
-				BGA_Y := (others => '0');
+			when BGC_VSRAM_RD =>
+				BGAC <= BGC_CALC_Y;
 
-				case HSCR is -- Horizontal scroll mode
-				when "00" => BGA_VRAM_ADDR <= HSCB & "000000000";
-				when "01" => BGA_VRAM_ADDR <= HSCB & "00000" & BG_Y(2 downto 0) & '0';
-				when "10" => BGA_VRAM_ADDR <= HSCB & BG_Y(7 downto 3) & "0000";
-				when "11" => BGA_VRAM_ADDR <= HSCB & BG_Y(7 downto 0) & '0';
-				when others => null;
-				end case;
-				
-				if INTERLACE_FF = '1' then
-					Y := BG_Y(7 downto 0) & ODD;
+			when BGC_CALC_Y =>
+				if WIN_H = '1' or WIN_V = '1' then
+					BGA_Y := "00" & Y;
 				else
-					Y := '0'&BG_Y(7 downto 0);
-				end if;
-				
-				BGA_SEL <= '1';
-				BGAC <= BGC_HS_RD;
-			end if;
+					if BGA_POS(9) = '1' or VSCR = '0' then
+						VS := BGA_VSRAM0_LATCH;
+					else
+						VS := VSRAM_BGA;
+					end if;
 
-		when BGC_HS_RD =>
-			if BGA_ACK_N='0' then
-				V_BGA_XSTART := "0000000000" - BGA_VRAM_DO(9 downto 0);
-				BGA_SEL <= '0';
-				BGA_X := ( V_BGA_XSTART(9 downto 3) & "000" ) and HMASK;
-				BGA_POS := "0000000000" - ( "0000000" & V_BGA_XSTART(2 downto 0) );
-				VSRAM_NUMA <= BGA_POS(8 downto 4);
-				BGAC <= BGC_VSRAM_RD;
-			end if;
-
-		when BGC_VSRAM_RD =>
-			BGAC <= BGC_CALC_Y;
-
-		when BGC_CALC_Y =>
-			if WIN_H = '1' or WIN_V = '1' then
-				BGA_Y := "00" & Y;
-			else
-				if BGA_POS(9) = '1' or VSCR = '0' then
-					VS := BGA_VSRAM0_LATCH;
-				else
-					VS := VSRAM_BGA;
+					if INTERLACE_FF = '0' then
+						BGA_Y := '0'&((VS(9 downto 0) + Y) and VMASK);
+					else
+						BGA_Y := (VS(10 downto 0) + Y) and (VMASK&'1');
+					end if;
 				end if;
 
 				if INTERLACE_FF = '0' then
-					BGA_Y := '0'&((VS(9 downto 0) + Y) and VMASK);
+					CELLY := BGA_Y(9 downto 3);
 				else
-					BGA_Y := (VS(10 downto 0) + Y) and (VMASK&'1');
+					CELLY := BGA_Y(10 downto 4);
 				end if;
-			end if;
 
-			if INTERLACE_FF = '0' then
-				CELLY := BGA_Y(9 downto 3);
-			else
-				CELLY := BGA_Y(10 downto 4);
-			end if;
-
-			if WIN_H = '1' or WIN_V = '1' then
-				V_BGA_BASE := (NTWB & "00000000000") + (BGA_POS(9 downto 3) & "0");
-				if H40 = '0' then -- WIN is 32 tiles wide in H32 mode
-					V_BGA_BASE := V_BGA_BASE + (CELLY & "00000" & "0");
-				else              -- WIN is 64 tiles wide in H40 mode
-					V_BGA_BASE := V_BGA_BASE + (CELLY & "000000" & "0");
-				end if;
-			else
-				V_BGA_BASE := (NTAB & "0000000000000") + (BGA_X(9 downto 3) & "0");
-
-				case HSIZE is
-				when "00"|"10" => -- HS 32 cells
-					V_BGA_BASE := V_BGA_BASE + (CELLY & "00000" & "0");
-				when "01" => -- HS 64 cells
-					V_BGA_BASE := V_BGA_BASE + (CELLY & "000000" & "0");
-				when "11" => -- HS 128 cells
-					V_BGA_BASE := V_BGA_BASE + (CELLY & "0000000" & "0");
-				end case;
-			end if;
-
-			BGA_VRAM_ADDR <= V_BGA_BASE(15 downto 1);
-			BGA_SEL <= '1';
-			BGAC <= BGC_BASE_RD;
-
-		when BGC_BASE_RD =>
-			if BGA_ACK_N='0' then
-				BGA_SEL <= '0';
-				T_BGA_PRI := BGA_VRAM_DO(15);
-				T_BGA_PAL := BGA_VRAM_DO(14 downto 13);
-				BGA_HF := BGA_VRAM_DO(11);
-				if INTERLACE_FF = '1' then
-					if BGA_VRAM_DO(12) = '1' then	-- VF
-						BGA_TILEBASE := BGA_VRAM_DO(9 downto 0) & not(BGA_Y(3 downto 0)) & "00";
-					else
-						BGA_TILEBASE := BGA_VRAM_DO(9 downto 0) & BGA_Y(3 downto 0) & "00";
+				if WIN_H = '1' or WIN_V = '1' then
+					V_BGA_BASE := (NTWB & "00000000000") + (BGA_POS(9 downto 3) & "0");
+					if H40 = '0' then -- WIN is 32 tiles wide in H32 mode
+						V_BGA_BASE := V_BGA_BASE + (CELLY & "00000" & "0");
+					else              -- WIN is 64 tiles wide in H40 mode
+						V_BGA_BASE := V_BGA_BASE + (CELLY & "000000" & "0");
 					end if;
 				else
-					if BGA_VRAM_DO(12) = '1' then	-- VF
-						BGA_TILEBASE := BGA_VRAM_DO(10 downto 0) & not(BGA_Y(2 downto 0)) & "00";
-					else
-						BGA_TILEBASE := BGA_VRAM_DO(10 downto 0) & BGA_Y(2 downto 0) & "00";
-					end if;
-				end if;
-				BGAC <= BGC_LOOP;
-			end if;
+					V_BGA_BASE := (NTAB & "0000000000000") + (BGA_X(9 downto 3) & "0");
 
-		when BGC_LOOP =>
-			if BGA_POS(9) = '0' and WIN_H = '0' and WRIGT = '1'
-				and BGA_POS(3 downto 0) = "0000" and BGA_POS(8 downto 4) = WHP
-			then
-				WIN_H := not WIN_H;
-				BGAC <= BGC_VSRAM_RD;
-			elsif BGA_POS(9) = '0' and WIN_H = '1' and WRIGT = '0'
-				and BGA_X(2 downto 0) = "000" and BGA_POS(8 downto 4) = WHP
-			then
-				WIN_H := not WIN_H;
-				if WIN_V = '0' then
+					case HSIZE is
+					when "00"|"10" => -- HS 32 cells
+						V_BGA_BASE := V_BGA_BASE + (CELLY & "00000" & "0");
+					when "01" => -- HS 64 cells
+						V_BGA_BASE := V_BGA_BASE + (CELLY & "000000" & "0");
+					when "11" => -- HS 128 cells
+						V_BGA_BASE := V_BGA_BASE + (CELLY & "0000000" & "0");
+					end case;
+				end if;
+
+				BGA_VRAM_ADDR <= V_BGA_BASE(15 downto 1);
+				BGA_SEL <= '1';
+				BGAC <= BGC_BASE_RD;
+
+			when BGC_BASE_RD =>
+				if BGA_ACK_N='0' then
+					BGA_SEL <= '0';
+					T_BGA_PRI := BGA_VRAM_DO(15);
+					T_BGA_PAL := BGA_VRAM_DO(14 downto 13);
+					BGA_HF := BGA_VRAM_DO(11);
+					if INTERLACE_FF = '1' then
+						if BGA_VRAM_DO(12) = '1' then	-- VF
+							BGA_TILEBASE := BGA_VRAM_DO(9 downto 0) & not(BGA_Y(3 downto 0)) & "00";
+						else
+							BGA_TILEBASE := BGA_VRAM_DO(9 downto 0) & BGA_Y(3 downto 0) & "00";
+						end if;
+					else
+						if BGA_VRAM_DO(12) = '1' then	-- VF
+							BGA_TILEBASE := BGA_VRAM_DO(10 downto 0) & not(BGA_Y(2 downto 0)) & "00";
+						else
+							BGA_TILEBASE := BGA_VRAM_DO(10 downto 0) & BGA_Y(2 downto 0) & "00";
+						end if;
+					end if;
+					BGAC <= BGC_LOOP;
+				end if;
+
+			when BGC_LOOP =>
+				if BGA_POS(9) = '0' and WIN_H = '0' and WRIGT = '1'
+					and BGA_POS(3 downto 0) = "0000" and BGA_POS(8 downto 4) = WHP
+				then
+					WIN_H := not WIN_H;
 					BGAC <= BGC_VSRAM_RD;
-				end if;
-			elsif BGA_POS(1 downto 0) = "00" and BGA_SEL = '0' and (WIN_H = '1' or WIN_V = '1') then
-				BGA_VRAM_ADDR <= BGA_TILEBASE(15 downto 2) & (BGA_POS(2) xor BGA_HF);
-				BGA_SEL <= '1';
-				BGAC <= BGC_TILE_RD;
-			elsif BGA_X(1 downto 0) = "00" and BGA_SEL = '0' and (WIN_H = '0' and WIN_V = '0') then
-				BGA_VRAM_ADDR <= BGA_TILEBASE(15 downto 2) & (BGA_X(2) xor BGA_HF);
-				BGA_SEL <= '1';
-				BGAC <= BGC_TILE_RD;
-			else
-				if BGA_POS(9) = '0' then
-					BGAC <= BGC_LOOP_WR;
-					BGA_COLINFO_WE_A <= '1';
-					BGA_COLINFO_ADDR_A <= BGA_POS(8 downto 0);
-					if WIN_H = '1' or WIN_V = '1' then
-						case BGA_POS(1 downto 0) xor (BGA_HF&BGA_HF) is
-						when "00" =>
-							BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(15 downto 12);
-						when "01" =>
-							BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(11 downto 8);
-						when "10" =>
-							BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(7 downto 4);
-						when others =>
-							BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(3 downto 0);
-						end case;
-					else
-						case BGA_X(1 downto 0) xor (BGA_HF&BGA_HF) is
-						when "00" =>
-							BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(15 downto 12);
-						when "01" =>
-							BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(11 downto 8);
-						when "10" =>
-							BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(7 downto 4);
-						when others =>
-							BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(3 downto 0);
-						end case;
+				elsif BGA_POS(9) = '0' and WIN_H = '1' and WRIGT = '0'
+					and BGA_X(2 downto 0) = "000" and BGA_POS(8 downto 4) = WHP
+				then
+					WIN_H := not WIN_H;
+					if WIN_V = '0' then
+						BGAC <= BGC_VSRAM_RD;
 					end if;
-				end if;
-				if BGA_POS = HDISP_SIZE - 1 then
-					BGAC <= BGC_DONE;
+				elsif BGA_POS(1 downto 0) = "00" and BGA_SEL = '0' and (WIN_H = '1' or WIN_V = '1') then
+					BGA_VRAM_ADDR <= BGA_TILEBASE(15 downto 2) & (BGA_POS(2) xor BGA_HF);
+					BGA_SEL <= '1';
+					BGAC <= BGC_TILE_RD;
+				elsif BGA_X(1 downto 0) = "00" and BGA_SEL = '0' and (WIN_H = '0' and WIN_V = '0') then
+					BGA_VRAM_ADDR <= BGA_TILEBASE(15 downto 2) & (BGA_X(2) xor BGA_HF);
+					BGA_SEL <= '1';
+					BGAC <= BGC_TILE_RD;
 				else
-					if BGA_X(2 downto 0) = "111" and (WIN_H = '0' and WIN_V = '0') then
-						BGAC <= BGC_VSRAM_RD;
-					elsif BGA_POS(2 downto 0) = "111" and (WIN_H = '1' or WIN_V = '1') then
-						BGAC <= BGC_VSRAM_RD;
+					if BGA_POS(9) = '0' then
+						BGAC <= BGC_LOOP_WR;
+						BGA_COLINFO_WE_A <= '1';
+						BGA_COLINFO_ADDR_A <= BGA_POS(8 downto 0);
+						if WIN_H = '1' or WIN_V = '1' then
+							case BGA_POS(1 downto 0) xor (BGA_HF&BGA_HF) is
+							when "00" =>
+								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(15 downto 12);
+							when "01" =>
+								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(11 downto 8);
+							when "10" =>
+								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(7 downto 4);
+							when others =>
+								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(3 downto 0);
+							end case;
+						else
+							case BGA_X(1 downto 0) xor (BGA_HF&BGA_HF) is
+							when "00" =>
+								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(15 downto 12);
+							when "01" =>
+								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(11 downto 8);
+							when "10" =>
+								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(7 downto 4);
+							when others =>
+								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(3 downto 0);
+							end case;
+						end if;
 					end if;
-					BGA_POS := BGA_POS + 1;
+					if BGA_POS = HDISP_SIZE - 1 then
+						BGAC <= BGC_DONE;
+					else
+						if BGA_X(2 downto 0) = "111" and (WIN_H = '0' and WIN_V = '0') then
+							BGAC <= BGC_VSRAM_RD;
+						elsif BGA_POS(2 downto 0) = "111" and (WIN_H = '1' or WIN_V = '1') then
+							BGAC <= BGC_VSRAM_RD;
+						end if;
+						BGA_POS := BGA_POS + 1;
+					end if;
+					BGA_X := (BGA_X + 1) and HMASK;
+					BGA_SEL <= '0';
 				end if;
-				BGA_X := (BGA_X + 1) and HMASK;
-				BGA_SEL <= '0';
-			end if;
-			VSRAM_NUMA <= BGA_POS(8 downto 4);
+				VSRAM_NUMA <= BGA_POS(8 downto 4);
 
-		when BGC_LOOP_WR =>
-			BGAC <= BGC_LOOP;
-
-		when BGC_TILE_RD =>
-			if BGA_ACK_N='0' then
+			when BGC_LOOP_WR =>
 				BGAC <= BGC_LOOP;
-			end if;
 
-		when others =>	-- BGAC_DONE
-			VSRAM_NUMA <= (others => '0');
-			BGA_SEL <= '0';
-			if BGEN_ACTIVE = '0' then
-				BGAC <= BGC_INIT;
-			end if;
-		end case;
+			when BGC_TILE_RD =>
+				if BGA_ACK_N='0' then
+					BGAC <= BGC_LOOP;
+				end if;
+
+			when others =>	-- BGAC_DONE
+				VSRAM_NUMA <= (others => '0');
+				BGA_SEL <= '0';
+				if BGEN_ACTIVE = '0' then
+					BGAC <= BGC_INIT;
+				end if;
+			end case;
+		end if;
 	end if;
 end process;
 
@@ -1753,7 +1763,7 @@ begin
 				BGEN_ACTIVE <= '0';
 			end if;
 
-			if H_CNT = HDISP_START+HDISP_SIZE+4-1 then
+			if H_CNT = HDISP_START+HDISP_SIZE+2 then
 				V_CNT <= V_CNT + 1;
 				if V_CNT >= VTOTAL-1 then
 					V_CNT <= (others => '0');
@@ -1846,12 +1856,12 @@ begin
 			end if;
 		end if;
 
-        H_MCLKS_COUNT <= H_MCLKS_COUNT + 1;
-        if H_MCLKS_COUNT = HTOTAL_MCLKS_SZ-1 then -- end of line reached
-            H_MCLKS_COUNT <= (others => '0');
-            PIXDIV <= (others => '0');
-            H_CNT <= (others => '0');
-        end if;
+		H_MCLKS_COUNT <= H_MCLKS_COUNT + 1;
+		if H_MCLKS_COUNT = HTOTAL_MCLKS_SZ-1 then -- end of line reached
+			H_MCLKS_COUNT <= (others => '0');
+			PIXDIV <= (others => '0');
+			H_CNT <= (others => '0');
+		end if;
 
 	end if;
 end process;
