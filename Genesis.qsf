@@ -364,6 +364,8 @@ set_global_assignment -name VHDL_FILE vdp.vhd
 set_global_assignment -name VERILOG_FILE gen_io.v
 set_global_assignment -name SYSTEMVERILOG_FILE teamplayer.sv
 set_global_assignment -name VERILOG_FILE fourway.v
+set_global_assignment -name VERILOG_FILE audio_iir_filter.v
+set_global_assignment -name VERILOG_FILE genesis_lpf.v
 set_global_assignment -name SYSTEMVERILOG_FILE multitap.sv
 set_global_assignment -name SYSTEMVERILOG_FILE system.sv
 set_global_assignment -name SYSTEMVERILOG_FILE Genesis.sv
