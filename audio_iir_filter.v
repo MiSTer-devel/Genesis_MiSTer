@@ -80,7 +80,7 @@ module iir_1st_order
 			y0 <= 0;
 		end
 		else begin
-			count <= count + 1;
+			count <= count + 1'd1;
 			if (count == div - 1) begin
 					count <= 0;
 					y0 <= {out32[DATA_WIDTH + COEFF_WIDTH - 1] , out32[COEFF_SCALE + DATA_WIDTH - 2 : COEFF_SCALE]};
@@ -158,7 +158,7 @@ module iir_2nd_order
 			y1 <= 0; 
 		end
 		else begin
-			count <= count + 1;
+			count <= count + 1'd1;
 			if (count == div - 1) begin
 					count <= 0;
 					y1 <= y0;

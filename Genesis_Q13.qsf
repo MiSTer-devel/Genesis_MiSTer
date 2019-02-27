@@ -95,7 +95,7 @@ set_location_assignment PIN_AF15 -to USER_IO[5]
 set_location_assignment PIN_AG16 -to USER_IO[4]
 set_location_assignment PIN_AH11 -to USER_IO[3]
 set_location_assignment PIN_AH12 -to USER_IO[2]
-set_location_assignment PIN_AH9  -to USER_IO[1]
+set_location_assignment PIN_AH9 -to USER_IO[1]
 set_location_assignment PIN_AG11 -to USER_IO[0]
 set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to USER_IO[*]
 set_instance_assignment -name WEAK_PULL_UP_RESISTOR ON -to USER_IO[*]
@@ -366,6 +366,8 @@ set_global_assignment -name QIP_FILE jt12/jt12.qip
 set_global_assignment -name QIP_FILE jt89/jt89.qip
 set_global_assignment -name VHDL_FILE bram.vhd
 set_global_assignment -name SYSTEMVERILOG_FILE ddram.sv
+set_global_assignment -name VERILOG_FILE audio_iir_filter.v
+set_global_assignment -name VERILOG_FILE genesis_lpf.v
 set_global_assignment -name SYSTEMVERILOG_FILE compressor.sv
 set_global_assignment -name VHDL_FILE vdp.vhd
 set_global_assignment -name VERILOG_FILE gen_io.v
