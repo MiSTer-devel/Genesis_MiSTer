@@ -508,7 +508,7 @@ always @(posedge clk_sys) begin
 	if(~old_downloading & downloading) bk_ena <= 0;
 
 	//Save file always mounted in the end of downloading state.
-	if(downloading && img_mounted && img_size && !img_readonly) bk_ena <= 1;
+	if(downloading && img_mounted && !img_readonly) bk_ena <= 1;
 
 	if (bk_change & ~OSD_STATUS)
 		sav_pending <= 1'b1;
@@ -541,7 +541,7 @@ always @(posedge clk_sys) begin
 			sd_rd <=  bk_load;
 			sd_wr <= ~bk_load;
 		end
-		if(old_downloading & ~ioctl_download & bk_ena) begin
+		if(old_downloading & ~ioctl_download & |img_size & bk_ena) begin
 			bk_state <= 1;
 			bk_loading <= 1;
 			sd_lba <= 0;
