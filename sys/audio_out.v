@@ -30,7 +30,7 @@ localparam AUDIO_RATE = 48000;
 localparam AUDIO_DW = 16;
 
 localparam CE_RATE = AUDIO_RATE*AUDIO_DW*8;
-localparam FILTER_DIV = (CE_RATE/(AUDIO_RATE*32*2))-1;
+localparam FILTER_DIV = (CE_RATE/(AUDIO_RATE*32))-1;
 
 wire [31:0] real_ce = sample_rate ? {CE_RATE[30:0],1'b0} : CE_RATE[31:0];
 
