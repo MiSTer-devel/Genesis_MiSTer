@@ -484,7 +484,7 @@ dpram_dif #(16,8,15,16) sram
 	.q_a(sram_q[7:0]),
 
 	.address_b(LOADING ? ram_rst_a : BRAM_A),
-	.data_b(LOADING ? 16'hFFFF : BRAM_DI),
+	.data_b(LOADING ? 16'h0000 : BRAM_DI),
 	.wren_b(LOADING | BRAM_WE),
 	.q_b(BRAM_DO)
 );
@@ -717,11 +717,8 @@ always @(posedge MCLK) begin
 										BANK_REG[MBUS_A[3:1]] <= MBUS_DO[4:0];
 										BANK_MODE <= 2'h2;
 									end else if (MBUS_A[3:1] == 'h4) begin // Pier EEPROM
-										ep_si <= MBUS_DO[0];
-										ep_sck <= MBUS_DO[1];
-										ep_hold <= MBUS_DO[2];
-										ep_cs <= MBUS_DO[3];
-									end else if (MBUS_A[3:1] < 'h4) begin // Pier Banks
+										{ep_cs, ep_hold , ep_sck, ep_si} <= MBUS_DO[3:0];
+									end else if (~MBUS_A[3]) begin // Pier Banks
 										BANK_REG[MBUS_A[3:1] - 1'b1] <= {1'b0, MBUS_DO[3:0]};
 									end
 								end
