@@ -276,6 +276,7 @@ system system
 	.EEPROM_QUIRK(eeprom_quirk),
 	.ZBUS_QUIRK(zbus_quirk),
 	.NORAM_QUIRK(noram_quirk),
+	.PIER_QUIRK(pier_quirk),
 
 	.DAC_LDATA(audio_l),
 	.DAC_RDATA(audio_r),
@@ -456,12 +457,13 @@ reg eeprom_quirk = 0;
 reg fifo_quirk = 0;
 reg zbus_quirk = 0;
 reg noram_quirk = 0;
+reg pier_quirk = 0;
 always @(posedge clk_sys) begin
 	reg [55:0] cart_id;
 	reg old_download, old_reset;
 	old_download <= ioctl_download;
 
-	if(~old_download && ioctl_download) {zbus_quirk,fifo_quirk,eeprom_quirk,sram_quirk,noram_quirk} <= 0;
+	if(~old_download && ioctl_download) {zbus_quirk,fifo_quirk,eeprom_quirk,sram_quirk,noram_quirk,pier_quirk} <= 0;
 
 	if(ioctl_wr) begin
 		if(ioctl_addr == 'h182) cart_id[55:48] <= {ioctl_data[15:8]};
@@ -488,6 +490,8 @@ always @(posedge clk_sys) begin
 			else if({cart_id,ioctl_data[7:0]} == "00001009") fifo_quirk <= 1;   // Sonic
 			else if({cart_id,ioctl_data[7:0]} == "00004049") fifo_quirk <= 1;   // Sonic JP
 			else if({cart_id,ioctl_data[7:0]} == "T-103036") zbus_quirk <= 1;   // Joe & Mac
+			else if({cart_id,ioctl_data[7:0]} == "T-574023") pier_quirk <= 1;   // Pier Solar Reprint
+			else if({cart_id,ioctl_data[7:0]} == "T-574013") pier_quirk <= 1;   // Pier Solar 1st Edition
 		end
 	end
 end

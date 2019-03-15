@@ -52,6 +52,7 @@ module system
 	input         EEPROM_QUIRK,
 	input         ZBUS_QUIRK,
 	input         NORAM_QUIRK,
+	input         PIER_QUIRK,
 
 	input  [14:0] BRAM_A,
 	input  [15:0] BRAM_DI,
@@ -444,20 +445,42 @@ multitap multitap
 //-----------------------------------------------------------------------
 // ROM
 //-----------------------------------------------------------------------
-assign ROM_ADDR = (BANK_MODE == 2'h2) ? {BANK_REG[MBUS_A[21:19]], MBUS_A[18:1]} : MBUS_A;
 
+wire [23:0] pier_bank = (MBUS_A[23:1] - 23'h140000);
+always_comb begin
+	case(BANK_MODE)
+		2'h2: ROM_ADDR = {BANK_REG[MBUS_A[21:19]], MBUS_A[18:1]};
+		2'h3: ROM_ADDR = {BANK_REG[pier_bank[20:18]], MBUS_A[18:1]};
+		default: ROM_ADDR = MBUS_A;
+	endcase
+end
 
 //-----------------------------------------------------------------------
 // 64KB SRAM
 //-----------------------------------------------------------------------
 reg SRAM_SEL;
+wire [15:0] sram_addr;
+wire [7:0] sram_di;
+wire sram_wren;
+
+always_comb begin
+	if (PIER_QUIRK) begin
+		sram_addr = {4'b0000, m95_addr};
+		sram_di = m95_di;
+		sram_wren = m95_rnw;
+	end else begin
+		sram_addr = MBUS_A[16:1];
+		sram_di = MBUS_DO[7:0];
+		sram_wren = (SRAM_SEL & ~MBUS_RNW);
+	end
+end
 
 dpram_dif #(16,8,15,16) sram
 (
 	.clock(MCLK),
-	.address_a(MBUS_A[16:1]),
-	.data_a(MBUS_DO[7:0]),
-	.wren_a(SRAM_SEL & ~MBUS_RNW),
+	.address_a(sram_addr),
+	.data_a(sram_di),
+	.wren_a(sram_wren),
 	.q_a(sram_q[7:0]),
 
 	.address_b(LOADING ? ram_rst_a : BRAM_A),
@@ -467,7 +490,31 @@ dpram_dif #(16,8,15,16) sram
 );
 
 wire [7:0] sram_q;
-assign BRAM_CHANGE = (SRAM_SEL & ~MBUS_RNW);
+assign BRAM_CHANGE = sram_wren;
+
+//-----------------------------------------------------------------------
+// EEPROM Handling
+//-----------------------------------------------------------------------
+reg ep_si, m95_so, ep_sck, ep_hold, ep_cs;
+wire [7:0] m95_di, m95_q;
+wire [11:0] m95_addr;
+wire m95_rnw;
+
+STM95XXX pier_eeprom
+(
+	.clk(MCLK),
+	.enable(PIER_QUIRK),
+	.so(m95_so),
+	.si(ep_si),
+	.sck(ep_sck),
+	.hold_n(ep_hold),
+	.cs_n(ep_cs),
+	.wp_n(1'b1),
+	.ram_addr(m95_addr),
+	.ram_q(sram_q[7:0]),
+	.ram_di(m95_di),
+	.ram_RnW(m95_rnw)
+);
 
 //-----------------------------------------------------------------------
 // 68K RAM
@@ -499,7 +546,6 @@ dpram #(15) ram68k_l
 );
 wire [15:0] ram68k_q;
 
-
 //-----------------------------------------------------------------------
 // MBUS Handling
 //-----------------------------------------------------------------------
@@ -518,13 +564,16 @@ reg        MBUS_RNW;
 reg        MBUS_UDS_N;
 reg        MBUS_LDS_N;
 
-reg [5:0]  BANK_REG[8];
-reg [1:0]  BANK_MODE; //0 = none, 1 = BANK SRAM, 2 = BANK ROM
+reg [4:0]  BANK_REG[0:7];
+reg [2:0]  BANK_MODE; //0 = none, 1 = BANK SRAM, 2 = BANK ROM
+
+
 
 always @(posedge MCLK) begin
 	reg  [3:0] mstate;
 	reg  [1:0] msrc;
 	reg [15:0] data;
+	reg  [3:0] pier_count;
 	
 	localparam	MSRC_NONE = 0,
 					MSRC_M68K = 1,
@@ -551,8 +600,9 @@ always @(posedge MCLK) begin
 		IO_SEL <= 0;
 		ZBUS_SEL <= 0;
 		BANK_MODE <= 0;
-		BANK_REG <= '{0,1,2,3,4,5,6,7};
+		BANK_REG <= '{0,0,0,0,0,0,0,0};
 		mstate <= MBUS_IDLE;
+		pier_count <= 0;
 		MBUS_RNW <= 1;
 	end
 	else begin
@@ -606,6 +656,14 @@ always @(posedge MCLK) begin
 						SRAM_SEL <= 1;
 						mstate <= MBUS_SRAM_READ;
 					end
+					else if (PIER_QUIRK && ({MBUS_A,1'b0} == 'h0015E6 || {MBUS_A,1'b0} == 'h0015E8)) begin
+						if (pier_count < 'h6) begin
+							pier_count <= pier_count + 1'h1;
+							data <= MBUS_A[1] ? 16'h0 : 16'h0010;
+						end else begin
+							data <= MBUS_A[1] ? 16'h0001 : 16'h8010;
+						end
+					end
 					else if (EEPROM_QUIRK && {MBUS_A,1'b0} == 'h200000) begin
 						data <= 0;
 						mstate <= MBUS_FINISH;
@@ -615,6 +673,7 @@ always @(posedge MCLK) begin
 						mstate <= MBUS_SRAM_READ;
 					end
 					else if (MBUS_A < ROMSZ) begin
+						if (PIER_QUIRK) BANK_MODE <= (MBUS_A >= 23'h140000) ? 3'h3 : 3'h0;
 						ROM_REQ <= ~ROM_ACK;
 						mstate <= MBUS_ROM_READ;
 					end
@@ -649,15 +708,25 @@ always @(posedge MCLK) begin
 						mstate <= MBUS_FINISH;
 					end
 
-					// BANK Register A130FX
-					if (MBUS_A[23:4] == 'hA130F && ~MBUS_RNW) begin
-						if (ROMSZ > 'h200000) begin // SSF2 ROM banking
-							if (MBUS_A[3:1]) begin
-								BANK_REG[MBUS_A[3:1]] <= MBUS_DO[5:0];
-								BANK_MODE <= 2'h2;
+					// BANK Register A13XXX
+					if (MBUS_A[23:8] == 'hA130) begin
+						if (~MBUS_RNW) begin
+							if (ROMSZ > 'h200000) begin // SSF2/Pier Solar ROM banking
+								if (MBUS_A[3:1]) begin
+									if (~PIER_QUIRK) begin // SSF2
+										BANK_REG[MBUS_A[3:1]] <= MBUS_DO[4:0];
+										BANK_MODE <= 2'h2;
+									end else if (MBUS_A[3:1] == 'h4) begin // Pier EEPROM
+										{ep_cs, ep_hold , ep_sck, ep_si} <= MBUS_DO[3:0];
+									end else if (~MBUS_A[3]) begin // Pier Banks
+										BANK_REG[MBUS_A[3:1] - 1'b1] <= {1'b0, MBUS_DO[3:0]};
+									end
+								end
+							end else begin // SRAM Banking
+								BANK_MODE <= {1'b0, MBUS_DO[0]};
 							end
-						end else begin // SRAM Banking
-							BANK_MODE <= {1'b0, MBUS_DO[0]};
+						end else if (PIER_QUIRK && MBUS_A[3:1] == 'h5) begin
+							data <= {15'h7FFF, m95_so};
 						end
 						mstate <= MBUS_FINISH;
 					end
