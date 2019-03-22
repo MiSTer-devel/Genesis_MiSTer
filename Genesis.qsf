@@ -362,7 +362,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE EEPROM_STM95.sv
 set_global_assignment -name CDF_FILE jtag.cdf
 set_global_assignment -name QIP_FILE sys/sys.qip
 set_global_assignment -name QIP_FILE FX68K/fx68k.qip
-set_global_assignment -name QIP_FILE T80/t80.qip
+set_global_assignment -name QIP_FILE T80/T80.qip
 set_global_assignment -name QIP_FILE jt12/jt12.qip
 set_global_assignment -name QIP_FILE jt89/jt89.qip
 set_global_assignment -name VHDL_FILE bram.vhd
