@@ -600,10 +600,12 @@ always @(posedge MCLK) begin
 		IO_SEL <= 0;
 		ZBUS_SEL <= 0;
 		BANK_MODE <= 0;
-		BANK_REG <= '{0,0,0,0,0,0,0,0};
 		mstate <= MBUS_IDLE;
 		pier_count <= 0;
 		MBUS_RNW <= 1;
+
+		if(PIER_QUIRK) BANK_REG <= '{0,0,0,0,0,0,0,0};
+		else BANK_REG <= '{0,1,2,3,4,5,6,7};
 	end
 	else begin
 		if (M68K_AS_N) M68K_MBUS_DTACK_N <= 1;
