@@ -53,6 +53,7 @@ module system
 	input         ZBUS_QUIRK,
 	input         NORAM_QUIRK,
 	input         PIER_QUIRK,
+	input         TTN2_QUIRK,
 
 	input  [14:0] BRAM_A,
 	input  [15:0] BRAM_DI,
@@ -97,29 +98,49 @@ always @(posedge MCLK) if(M68K_CLKENn) reset <= ~RESET_N | LOADING;
 //--------------------------------------------------------------
 wire M68K_CLKEN = M68K_CLKENp;
 reg  M68K_CLKENp, M68K_CLKENn;
-reg  Z80_CLKEN;
+reg  Z80_CLKEN, PSG_CLKEN;
 
 always @(negedge MCLK) begin
 	reg [3:0] VCLKCNT = 0;
 	reg [3:0] ZCLKCNT = 0;
+	reg [3:0] PCLKCNT = 0;
+	reg [3:0] ZCLKMAX = 0;
 
-	Z80_CLKEN <= 0;
-	ZCLKCNT <= ZCLKCNT + 1'b1;
-	if (ZCLKCNT == 14) begin
-		ZCLKCNT <= 0;
-		Z80_CLKEN <= 1;
-	end
-
-	M68K_CLKENp <= 0;
-	VCLKCNT <= VCLKCNT + 1'b1;
-	if (VCLKCNT == 6) begin
+	if(~RESET_N | LOADING) begin
 		VCLKCNT <= 0;
+		PCLKCNT <= 0;
+		Z80_CLKEN <= 1;
+		PSG_CLKEN <= 1;
 		M68K_CLKENp <= 1;
-	end
-
-	M68K_CLKENn <= 0;
-	if (VCLKCNT == 3) begin
 		M68K_CLKENn <= 1;
+		ZCLKMAX <= TTN2_QUIRK ? 4'd13 : 4'd14;
+	end
+	else begin
+		Z80_CLKEN <= 0;
+		ZCLKCNT <= ZCLKCNT + 1'b1;
+		if (ZCLKCNT == ZCLKMAX) begin
+			ZCLKCNT <= 0;
+			Z80_CLKEN <= 1;
+		end
+
+		PSG_CLKEN <= 0;
+		PCLKCNT <= PCLKCNT + 1'b1;
+		if (PCLKCNT == 14) begin
+			PCLKCNT <= 0;
+			PSG_CLKEN <= 1;
+		end
+
+		M68K_CLKENp <= 0;
+		VCLKCNT <= VCLKCNT + 1'b1;
+		if (VCLKCNT == 6) begin
+			VCLKCNT <= 0;
+			M68K_CLKENp <= 1;
+		end
+
+		M68K_CLKENn <= 0;
+		if (VCLKCNT == 3) begin
+			M68K_CLKENn <= 1;
+		end
 	end
 end
 
@@ -340,7 +361,7 @@ jt89 psg
 (
 	.rst(reset),
 	.clk(MCLK),
-	.clk_en(Z80_CLKEN),
+	.clk_en(PSG_CLKEN),
 
 	.wr_n(MBUS_RNW | ~VDP_SEL | ~MBUS_A[4] | MBUS_A[3]),
 	.din(MBUS_DO[15:8]),

@@ -277,6 +277,7 @@ system system
 	.ZBUS_QUIRK(zbus_quirk),
 	.NORAM_QUIRK(noram_quirk),
 	.PIER_QUIRK(pier_quirk),
+	.TTN2_QUIRK(ttn2_quirk),
 
 	.DAC_LDATA(audio_l),
 	.DAC_RDATA(audio_r),
@@ -458,13 +459,14 @@ reg fifo_quirk = 0;
 reg zbus_quirk = 0;
 reg noram_quirk = 0;
 reg pier_quirk = 0;
+reg ttn2_quirk = 0;
 always @(posedge clk_sys) begin
 	reg [55:0] cart_id;
 	reg [127:0] domestic;
 	reg old_download, old_reset;
 	old_download <= ioctl_download;
 
-	if(~old_download && ioctl_download) {zbus_quirk,fifo_quirk,eeprom_quirk,sram_quirk,noram_quirk,pier_quirk} <= 0;
+	if(~old_download && ioctl_download) {zbus_quirk,fifo_quirk,eeprom_quirk,sram_quirk,noram_quirk,pier_quirk,ttn2_quirk} <= 0;
 
 	if(ioctl_wr) begin
 		if(ioctl_addr >= 'h120 && ioctl_addr < 'h130)
@@ -496,6 +498,7 @@ always @(posedge clk_sys) begin
 			else if({cart_id,ioctl_data[7:0]} == "T-103036") zbus_quirk <= 1;   // Joe & Mac
 			else if({cart_id,ioctl_data[7:0]} == "T-574023") pier_quirk <= 1;   // Pier Solar Reprint
 			else if({cart_id,ioctl_data[7:0]} == "T-574013") pier_quirk <= 1;   // Pier Solar 1st Edition
+			else if({cart_id,ioctl_data[7:0]} == "TITAN002") ttn2_quirk <= 1;   // Titan Overdrive 2
 			if(domestic == "OLD TOWERS      ") fifo_quirk <= 1;                 // Old Towers (uses serial 000000000)
 		end
 	end
