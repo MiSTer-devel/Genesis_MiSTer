@@ -35,6 +35,8 @@ module jt12_top (
 
     output  [7:0]   dout,
     output          irq_n,
+    // Configuration
+    input           en_hifi_pcm,  // high to enable PCM interpolation on YM2612 mode
     // ADPCM pins
     output  [19:0]  adpcma_addr,  // real hardware has 10 pins multiplexed through RMPX pin
     output  [ 3:0]  adpcma_bank,
@@ -563,7 +565,7 @@ generate
         assign fm_snd_right[3:0] = 4'd0;
         assign fm_snd_left [3:0] = 4'd0;
         assign snd_sample        = zero;
-        wire signed [8:0] pcm2;
+        reg signed [8:0] pcm2;
 
         // interpolate PCM samples with automatic sample rate detection
         // this feature is not present in original YM2612
@@ -589,7 +591,9 @@ generate
 
         `ifndef NOPCMLINEAR
         wire signed [10:0] pcm_full;
-        assign pcm2 = pcm_full[9:1];
+        always @(*)
+            pcm2 = en_hifi_pcm ? pcm_full[9:1] : pcm;
+            
         jt12_pcm_interpol #(.dw(11), .stepw(5)) u_pcm (
             .rst_n ( rst_pcm_n      ),
             .clk   ( clk            ),

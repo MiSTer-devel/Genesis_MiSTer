@@ -161,6 +161,7 @@ localparam CONF_STR3 = {
 	"OIJ,Mouse,None,Port1,Port2;",
 	"OK,Mouse Flip Y,No,Yes;",
 	"OEF,Audio Filter,Model 1,Model 2,Minimal,No Filter;",
+    "ON,HiFi PCM,No,Yes;",
 	"-;",
 `ifdef SOUND_DBG
 	"OB,Enable FM,Yes,No;",
@@ -311,7 +312,7 @@ system system
 	.ENABLE_FM(1),
 	.ENABLE_PSG(1),
 `endif
-
+    .EN_HIFI_PCM(status[23]), // Option "N"
 	.LPF_MODE(status[15:14]),
 
 	.BRAM_A({sd_lba[6:0],sd_buff_addr}),
