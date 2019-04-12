@@ -26,7 +26,7 @@ module jt12_reg(
     input           clk_en,
     input   [7:0]   din,
     
-    input   [2:0]   ch,
+    input   [2:0]   ch,     // channel to update
     input   [1:0]   op,
     
     input           csm,
@@ -46,7 +46,9 @@ module jt12_reg(
     input           up_sl_rr,
     input           up_ssgeg,
 
-    output  reg     ch6op,  // 1 when the operator belongs to CH6
+    output reg       ch6op,  // 1 when the operator belongs to CH6
+    output reg [2:0] cur_ch,
+    output reg [1:0] cur_op,
     
     // CH3 Effect-mode operation
     input           effect,
@@ -65,11 +67,12 @@ module jt12_reg(
     output          s4_enters,
     
     // Operator
-    output          use_prevprev1,
-    output          use_internal_x,
-    output          use_internal_y, 
-    output          use_prev2,
-    output          use_prev1,
+    output          xuse_prevprev1,
+    output          xuse_internal,
+    output          yuse_internal, 
+    output          xuse_prev2,
+    output          yuse_prev1,
+    output          yuse_prev2,
     
     // PG
     output      [10:0]  fnum_I,
@@ -104,8 +107,8 @@ module jt12_reg(
 parameter num_ch=6; // Use only 3 (YM2203/YM2610) or 6 (YM2612/YM2608)
 
 
-reg  [1:0] next_op, cur_op;
-reg  [2:0] next_ch, cur_ch;
+reg  [1:0] next_op;
+reg  [2:0] next_ch;
 reg last;
 
 `ifdef SIMULATION
@@ -116,6 +119,8 @@ reg last;
 initial begin
     cur_op = 2'd0;
     cur_ch = 3'd0;
+    next_op = 2'd0;
+    next_ch = 3'd1;
     last    = 1'b0;
     zero    = 1'b1;
 end
@@ -154,11 +159,9 @@ assign block_I =( {3{effect_on_s1}} & block_ch3op1 ) |
                 ( {3{effect_on_s3}} & block_ch3op3 ) |
                 ( {3{noeffect}}  & block_I_raw  );
                 
-wire [2:0] ch_II, ch_III, ch_IV, ch_V, ch_VI;
-
 wire [4:0] req_opch_I = { op, ch };
 wire [4:0]  req_opch_II, req_opch_III, 
-            req_opch_IV, req_opch_V, req_opch_VI;
+            req_opch_IV, req_opch_V; //, req_opch_VI;
                 
 jt12_sumch #(.num_ch(num_ch)) u_opch_II ( .chin(req_opch_I  ), .chout(req_opch_II ) );
 jt12_sumch #(.num_ch(num_ch)) u_opch_III( .chin(req_opch_II ), .chout(req_opch_III) );
@@ -179,7 +182,6 @@ wire update_op_IV = cur == req_opch_IV;
 wire    [3:0]   keyon_op = din[7:4];
 wire    [2:0]   keyon_ch = din[2:0];
 // channel data
-wire    [1:0]   rl_in   = din[7:6];
 wire    [2:0]   fb_in   = din[5:3];
 wire    [2:0]   alg_in  = din[2:0];
 wire    [2:0]   pms_in  = din[2:0];
@@ -215,6 +217,7 @@ always @(posedge clk) begin : up_counter
     end
 end
 
+`ifndef NOFM
 jt12_kon #(.num_ch(num_ch)) u_kon(
     .rst        ( rst       ),
     .clk        ( clk       ),
@@ -231,18 +234,19 @@ jt12_kon #(.num_ch(num_ch)) u_kon(
     .keyon_I    ( keyon_I   )
 );
 
-jt12_mod u_mod(
+jt12_mod #(.num_ch(num_ch)) u_mod(
     .alg_I      ( alg_I     ),
     .s1_enters  ( s1_enters ),
     .s3_enters  ( s3_enters ),
     .s2_enters  ( s2_enters ),
     .s4_enters  ( s4_enters ),
     
-    .use_prevprev1 ( use_prevprev1  ),
-    .use_internal_x( use_internal_x ),
-    .use_internal_y( use_internal_y ),  
-    .use_prev2   ( use_prev2      ),
-    .use_prev1   ( use_prev1      )
+    .xuse_prevprev1 ( xuse_prevprev1  ),
+    .xuse_internal  ( xuse_internal   ),
+    .yuse_internal  ( yuse_internal   ),  
+    .xuse_prev2     ( xuse_prev2      ),
+    .yuse_prev1     ( yuse_prev1      ),
+    .yuse_prev2     ( yuse_prev2      )
 );
 
 wire [43:0] shift_out;
@@ -351,6 +355,7 @@ generate
 if( num_ch==6 ) begin
     // RL is on a different register to 
     // have the reset to 1
+    wire [1:0] rl_in   = din[7:6];	 
     jt12_sh_rst #(.width(2),.stages(num_ch),.rstval(1'b1)) u_regch_rl(
         .clk    ( clk       ),
         .clk_en ( clk_en    ),
@@ -363,5 +368,5 @@ end else begin // YM2203 has no stereo output
 end
     
 endgenerate
-
+`endif
 endmodule

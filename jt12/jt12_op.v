@@ -33,11 +33,12 @@ module jt12_op(
     input   [9:0]   pg_phase_VIII,
     input   [9:0]   eg_atten_IX,        // output from envelope generator
     input   [2:0]   fb_II,      // voice feedback
-    input           use_prevprev1,
-    input           use_internal_x,
-    input           use_internal_y,    
-    input           use_prev2,
-    input           use_prev1,
+    input           xuse_prevprev1,
+    input           xuse_prev2,
+    input           xuse_internal,
+    input           yuse_prev1,
+    input           yuse_prev2,
+    input           yuse_internal, 
     input           test_214,
     
     input           s1_enters,
@@ -49,6 +50,8 @@ module jt12_op(
     output  signed [ 8:0]   op_result,
     output  signed [13:0]   full_result
 );
+
+parameter num_ch = 6;
 
 /*  enters  exits
     S1      S2
@@ -63,35 +66,46 @@ reg [11:0]  atten_internal_IX;
 assign op_result   = op_result_internal[13:5];
 assign full_result = op_result_internal;
 
-parameter NUM_VOICES = 6;
-
 reg         signbit_IX, signbit_X, signbit_XI;
 reg [11:0]  totalatten_X;
 
 wire [13:0] prev1, prevprev1, prev2;
 
-jt12_sh #( .width(14), .stages(NUM_VOICES)) prev1_buffer(
-//  .rst    ( rst   ),
-    .clk    ( clk   ),
-    .clk_en ( clk_en),
-    .din    ( s2_enters ? op_result_internal : prev1 ),
-    .drop   ( prev1 )
+reg [13:0] prev1_din, prevprev1_din, prev2_din;
+
+always @(*)
+    if( num_ch==3 ) begin
+        prev1_din     = s1_enters ? op_result_internal : prev1;
+        prevprev1_din = s3_enters ? op_result_internal : prevprev1;
+        prev2_din     = s2_enters ? op_result_internal : prev2;
+    end else begin // 6 channels
+        prev1_din     = s2_enters ? op_result_internal : prev1;
+        prevprev1_din = s2_enters ? prev1 : prevprev1;
+        prev2_din     = s1_enters ? op_result_internal : prev2;
+    end
+
+jt12_sh #( .width(14), .stages(num_ch)) prev1_buffer(
+//  .rst    ( rst       ),
+    .clk    ( clk       ),
+    .clk_en ( clk_en    ),
+    .din    ( prev1_din ),
+    .drop   ( prev1     )
 );
 
-jt12_sh #( .width(14), .stages(NUM_VOICES)) prevprev1_buffer(
-//  .rst    ( rst   ),
-    .clk    ( clk   ),
-    .clk_en ( clk_en),
-    .din    ( s2_enters ? prev1 : prevprev1 ),
-    .drop   ( prevprev1 )
+jt12_sh #( .width(14), .stages(num_ch)) prevprev1_buffer(
+//  .rst    ( rst           ),
+    .clk    ( clk           ),
+    .clk_en ( clk_en        ),
+    .din    ( prevprev1_din ),
+    .drop   ( prevprev1     )
 );
 
-jt12_sh #( .width(14), .stages(NUM_VOICES)) prev2_buffer(
-//  .rst    ( rst   ),
-    .clk    ( clk   ),
-    .clk_en ( clk_en),
-    .din    ( s1_enters ? op_result_internal : prev2 ),
-    .drop   ( prev2 )
+jt12_sh #( .width(14), .stages(num_ch)) prev2_buffer(
+//  .rst    ( rst       ),
+    .clk    ( clk       ),
+    .clk_en ( clk_en    ),
+    .din    ( prev2_din ),
+    .drop   ( prev2     )
 );
 
 
@@ -106,11 +120,18 @@ reg [14:0]  xs, ys, pm_preshift_II;
 reg         s1_II;
 
 always @(*) begin
-    x  = ( {14{use_prevprev1}}  & prevprev1 ) |
-          ( {14{use_internal_x}} & op_result_internal ) |
-          ( {14{use_prev2}}      & prev2 );
-    y  = ( {14{use_prev1}}      & prev1 ) |
-          ( {14{use_internal_y}} & op_result_internal );
+    casez( {xuse_prevprev1, xuse_prev2, xuse_internal })
+        3'b1??: x = prevprev1;
+        3'b01?: x = prev2;
+        3'b001: x = op_result_internal;
+        default: x = 14'd0;
+    endcase
+    casez( {yuse_prev1, yuse_prev2, yuse_internal })
+        3'b1??: y = prev1;
+        3'b01?: y = prev2;
+        3'b001: y = op_result_internal;
+        default: y = 14'd0;
+    endcase    
     xs = { x[13], x }; // sign-extend
     ys = { y[13], y }; // sign-extend
 end
@@ -148,12 +169,18 @@ always @(*) begin
 end
 
 // REGISTER/CYCLE 2-7
-jt12_sh #( .width(10), .stages(NUM_VOICES)) phasemod_sh(
-    .clk    ( clk   ),
-    .clk_en ( clk_en),
-    .din    ( phasemod_II ),
-    .drop   ( phasemod_VIII )
-);
+//generate
+//    if( num_ch==6 )
+        jt12_sh #( .width(10), .stages(6)) phasemod_sh(
+            .clk    ( clk   ),
+            .clk_en ( clk_en),
+            .din    ( phasemod_II ),
+            .drop   ( phasemod_VIII )
+        );
+//     else begin
+//         assign phasemod_VIII = phasemod_II;
+//     end
+// endgenerate
 
 // REGISTER/CYCLE 8
 reg [ 9:0]  phase;
@@ -242,237 +269,5 @@ always @(posedge clk) if( clk_en ) begin
     // Extra register, take output after here
     op_result_internal <= op_XII;   
 end
-
-`ifdef SIMULATION
-/* verilator lint_off PINMISSING */
-reg [4:0] sep24_cnt;
-
-wire signed [13:0] op_ch0s1, op_ch1s1, op_ch2s1, op_ch3s1,
-         op_ch4s1, op_ch5s1, op_ch0s2, op_ch1s2,
-         op_ch2s2, op_ch3s2, op_ch4s2, op_ch5s2,
-         op_ch0s3, op_ch1s3, op_ch2s3, op_ch3s3,
-         op_ch4s3, op_ch5s3, op_ch0s4, op_ch1s4,
-         op_ch2s4, op_ch3s4, op_ch4s4, op_ch5s4;
-
-always @(posedge clk ) if( clk_en ) begin
-    sep24_cnt <= !zero ? sep24_cnt+1'b1 : 5'd0;
-end
-
-sep24 #( .width(14), .pos0(13)) opsep
-(
-    .clk    ( clk       ),
-    .clk_en ( clk_en    ),
-    .mixed  ( op_result_internal    ),
-    .mask   ( 24'd0     ),
-    .cnt    ( sep24_cnt ),  
-    
-    .ch0s1 (op_ch0s1), 
-    .ch1s1 (op_ch1s1), 
-    .ch2s1 (op_ch2s1), 
-    .ch3s1 (op_ch3s1), 
-    .ch4s1 (op_ch4s1), 
-    .ch5s1 (op_ch5s1), 
-
-    .ch0s2 (op_ch0s2), 
-    .ch1s2 (op_ch1s2), 
-    .ch2s2 (op_ch2s2), 
-    .ch3s2 (op_ch3s2), 
-    .ch4s2 (op_ch4s2), 
-    .ch5s2 (op_ch5s2), 
-
-    .ch0s3 (op_ch0s3), 
-    .ch1s3 (op_ch1s3), 
-    .ch2s3 (op_ch2s3), 
-    .ch3s3 (op_ch3s3), 
-    .ch4s3 (op_ch4s3), 
-    .ch5s3 (op_ch5s3), 
-
-    .ch0s4 (op_ch0s4), 
-    .ch1s4 (op_ch1s4), 
-    .ch2s4 (op_ch2s4), 
-    .ch3s4 (op_ch3s4), 
-    .ch4s4 (op_ch4s4), 
-    .ch5s4 (op_ch5s4)
-);
-
-wire signed [8:0] acc_ch0s1, acc_ch1s1, acc_ch2s1, acc_ch3s1,
-         acc_ch4s1, acc_ch5s1, acc_ch0s2, acc_ch1s2,
-         acc_ch2s2, acc_ch3s2, acc_ch4s2, acc_ch5s2,
-         acc_ch0s3, acc_ch1s3, acc_ch2s3, acc_ch3s3,
-         acc_ch4s3, acc_ch5s3, acc_ch0s4, acc_ch1s4,
-         acc_ch2s4, acc_ch3s4, acc_ch4s4, acc_ch5s4;
-
-sep24 #( .width(9), .pos0(13)) accsep
-(
-    .clk    ( clk       ),
-    .clk_en ( clk_en    ),
-    .mixed  ( op_result_internal[13:5] ),
-    .mask   ( 24'd0     ),
-    .cnt    ( sep24_cnt ),  
-    
-    .ch0s1 (acc_ch0s1), 
-    .ch1s1 (acc_ch1s1), 
-    .ch2s1 (acc_ch2s1), 
-    .ch3s1 (acc_ch3s1), 
-    .ch4s1 (acc_ch4s1), 
-    .ch5s1 (acc_ch5s1), 
-
-    .ch0s2 (acc_ch0s2), 
-    .ch1s2 (acc_ch1s2), 
-    .ch2s2 (acc_ch2s2), 
-    .ch3s2 (acc_ch3s2), 
-    .ch4s2 (acc_ch4s2), 
-    .ch5s2 (acc_ch5s2), 
-
-    .ch0s3 (acc_ch0s3), 
-    .ch1s3 (acc_ch1s3), 
-    .ch2s3 (acc_ch2s3), 
-    .ch3s3 (acc_ch3s3), 
-    .ch4s3 (acc_ch4s3), 
-    .ch5s3 (acc_ch5s3), 
-
-    .ch0s4 (acc_ch0s4), 
-    .ch1s4 (acc_ch1s4), 
-    .ch2s4 (acc_ch2s4), 
-    .ch3s4 (acc_ch3s4), 
-    .ch4s4 (acc_ch4s4), 
-    .ch5s4 (acc_ch5s4)
-);
-
-wire signed [9:0] pm_ch0s1, pm_ch1s1, pm_ch2s1, pm_ch3s1,
-         pm_ch4s1, pm_ch5s1, pm_ch0s2, pm_ch1s2,
-         pm_ch2s2, pm_ch3s2, pm_ch4s2, pm_ch5s2,
-         pm_ch0s3, pm_ch1s3, pm_ch2s3, pm_ch3s3,
-         pm_ch4s3, pm_ch5s3, pm_ch0s4, pm_ch1s4,
-         pm_ch2s4, pm_ch3s4, pm_ch4s4, pm_ch5s4;
-
-
-sep24 #( .width(10), .pos0( 18 ) ) pmsep
-(
-    .clk    ( clk       ),
-    .clk_en ( clk_en    ),
-    .mixed  ( phasemod_VIII ),
-    .mask   ( 24'd0     ),
-    .cnt    ( sep24_cnt ),  
-    
-    .ch0s1 (pm_ch0s1), 
-    .ch1s1 (pm_ch1s1), 
-    .ch2s1 (pm_ch2s1), 
-    .ch3s1 (pm_ch3s1), 
-    .ch4s1 (pm_ch4s1), 
-    .ch5s1 (pm_ch5s1), 
-
-    .ch0s2 (pm_ch0s2), 
-    .ch1s2 (pm_ch1s2), 
-    .ch2s2 (pm_ch2s2), 
-    .ch3s2 (pm_ch3s2), 
-    .ch4s2 (pm_ch4s2), 
-    .ch5s2 (pm_ch5s2), 
-
-    .ch0s3 (pm_ch0s3), 
-    .ch1s3 (pm_ch1s3), 
-    .ch2s3 (pm_ch2s3), 
-    .ch3s3 (pm_ch3s3), 
-    .ch4s3 (pm_ch4s3), 
-    .ch5s3 (pm_ch5s3), 
-
-    .ch0s4 (pm_ch0s4), 
-    .ch1s4 (pm_ch1s4), 
-    .ch2s4 (pm_ch2s4), 
-    .ch3s4 (pm_ch3s4), 
-    .ch4s4 (pm_ch4s4), 
-    .ch5s4 (pm_ch5s4)
-);
-
-wire [9:0] phase_ch0s1, phase_ch1s1, phase_ch2s1, phase_ch3s1,
-         phase_ch4s1, phase_ch5s1, phase_ch0s2, phase_ch1s2,
-         phase_ch2s2, phase_ch3s2, phase_ch4s2, phase_ch5s2,
-         phase_ch0s3, phase_ch1s3, phase_ch2s3, phase_ch3s3,
-         phase_ch4s3, phase_ch5s3, phase_ch0s4, phase_ch1s4,
-         phase_ch2s4, phase_ch3s4, phase_ch4s4, phase_ch5s4;
-
-
-sep24 #( .width(10), .pos0( 18 ) ) phsep
-(
-    .clk    ( clk       ),
-    .clk_en ( clk_en    ),
-    .mixed  ( phase     ),
-    .mask   ( 24'd0     ),
-    .cnt    ( sep24_cnt ),  
-    
-    .ch0s1 (phase_ch0s1), 
-    .ch1s1 (phase_ch1s1), 
-    .ch2s1 (phase_ch2s1), 
-    .ch3s1 (phase_ch3s1), 
-    .ch4s1 (phase_ch4s1), 
-    .ch5s1 (phase_ch5s1), 
-
-    .ch0s2 (phase_ch0s2), 
-    .ch1s2 (phase_ch1s2), 
-    .ch2s2 (phase_ch2s2), 
-    .ch3s2 (phase_ch3s2), 
-    .ch4s2 (phase_ch4s2), 
-    .ch5s2 (phase_ch5s2), 
-
-    .ch0s3 (phase_ch0s3), 
-    .ch1s3 (phase_ch1s3), 
-    .ch2s3 (phase_ch2s3), 
-    .ch3s3 (phase_ch3s3), 
-    .ch4s3 (phase_ch4s3), 
-    .ch5s3 (phase_ch5s3), 
-
-    .ch0s4 (phase_ch0s4), 
-    .ch1s4 (phase_ch1s4), 
-    .ch2s4 (phase_ch2s4), 
-    .ch3s4 (phase_ch3s4), 
-    .ch4s4 (phase_ch4s4), 
-    .ch5s4 (phase_ch5s4)
-);
-
-wire [9:0] eg_ch0s1, eg_ch1s1, eg_ch2s1, eg_ch3s1, eg_ch4s1, eg_ch5s1,
-        eg_ch0s2, eg_ch1s2, eg_ch2s2, eg_ch3s2, eg_ch4s2, eg_ch5s2,
-        eg_ch0s3, eg_ch1s3, eg_ch2s3, eg_ch3s3, eg_ch4s3, eg_ch5s3,
-        eg_ch0s4, eg_ch1s4, eg_ch2s4, eg_ch3s4, eg_ch4s4, eg_ch5s4;
-
-
-sep24 #( .width(10), .pos0(17) ) egsep
-(
-    .clk    ( clk       ),
-    .clk_en ( clk_en    ),
-    .mixed  ( eg_atten_IX       ),
-    .mask   ( 24'd0     ),
-    .cnt    ( sep24_cnt ),  
-    
-    .ch0s1 (eg_ch0s1), 
-    .ch1s1 (eg_ch1s1), 
-    .ch2s1 (eg_ch2s1), 
-    .ch3s1 (eg_ch3s1), 
-    .ch4s1 (eg_ch4s1), 
-    .ch5s1 (eg_ch5s1), 
-
-    .ch0s2 (eg_ch0s2), 
-    .ch1s2 (eg_ch1s2), 
-    .ch2s2 (eg_ch2s2), 
-    .ch3s2 (eg_ch3s2), 
-    .ch4s2 (eg_ch4s2), 
-    .ch5s2 (eg_ch5s2), 
-
-    .ch0s3 (eg_ch0s3), 
-    .ch1s3 (eg_ch1s3), 
-    .ch2s3 (eg_ch2s3), 
-    .ch3s3 (eg_ch3s3), 
-    .ch4s3 (eg_ch4s3), 
-    .ch5s3 (eg_ch5s3), 
-
-    .ch0s4 (eg_ch0s4), 
-    .ch1s4 (eg_ch1s4), 
-    .ch2s4 (eg_ch2s4), 
-    .ch3s4 (eg_ch3s4), 
-    .ch4s4 (eg_ch4s4), 
-    .ch5s4 (eg_ch5s4)
-);
-/* verilator lint_on PINMISSING */
-`endif
-
 
 endmodule

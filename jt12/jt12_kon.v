@@ -41,19 +41,6 @@ module jt12_kon(
 
 parameter num_ch=6;
 
-// capture overflow signal so it lasts long enough
-reg overflow2;
-reg [4:0] overflow_cycle;
-
-always @(posedge clk) if( clk_en ) begin
-    if(overflow_A) begin
-        overflow2 <= 1'b1;
-        overflow_cycle <= { next_op, next_ch };
-    end else begin
-        if(overflow_cycle == {next_op, next_ch}) overflow2<=1'b0;
-    end
-end
-
 reg din;
 wire csr_out;
 
@@ -75,6 +62,19 @@ generate
 if(num_ch==6) begin
     wire middle;
     reg  mid_din;
+
+    // capture overflow signal so it lasts long enough
+    reg overflow2;
+    reg [4:0] overflow_cycle;
+
+    always @(posedge clk) if( clk_en ) begin
+        if(overflow_A) begin
+            overflow2 <= 1'b1;
+            overflow_cycle <= { next_op, next_ch };
+        end else begin
+            if(overflow_cycle == {next_op, next_ch}) overflow2<=1'b0;
+        end
+    end
 
     always @(posedge clk) if( clk_en ) 
         keyon_I <= (csm&&next_ch==3'd2&&overflow2) || csr_out;

@@ -26,11 +26,16 @@ module jt12_mmr(
     input           cen,
     output          clk_en,
     output          clk_en_ssg,
+    output          clk_en_666,
+    output          clk_en_111,
+    output          clk_en_55,
     input   [7:0]   din,
     input           write,
     input   [1:0]   addr,
     output  reg     busy,
     output          ch6op,
+    output  [2:0]   cur_ch,
+    output  [1:0]   cur_op,
     // LFO
     output  reg [2:0]   lfo_freq,
     output  reg         lfo_en,
@@ -50,12 +55,33 @@ module jt12_mmr(
     output  reg [8:0]   pcm,
     output  reg         pcm_en,
     output  reg         pcm_wr, // high for one clock cycle when PCM is written
+    // ADPCM-A
+    output  reg  [ 7:0] aon_a,      // ON
+    output  reg  [ 5:0] atl_a,      // TL
+    output  reg  [15:0] addr_a,     // address latch
+    output  reg  [ 7:0] lracl,      // L/R ADPCM Channel Level
+    output  reg         up_start,   // write enable start address latch
+    output  reg         up_end,     // write enable end address latch
+    output  reg  [ 2:0] up_addr,    // write enable end address latch
+    output  reg  [ 2:0] up_lracl,
+    output  reg         up_aon,     // There was a write AON register
+    // ADPCM-B
+    output  reg         acmd_on_b,  // Control - Process start, Key On
+    output  reg         acmd_rep_b, // Control - Repeat
+    output  reg         acmd_rst_b, // Control - Reset
+    output  reg  [ 1:0] alr_b,      // Left / Right
+    output  reg  [15:0] astart_b,   // Start address
+    output  reg  [15:0] aend_b,     // End   address
+    output  reg  [15:0] adeltan_b,  // Delta-N
+    output  reg  [ 7:0] aeg_b,      // Envelope Generator Control
+    output  reg  [ 6:0] flag_ctl,
     // Operator
-    output          use_prevprev1,
-    output          use_internal_x,
-    output          use_internal_y,
-    output          use_prev2,
-    output          use_prev1,
+    output          xuse_prevprev1,
+    output          xuse_internal,
+    output          yuse_internal, 
+    output          xuse_prev2,
+    output          yuse_prev1,
+    output          yuse_prev2,
     // PG
     output  [10:0]  fnum_I,
     output  [ 2:0]  block_I,
@@ -84,7 +110,6 @@ module jt12_mmr(
 
     output          keyon_I,
 
-//  output  [ 1:0]  cur_op,
     // Operator
     output          zero,
     output          s1_enters,
@@ -98,30 +123,25 @@ module jt12_mmr(
     output  reg     psg_wr_n
 );
 
-parameter use_ssg=0, num_ch=6, use_pcm=1;
-
-`ifdef SIMULATION
-    initial begin
-        cen_cnt = 3'd0;
-    end
-    `include "jt12_mmr_sim.vh"
-`endif
+parameter use_ssg=0, num_ch=6, use_pcm=1, use_adpcm=0;
 
 reg [1:0] div_setting;
 
 
-jt12_div #(.use_ssg(use_ssg)) u_div (
-    .rst            ( rst           ),
-    .clk            ( clk           ),
-    .cen            ( cen           ),
-    .div_setting    ( div_setting   ),
-    .clk_en         ( clk_en        ),
-    .clk_en_ssg     ( clk_en_ssg    )
+jt12_div #(.use_ssg(use_ssg),.num_ch(num_ch)) u_div (
+    .rst            ( rst             ),
+    .clk            ( clk             ),
+    .cen            ( cen             ),
+    .div_setting    ( div_setting     ),
+    .clk_en         ( clk_en          ),
+    .clk_en_ssg     ( clk_en_ssg      ),
+    .clk_en_666     ( clk_en_666      ),
+    .clk_en_111     ( clk_en_111      ),
+    .clk_en_55      ( clk_en_55       )
 );
 
 reg [7:0]   selected_register;
 
-//reg       sch; // 0 => CH1~CH3 only available. 1=>CH4~CH6
 /*
 reg     irq_zero_en, irq_brdy_en, irq_eos_en,
         irq_tb_en, irq_ta_en;
@@ -130,9 +150,7 @@ reg [6:0] up_opreg; // hot-one encoding. tells which operator register gets upda
 reg [2:0] up_chreg; // hot-one encoding. tells which channel register gets updated next
 reg up_keyon;
 
-wire            busy_reg;
-
-parameter   REG_TESTYM  =   8'h21,
+localparam  REG_TESTYM  =   8'h21,
             REG_LFO     =   8'h22,
             REG_CLKA1   =   8'h24,
             REG_CLKA2   =   8'h25,
@@ -145,8 +163,11 @@ parameter   REG_TESTYM  =   8'h21,
             REG_DACTEST =   8'h2C,
             REG_CLK_N6  =   8'h2D,
             REG_CLK_N3  =   8'h2E,
-            REG_CLK_N2  =   8'h2F;
-
+            REG_CLK_N2  =   8'h2F,
+            // ADPCM (YM2610)
+            REG_ADPCMA_ON   = 8'h00,
+            REG_ADPCMA_TL   = 8'h01,
+            REG_ADPCMA_TEST = 8'h02;
 
 reg csm, effect;
 
@@ -180,7 +201,7 @@ reg part;
 always @(posedge clk) begin : memory_mapped_registers
     if( rst ) begin
         selected_register   <= 8'h0;
-        div_setting         <= num_ch==6 ? 2'b10 : 2'b11; // divide by 6 or 3
+        div_setting         <= 2'b11; 
         up_ch               <= 3'd0;
         up_op               <= 2'd0;
         up_keyon            <= 1'd0;
@@ -203,11 +224,37 @@ always @(posedge clk) begin : memory_mapped_registers
         pcm         <= 9'h0;
         pcm_en      <= 1'b0;
         pcm_wr      <= 1'b0;
-        // sch          <= 1'b0;
+        // ADPCM-A
+        aon_a       <=  'd0;
+        atl_a       <=  'd0;
+        up_start    <=  'd0;
+        up_end      <=  'd0;
+        up_addr     <= 3'd7;
+        up_lracl    <= 3'd7;
+        up_aon      <=  'd0;
+        lracl       <=  'd0;
+        addr_a      <=  'd0;        
+        // ADPCM-B
+        acmd_on_b   <=  'd0;
+        acmd_rep_b  <=  'd0;
+        acmd_rst_b  <=  'd0;
+        alr_b       <=  'd0;
+        flag_ctl    <=  'd0;
+        astart_b    <=  'd0;
+        aend_b      <=  'd0;
+        adeltan_b   <=  'd0;
+        aeg_b       <= 8'hff;
         // Original test features
         eg_stop     <= 1'b0;
         pg_stop     <= 1'b0;
         psg_wr_n    <= 1'b1;
+        // 
+        { block_ch3op1, fnum_ch3op1 } <= {3'd0, 11'd0 };
+        { block_ch3op3, fnum_ch3op3 } <= {3'd0, 11'd0 };
+        { block_ch3op2, fnum_ch3op2 } <= {3'd0, 11'd0 };
+        latch_fnum <= 6'd0;
+        din_copy   <= 8'd0;
+        part       <= 1'b0;
     end else begin
         // WRITE IN REGISTERS
         if( write ) begin
@@ -222,7 +269,7 @@ always @(posedge clk) begin : memory_mapped_registers
                 up_op <= selected_register[3:2]; // 0=S1,1=S3,2=S2,3=S4
                 casez( selected_register)
                     //REG_TEST: lfo_rst <= 1'b1; // regardless of din
-                    8'h0?: psg_wr_n <= 1'b0;
+                    8'h0?: if(!part) psg_wr_n <= 1'b0;
                     REG_TESTYM: begin
                         eg_stop <= din[5];
                         pg_stop <= din[3];
@@ -254,7 +301,8 @@ always @(posedge clk) begin : memory_mapped_registers
                     8'hA4, 8'hA5, 8'hA6, 8'hAD, 8'hAC, 8'hAE: latch_fnum <= din[5:0];
                     default:;   // avoid incomplete-case warning
                 endcase
-                if( use_pcm==1 ) begin // for YM2612 only
+                // YM2612 PCM support
+                if( use_pcm==1 ) begin
                     casez( selected_register)
                         REG_DACTEST: pcm[0] <= din[3];
                         REG_PCM:
@@ -263,6 +311,54 @@ always @(posedge clk) begin : memory_mapped_registers
                         default:;
                     endcase
                     pcm_wr <= selected_register==REG_PCM;
+                end
+                if( use_adpcm==1 ) begin
+                    // YM2610 ADPCM-A support, A1=1, regs 0-2D
+                    if(part && selected_register[7:6]==2'b0) begin
+                        casez( selected_register[5:0] )
+                            6'h0: begin
+                                aon_a  <= din;
+                                up_aon <= 1'b1;
+                            end
+                            6'h1: atl_a <= din[5:0];
+                            // LRACL
+                            6'h8, 6'h9, 6'hA, 6'hB, 6'hC, 6'hD: begin
+                                lracl <= din;
+                                up_lracl <= selected_register[2:0];
+                            end
+                            6'b01_????, 6'b10_????: begin
+                                if( !selected_register[3] ) addr_a[ 7:0] <= din;
+                                if( selected_register[3]  ) addr_a[15:8] <= din;
+                                case( selected_register[5:4] )
+                                    2'b01, 2'b10: begin
+                                        {up_end, up_start } <= selected_register[5:4];
+                                        up_addr <= selected_register[2:0];
+                                    end
+                                    default: begin
+                                        up_start <= 1'b0;
+                                        up_end   <= 1'b0;
+                                    end
+                                endcase
+                            end
+                            default:;
+                        endcase
+                    end
+                    if( !part && selected_register[7:4]==4'h1 ) begin
+                        // YM2610 ADPCM-B support, A1=0, regs 1x
+                        case(selected_register[3:0])
+                            4'd0: {acmd_on_b, acmd_rep_b,acmd_rst_b} <= {din[7],din[4],din[0]};
+                            4'd1: alr_b  <= din[7:6];
+                            4'd2: astart_b [ 7:0] <= din;
+                            4'd3: astart_b [15:8] <= din;
+                            4'd4: aend_b   [ 7:0] <= din;
+                            4'd5: aend_b   [15:8] <= din;
+                            4'h9: adeltan_b[ 7:0] <= din;
+                            4'ha: adeltan_b[15:8] <= din;
+                            4'hb: aeg_b           <= din;
+                            4'hc: flag_ctl        <= {din[7],din[5:0]}; // this lasts a single clock cycle
+                            default:;
+                        endcase
+                    end
                 end
                 if( selected_register[1:0]==2'b11 ) 
                     { up_chreg, up_opreg } <= { 3'h0, 7'h0 };
@@ -289,7 +385,9 @@ always @(posedge clk) begin : memory_mapped_registers
             // lfo_rst <= 1'b0;
             { clr_flag_B, clr_flag_A } <= 2'd0;
             psg_wr_n <= 1'b1;
-            pcm_wr <= 1'b0;
+            pcm_wr   <= 1'b0;
+            flag_ctl <= 'd0;
+            up_aon   <= 1'b0;
         end
     end
 end
@@ -311,7 +409,7 @@ always @(posedge clk)
             busy_cnt <= busy_cnt+5'd1;
         end
     end
-
+/* verilator tracing_off */
 jt12_reg #(.num_ch(num_ch)) u_reg(
     .rst        ( rst       ),
     .clk        ( clk       ),      // P1
@@ -338,6 +436,8 @@ jt12_reg #(.num_ch(num_ch)) u_reg(
     .overflow_A ( overflow_A),
 
     .ch6op      ( ch6op     ),
+    .cur_ch     ( cur_ch    ),
+    .cur_op     ( cur_op    ),
     // CH3 Effect-mode operation
     .effect     ( effect    ),      // allows independent freq. for CH 3
     .fnum_ch3op2( fnum_ch3op2 ),
@@ -348,11 +448,12 @@ jt12_reg #(.num_ch(num_ch)) u_reg(
     .block_ch3op1( block_ch3op1 ),
     .latch_fnum ( latch_fnum    ),
     // Operator
-    .use_prevprev1(use_prevprev1),
-    .use_internal_x(use_internal_x),
-    .use_internal_y(use_internal_y),
-    .use_prev2  ( use_prev2 ),
-    .use_prev1  ( use_prev1 ),
+    .xuse_prevprev1 ( xuse_prevprev1  ),
+    .xuse_internal  ( xuse_internal   ),
+    .yuse_internal  ( yuse_internal   ),  
+    .xuse_prev2     ( xuse_prev2      ),
+    .yuse_prev1     ( yuse_prev1      ),
+    .yuse_prev2     ( yuse_prev2      ),
     // PG
     .fnum_I     (   fnum_I  ),
     .block_I    (   block_I ),

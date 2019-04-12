@@ -53,8 +53,6 @@ module jt12_acc(
     output reg signed   [11:0]  right
 );
 
-parameter num_ch=6;
-
 reg sum_en;
 
 always @(*) begin
