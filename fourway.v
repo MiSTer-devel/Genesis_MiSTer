@@ -73,17 +73,15 @@ always @(posedge RESET or posedge CLK) begin
 	end
 	else if(CE) begin
 		if(JTMR > 11600 || J3BUT) JCNT <= 0;
-		else if(TH) JTMR <= JTMR + 1'd1;
+		if(~&JTMR) JTMR <= JTMR + 1'd1;
 
 		if(~SEL) DTACK_N <= 1;
 		else if(SEL & DTACK_N) begin
 			if(~RNW) begin
 				// Write
 				TH <= DI;
-				if(~TH & DI) begin
-					JTMR <= 0;
-					JCNT <= JCNT + 1'd1;
-				end
+				if(~TH & DI) JCNT <= JCNT + 1'd1;
+				if(TH & ~DI) JTMR <= 0;
 			end
 			else begin
 				// Read

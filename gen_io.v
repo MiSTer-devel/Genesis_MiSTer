@@ -143,24 +143,20 @@ always @(posedge RESET or posedge CLK) begin
 		JCNT2 <= 0;
 	end
 	else if(CE) begin
-		if(JTMR1 > 11600 || J3BUT) JCNT1 <= 0;
-		else if(DATA[6]) JTMR1 <= JTMR1 + 1'd1;
-
-		if(JTMR2 > 11600 || J3BUT) JCNT2 <= 0;
-		else if(DATB[6]) JTMR2 <= JTMR2 + 1'd1;
-
 		THAd <= THA;
-		if(~THAd & THA) begin
-			JTMR1 <= 0;
-			JCNT1 <= JCNT1 + 1'd1;
-		end
+		if(JTMR1 > 11600 || J3BUT) JCNT1 <= 0;
+		if(~THAd & THA) JCNT1 <= JCNT1 + 1'd1;
+
+		if(~&JTMR1) JTMR1 <= JTMR1 + 1'd1;
+		if(THAd & ~THA) JTMR1 <= 0;
 
 		THBd <= THB;
-		if(~THBd & THB) begin
-			JTMR2 <= 0;
-			JCNT2 <= JCNT2 + 1'd1;
-		end
-		
+		if(JTMR2 > 11600 || J3BUT) JCNT2 <= 0;
+		if(~THBd & THB) JCNT2 <= JCNT2 + 1'd1;
+
+		if(~&JTMR2) JTMR2 <= JTMR2 + 1'd1;
+		if(THBd & ~THB) JTMR2 <= 0;
+
 		if(~SEL) DTACK_N <= 1;
 		else if(SEL & DTACK_N) begin
 			if(~RNW) begin
