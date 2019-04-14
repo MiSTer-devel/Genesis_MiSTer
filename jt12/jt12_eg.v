@@ -48,6 +48,8 @@ module jt12_eg (
     output  reg         pg_rst_II
 );
 
+parameter num_ch=6;
+
 wire [14:0] eg_cnt;
 
 jt12_eg_cnt u_egcnt(
@@ -158,14 +160,14 @@ always @(posedge clk) if(clk_en) begin
     eg_V        <= eg_out_IV;
 end
 
-jt12_sh #( .width(1), .stages(24) ) u_cntsh(
+jt12_sh #( .width(1), .stages(4*num_ch) ) u_cntsh(
     .clk    ( clk       ),
     .clk_en ( clk_en    ),
     .din    ( cnt_lsb_II),
     .drop   ( cnt_in_II )
 );
 
-jt12_sh_rst #( .width(10), .stages(21), .rstval(1'b1) ) u_egsh(
+jt12_sh_rst #( .width(10), .stages(4*num_ch-3), .rstval(1'b1) ) u_egsh(
     .clk    ( clk       ),
     .clk_en ( clk_en    ),
     .rst    ( rst       ),
@@ -173,7 +175,7 @@ jt12_sh_rst #( .width(10), .stages(21), .rstval(1'b1) ) u_egsh(
     .drop   ( eg_in_I   )
 );
 
-jt12_sh_rst #( .width(3), .stages(24), .rstval(1'b1) ) u_egstate(
+jt12_sh_rst #( .width(3), .stages(4*num_ch), .rstval(1'b1) ) u_egstate(
     .clk    ( clk       ),
     .clk_en ( clk_en    ),
     .rst    ( rst       ),
@@ -181,7 +183,7 @@ jt12_sh_rst #( .width(3), .stages(24), .rstval(1'b1) ) u_egstate(
     .drop   ( state_in_I    )
 );
 
-jt12_sh_rst #( .width(1), .stages(21), .rstval(1'b0) ) u_ssg_inv(
+jt12_sh_rst #( .width(1), .stages(4*num_ch-3), .rstval(1'b0) ) u_ssg_inv(
     .clk    ( clk           ),
     .clk_en ( clk_en        ),
     .rst    ( rst           ),
@@ -189,7 +191,7 @@ jt12_sh_rst #( .width(1), .stages(21), .rstval(1'b0) ) u_ssg_inv(
     .drop   ( ssg_inv_in_I  )
 );
 
-jt12_sh_rst #( .width(1), .stages(24), .rstval(1'b0) ) u_konsh(
+jt12_sh_rst #( .width(1), .stages(4*num_ch), .rstval(1'b0) ) u_konsh(
     .clk    ( clk       ),
     .clk_en ( clk_en    ),
     .rst    ( rst       ),  

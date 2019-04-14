@@ -26,43 +26,67 @@ module jt12_div(
     input           cen,
     input   [1:0]   div_setting,
     output  reg     clk_en,
-    output  reg     clk_en_ssg
+    output  reg     clk_en_ssg,
+    output  reg     clk_en_666,  // 666 kHz
+    output  reg     clk_en_111,  // 111
+    output  reg     clk_en_55         //  55
 );
 
-parameter use_ssg=0;
+parameter use_ssg=0, num_ch=6;
 
-reg [2:0] opn_pres, ssg_pres;
-reg [2:0] opn_cnt, ssg_cnt;
-reg cen_int, cen_ssg_int;
+reg [3:0] opn_pres, opn_cnt=4'd0;
+reg [2:0] ssg_pres, ssg_cnt=3'd0;
+reg [4:0] adpcm_cnt666  = 5'd0;
+reg [2:0] adpcm_cnt111 = 3'd0, adpcm_cnt55=3'd0;
+reg cen_int, cen_ssg_int, cen_adpcm_int, cen_adpcm3_int;
 
 always @(*)
+    if( num_ch==6 ) begin
+        opn_pres = 4'd5;
+        ssg_pres = 3'd3; // unused, really
+    end
+    else
     casez( div_setting )
-        2'b0?: { opn_pres, ssg_pres } = { 3'd1, 3'd0 };
-        2'b10: { opn_pres, ssg_pres } = { 3'd5, 3'd3 };
-        2'b11: { opn_pres, ssg_pres } = { 3'd2, 3'd1 };
+        2'b0?: { opn_pres, ssg_pres } = { 4'd2-4'd1, 3'd0 }; // 2
+        2'b10: { opn_pres, ssg_pres } = { 4'd6-4'd1, 3'd3 }; // 6 - Default for YM2608
+        2'b11: { opn_pres, ssg_pres } = { 4'd3-4'd1, 3'd1 }; // 3 - Default for YM2203
     endcase // div_setting
 
+`ifdef SIMULATION
+initial clk_en_666 = 1'b0;
+`endif
+
+reg cen_55_int;
 
 always @(negedge clk) begin
-    cen_int     <= opn_cnt == 3'd0;
-    cen_ssg_int <= ssg_cnt == 3'd0;
+    cen_int        <= opn_cnt    == 4'd0;
+    cen_ssg_int    <= ssg_cnt    == 3'd0;
+    cen_adpcm_int  <= adpcm_cnt666  == 5'd0;
+    cen_adpcm3_int <= adpcm_cnt111 == 3'd0;
+    cen_55_int     <= adpcm_cnt55== 3'd0;
     `ifdef FASTDIV
     // always enabled for fast sims (use with GYM output, timer will not work well)
     clk_en <= 1'b1;
     clk_en_ssg <= 1'b1;
+    clk_en_666 <= 1'b1;
+    clk_en_55    <= 1'b1;
     `else
-    clk_en      <= cen & cen_int;   
-    clk_en_ssg  <= use_ssg ? (cen & cen_ssg_int) : 1'b0;
+    clk_en     <= cen & cen_int;   
+    clk_en_ssg <= use_ssg ? (cen & cen_ssg_int) : 1'b0;
+    clk_en_666 <= cen & cen_adpcm_int; 
+    clk_en_111 <= cen & cen_adpcm_int & cen_adpcm3_int; 
+    clk_en_55  <= cen & cen_adpcm_int & cen_adpcm3_int & cen_55_int;
     `endif
 end
+
 
 // OPN
 always @(posedge clk)
     if( cen ) begin
         if( opn_cnt == opn_pres ) begin
-            opn_cnt <= 3'd0;            
+            opn_cnt <= 4'd0;  
         end
-        else opn_cnt <= opn_cnt + 3'd1;
+        else opn_cnt <= opn_cnt + 4'd1;
     end
 
 // SSG
@@ -72,6 +96,17 @@ always @(posedge clk)
             ssg_cnt <= 3'd0;            
         end
         else ssg_cnt <= ssg_cnt + 3'd1;
+    end
+
+// ADPCM-A
+always @(posedge clk)
+    if( cen ) begin
+        adpcm_cnt666 <= adpcm_cnt666==5'd11 ? 5'd0 : adpcm_cnt666 + 5'd1;
+        if( adpcm_cnt666==5'd0 ) begin
+            adpcm_cnt111 <= adpcm_cnt111==3'd5 ? 3'd0 : adpcm_cnt111+3'd1;
+            if( adpcm_cnt111==3'd0)
+                adpcm_cnt55 <= adpcm_cnt55==3'd1 ? 3'd0: adpcm_cnt55+3'd1;
+        end
     end
 
 endmodule // jt12_div

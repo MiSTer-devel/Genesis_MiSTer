@@ -54,6 +54,8 @@ module jt12_pg(
     output      [ 9:0]  phase_VIII
 );
 
+parameter num_ch=6;
+
 wire [4:0] keycode_I;
 wire signed [5:0] detune_mod_I;
 reg signed [5:0] detune_mod_II;
@@ -92,7 +94,7 @@ jt12_pg_comb u_comb(
     .phase_op   ( phase_II      )
 );
 
-jt12_sh_rst #( .width(20), .stages(24) ) u_phsh(
+jt12_sh_rst #( .width(20), .stages(4*num_ch) ) u_phsh(
     .clk    ( clk       ),
     .clk_en ( clk_en    ),
     .rst    ( rst       ),

@@ -16,6 +16,7 @@ port
 
     dout       : out std_logic_vector(7 downto 0);
     irq_n      : out std_logic;
+    en_hifi_pcm: in  std_logic;     -- set high to use interpolation on PCM samples
 
     -- combined output
     snd_right  : out std_logic_vector(15 downto 0); -- signed

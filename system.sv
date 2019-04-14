@@ -87,7 +87,8 @@ module system
 	output [24:1] ROM_ADDR,
 	input  [15:0] ROM_DATA,
 	output reg    ROM_REQ,
-	input         ROM_ACK
+	input         ROM_ACK,
+    input         EN_HIFI_PCM
 );
 
 reg reset;
@@ -1019,7 +1020,7 @@ jt12 fm
 	.wr_n(~(FM_SEL & ZBUS_WE)),
 	.din(ZBUS_DO),
 	.dout(FM_DO),
-
+    .en_hifi_pcm( EN_HIFI_PCM ),
 	.snd_left(FM_left),
 	.snd_right(FM_right)
 );
