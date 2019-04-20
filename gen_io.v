@@ -107,10 +107,10 @@ reg [16:0] JTMR2;
 wire [7:0] TDATA = CTLA & DATA;
 wire [7:0] TDATB = CTLB & DATB;
 
-wire THA = DATA[6] | ~CTLA[6];
-wire TRA = DATA[5] | ~CTLA[5];
-wire THB = DATB[6] | ~CTLB[6];
-wire TRB = DATB[5] | ~CTLB[5];
+wire THA = DATA[6] & CTLA[6];
+wire TRA = DATA[5] & CTLA[5];
+wire THB = DATB[6] & CTLB[6];
+wire TRB = DATB[5] & CTLB[5];
 
 always @(posedge RESET or posedge CLK) begin
 	reg THAd,THBd;
