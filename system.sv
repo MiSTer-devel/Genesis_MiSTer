@@ -88,7 +88,7 @@ module system
 	input  [15:0] ROM_DATA,
 	output reg    ROM_REQ,
 	input         ROM_ACK,
-    input         EN_HIFI_PCM
+	input         EN_HIFI_PCM
 );
 
 reg reset;
@@ -217,9 +217,7 @@ fx68k M68K
 //--------------------------------------------------------------
 reg         Z80_RESET_N;
 reg         Z80_BUSRQ_N;
-wire        Z80_M1_N;
 wire        Z80_MREQ_N;
-wire        Z80_IORQ_N;
 wire        Z80_RD_N;
 wire        Z80_WR_N;
 wire [15:0] Z80_A;
@@ -233,9 +231,7 @@ T80s #(.T2Write(1)) Z80
 	.CEN(Z80_CLKEN & Z80_BUSRQ_N),
 	.WAIT_n(~Z80_MBUS_DTACK_N | ~Z80_ZBUS_DTACK_N | ~Z80_IO),
 	.INT_n(~Z80_VINT),
-	.M1_n(Z80_M1_N),
 	.MREQ_n(Z80_MREQ_N),
-	.IORQ_n(Z80_IORQ_N),
 	.RD_n(Z80_RD_N),
 	.WR_n(Z80_WR_N),
 	.A(Z80_A),
@@ -274,8 +270,11 @@ wire        M68K_VINT;
 wire        Z80_VINT;
 
 wire        vram_req;
-wire        vram_we_u;
-wire        vram_we_l;
+wire        vram_we_u = vram_we & ~vram_u_n;
+wire        vram_we_l = vram_we & ~vram_l_n;
+wire        vram_we;
+wire        vram_u_n;
+wire        vram_l_n;
 wire [15:1] vram_a;
 wire [15:0] vram_d;
 wire [15:0] vram_q;
@@ -321,18 +320,18 @@ vdp vdp
 
 	.VRAM_req(vram_req),
 	.VRAM_ack(vram_ack),
-	.VRAM_we_u(vram_we_u),
-	.VRAM_we_l(vram_we_l),
+	.VRAM_we(vram_we),
+	.VRAM_u_n(vram_u_n),
+	.VRAM_l_n(vram_l_n),
 	.VRAM_a(vram_a),
-	.VRAM_do(vram_d),
-	.VRAM_di(vram_q),
+	.VRAM_d(vram_d),
+	.VRAM_q(vram_q),
 
-	.TG68_hint(M68K_HINT),
-	.TG68_vint(M68K_VINT),
-	.TG68_intack(M68K_INTACK),
+	.HINT(M68K_HINT),
+	.VINT_TG68(M68K_VINT),
+	.INTACK(M68K_INTACK),
 
-	.T80_vint(Z80_VINT),
-	.T80_intack(~Z80_M1_N & ~Z80_IORQ_N),
+	.VINT_T80(Z80_VINT),
 
 	.VBUS_addr(VBUS_A),
 	.VBUS_data(VDP_MBUS_D),
@@ -340,9 +339,9 @@ vdp vdp
 	.VBUS_dtack_n(VDP_MBUS_DTACK_N),
 	.VBUS_busy(VBUS_BUSY),
 
-	.FAST_FIFO(FAST_FIFO),
+	.VRAM_SPEED(~FAST_FIFO),
 
-	.FIELD(FIELD),
+	.FIELD_OUT(FIELD),
 	.INTERLACE(INTERLACE),
 
 	.PAL(PAL),

@@ -463,16 +463,12 @@ reg pier_quirk = 0;
 reg ttn2_quirk = 0;
 always @(posedge clk_sys) begin
 	reg [55:0] cart_id;
-	reg [127:0] domestic;
 	reg old_download, old_reset;
 	old_download <= ioctl_download;
 
 	if(~old_download && ioctl_download) {zbus_quirk,fifo_quirk,eeprom_quirk,sram_quirk,noram_quirk,pier_quirk,ttn2_quirk} <= 0;
 
 	if(ioctl_wr) begin
-		if(ioctl_addr >= 'h120 && ioctl_addr < 'h130)
-			domestic[('h7F - (((ioctl_addr[24:1]) - 'h90) << 3'd4)) -: 'd16] <= {ioctl_data[7:0],ioctl_data[15:8]};
-
 		if(ioctl_addr == 'h182) cart_id[55:48] <= {ioctl_data[15:8]};
 		if(ioctl_addr == 'h184) cart_id[47:32] <= {ioctl_data[7:0],ioctl_data[15:8]};
 		if(ioctl_addr == 'h186) cart_id[31:16] <= {ioctl_data[7:0],ioctl_data[15:8]};
@@ -494,13 +490,10 @@ always @(posedge clk_sys) begin
 			else if({cart_id,ioctl_data[7:0]} == "G-4524  ") eeprom_quirk <= 1; // Ninja Burai Densetsu
 			else if({cart_id,ioctl_data[7:0]} == "T-113016") noram_quirk <= 1;  // Puggsy fake ram check
 			else if({cart_id,ioctl_data[7:0]} == "T-89016 ") fifo_quirk <= 1;   // Clue
-			else if({cart_id,ioctl_data[7:0]} == "00001009") fifo_quirk <= 1;   // Sonic
-			else if({cart_id,ioctl_data[7:0]} == "00004049") fifo_quirk <= 1;   // Sonic JP
 			else if({cart_id,ioctl_data[7:0]} == "T-103036") zbus_quirk <= 1;   // Joe & Mac
 			else if({cart_id,ioctl_data[7:0]} == "T-574023") pier_quirk <= 1;   // Pier Solar Reprint
 			else if({cart_id,ioctl_data[7:0]} == "T-574013") pier_quirk <= 1;   // Pier Solar 1st Edition
 			else if({cart_id,ioctl_data[7:0]} == "TITAN002") ttn2_quirk <= 1;   // Titan Overdrive 2
-			if(domestic == "OLD TOWERS      ") fifo_quirk <= 1;                 // Old Towers (uses serial 000000000)
 		end
 	end
 end
