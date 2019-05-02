@@ -170,8 +170,8 @@ architecture rtl of T80 is
 	signal IntE_FF1             : std_logic;
 	signal IntE_FF2             : std_logic;
 	signal Halt_FF              : std_logic;
-	signal BusReq_s             : std_logic;
-	signal BusAck               : std_logic;
+	signal BusReq_s             : std_logic := '0';
+	signal BusAck               : std_logic := '0';
 	signal ClkEn                : std_logic;
 	signal NMI_s                : std_logic;
 	signal IStatus              : std_logic_vector(1 downto 0);
@@ -1044,7 +1044,7 @@ begin
 	TS <= std_logic_vector(TState);
 	DI_Reg <= DI;
 	HALT_n <= not Halt_FF;
-	BUSAK_n <= not BusAck;
+	BUSAK_n <= not (BusAck and RESET_n);
 	IntCycle_n <= not IntCycle;
 	IntE <= IntE_FF1;
 	IORQ <= IORQ_i;
@@ -1063,7 +1063,7 @@ begin
 			TState <= "000";
 			Pre_XY_F_M <= "000";
 			Halt_FF <= '0';
-			BusAck <= '0';
+			--BusAck <= '0';
 			NMICycle <= '0';
 			IntCycle <= '0';
 			IntE_FF1 <= '0';
@@ -1072,7 +1072,7 @@ begin
 			Auto_Wait_t1 <= '0';
 			Auto_Wait_t2 <= '0';
 			M1_n <= '1';
-			BusReq_s <= '0';
+			--BusReq_s <= '0';
 			NMI_s <= '0';
 		elsif rising_edge(CLK_n) then
 
