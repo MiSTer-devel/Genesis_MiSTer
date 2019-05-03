@@ -369,7 +369,6 @@ set_global_assignment -name VHDL_FILE bram.vhd
 set_global_assignment -name SYSTEMVERILOG_FILE ddram.sv
 set_global_assignment -name VERILOG_FILE audio_iir_filter.v
 set_global_assignment -name VERILOG_FILE genesis_lpf.v
-set_global_assignment -name SYSTEMVERILOG_FILE compressor.sv
 set_global_assignment -name VHDL_FILE vdp_common.vhd
 set_global_assignment -name VHDL_FILE vdp.vhd
 set_global_assignment -name VERILOG_FILE gen_io.v

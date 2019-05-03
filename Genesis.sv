@@ -263,8 +263,6 @@ wire interlace;
 assign DDRAM_CLK = clk_ram;
 wire reset = RESET | status[0] | buttons[1] | region_set | bk_loading;
 
-wire [15:0] audio_l, audio_r;
-
 system system
 (
 	.RESET_N(~reset),
@@ -279,8 +277,8 @@ system system
 	.PIER_QUIRK(pier_quirk),
 	.TTN2_QUIRK(ttn2_quirk),
 
-	.DAC_LDATA(audio_l),
-	.DAC_RDATA(audio_r),
+	.DAC_LDATA(AUDIO_L),
+	.DAC_RDATA(AUDIO_R),
 
 	.RED(r),
 	.GREEN(g),
@@ -379,13 +377,6 @@ video_mixer #(.LINE_LENGTH(320), .HALF_DEPTH(1)) video_mixer
 	.VSync(vs),
 	.HBlank(hblank),
 	.VBlank(vblank)
-);
-
-compressor compressor
-(
-	clk_sys,
-	audio_l[15:4], audio_r[15:4],
-	AUDIO_L,       AUDIO_R
 );
 
 ///////////////////////////////////////////////////
