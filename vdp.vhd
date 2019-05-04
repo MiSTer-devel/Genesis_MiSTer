@@ -2450,7 +2450,7 @@ begin
 		CE_PIX <= '0';
 		if HV_PIXDIV = 0 then
 			CE_PIX <= '1';
-			if HV_HCNT = HBLANK_END + H_DISP_WIDTH then 
+			if DISP_ACTIVE_LAST_COLUMN = '1' then 
 				HBL <= '1';
 			end if;
 			if HV_HCNT = HBLANK_END then 
