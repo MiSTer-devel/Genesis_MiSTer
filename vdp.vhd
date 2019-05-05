@@ -355,6 +355,9 @@ signal VSYNC_START     : std_logic_vector(8 downto 0);
 signal V_TOTAL_HEIGHT  : std_logic_vector(8 downto 0);
 signal V_INT_POS       : std_logic_vector(8 downto 0);
 
+signal V_DISP_HEIGHT_R : std_logic_vector(8 downto 0);
+signal V30_R           : std_logic;
+
 ----------------------------------------------------------------
 -- VRAM CONTROLLER
 ----------------------------------------------------------------
@@ -2279,7 +2282,7 @@ VSYNC_START     <= conv_std_logic_vector(VSYNC_START_PAL_V30, 9) when V30='1' an
               else conv_std_logic_vector(VSYNC_START_NTSC_V28, 9);
 V_DISP_START    <= conv_std_logic_vector(V_DISP_START_V30, 9) when V30='1'
               else conv_std_logic_vector(V_DISP_START_PAL_V28, 9) when PAL='1'
-			  else conv_std_logic_vector(V_DISP_START_NTSC_V28, 9);
+              else conv_std_logic_vector(V_DISP_START_NTSC_V28, 9);
 V_DISP_HEIGHT   <= conv_std_logic_vector(V_DISP_HEIGHT_V30, 9) when V30='1'
               else conv_std_logic_vector(V_DISP_HEIGHT_V28, 9);
 V_TOTAL_HEIGHT  <= conv_std_logic_vector(PAL_LINES, 9) when PAL='1'
@@ -2444,11 +2447,22 @@ begin
 	end if;
 end process;
 
+V_DISP_HEIGHT_R <= conv_std_logic_vector(V_DISP_HEIGHT_V30, 9) when V30_R ='1'
+              else conv_std_logic_vector(V_DISP_HEIGHT_V28, 9);
+
 process( CLK )
+	variable V30prev : std_logic;
 begin
 	if rising_edge(CLK) then
 		CE_PIX <= '0';
 		if HV_PIXDIV = 0 then
+			V30prev := V30prev and V30;
+			
+			if HV_HCNT = H_INT_POS and HV_VCNT = 0 then
+				V30_R <= V30prev;
+				V30prev := '1';
+			end if;
+			
 			CE_PIX <= '1';
 			if HV_HCNT = HBLANK_END + H_DISP_WIDTH + 1 then 
 				HBL <= '1';
@@ -2457,7 +2471,7 @@ begin
 				HBL <= '0';
 			end if;
 
-			if HV_VCNT < V_DISP_HEIGHT	then
+			if HV_VCNT < V_DISP_HEIGHT_R then
 				VBL <= '0';
 			else
 				VBL <= '1';
