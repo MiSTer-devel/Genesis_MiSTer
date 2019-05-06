@@ -45,12 +45,15 @@ use STD.TEXTIO.ALL;
 use work.vdp_common.all;
 
 entity vdp is
+	generic (
+		EXTERNAL_LOCK : std_logic := '0'
+	);
 	port(
 		RST_N       : in std_logic;
 		CLK         : in std_logic;
 		
 		SEL         : in std_logic;
-		A           : in std_logic_vector(4 downto 1);
+		A           : in std_logic_vector(4 downto 0);
 		RNW         : in std_logic;
 		DI          : in std_logic_vector(15 downto 0);
 		DO          : out std_logic_vector(15 downto 0);
@@ -70,7 +73,7 @@ entity vdp is
 		VINT_T80    : out std_logic;
 		INTACK      : in std_logic;
 
-		VBUS_ADDR   : out std_logic_vector(23 downto 1);
+		VBUS_ADDR   : out std_logic_vector(23 downto 0);
 		VBUS_DATA   : in std_logic_vector(15 downto 0);
 		
 		VBUS_SEL    : out std_logic;
@@ -78,9 +81,10 @@ entity vdp is
 		VBUS_BUSY   : out std_logic;
 
 		PAL         : in std_logic := '0';
+
+		CE_PIX      : out std_logic;
 		FIELD_OUT   : out std_logic;
 		INTERLACE   : out std_logic;
-		CE_PIX      : out std_logic;
 		HBL         : out std_logic;
 		VBL         : out std_logic;
 
@@ -638,8 +642,11 @@ signal PIXOUT		: std_logic;
 
 begin
 
-bgb_ci : entity work.dpram
-generic map (9,7)
+bgb_ci : entity work.DualPortRAM
+generic map (
+	addrbits => 9,
+	databits => 7
+)
 port map(
 	address_a	=> BGB_COLINFO_ADDR_A,
 	address_b	=> BGB_COLINFO_ADDR_B,
@@ -653,8 +660,11 @@ port map(
 );
 BGB_COLINFO_WE_B <= '0';
 
-bga_ci : entity work.dpram
-generic map (9,7)
+bga_ci : entity work.DualPortRAM
+generic map (
+	addrbits => 9,
+	databits => 7
+)
 port map(
 	address_a	=> BGA_COLINFO_ADDR_A,
 	address_b	=> BGA_COLINFO_ADDR_B,
@@ -668,8 +678,11 @@ port map(
 );
 BGA_COLINFO_WE_B <= '0';
 
-obj_ci : entity work.dpram
-generic map (9,7)
+obj_ci : entity work.DualPortRAM
+generic map (
+	addrbits        => 9,
+	databits        => 7
+)
 port map(
 	address_a	=> OBJ_COLINFO_ADDR_A,
 	address_b	=> OBJ_COLINFO_ADDR_B,
@@ -688,8 +701,11 @@ OBJ_COLINFO_WE_A <= '0';
 OBJ_COLINFO_WE_B <= OBJ_COLINFO_WE_SP3 when SP3C /= SP3C_DONE else OBJ_COLINFO_WE_REND;
 OBJ_COLINFO_D_B <= OBJ_COLINFO_D_SP3 when SP3C /= SP3C_DONE else OBJ_COLINFO_D_REND;
 
-obj_cache_y_l : entity work.dpram
-generic map (7,8)
+obj_cache_y_l : entity work.DualPortRAM
+generic map (
+	addrbits	=> 7,
+	databits	=> 8
+)
 port map(
 	clock			=> CLK,
 	data_a		=> (others => '0'),
@@ -702,8 +718,11 @@ port map(
 	q_b			=> open
  );
 
-obj_cache_y_h : entity work.dpram
-generic map (7,8)
+obj_cache_y_h : entity work.DualPortRAM
+generic map (
+	addrbits	=> 7,
+	databits	=> 8
+)
 port map(
 	clock			=> CLK,
 	data_a		=> (others => '0'),
@@ -720,8 +739,11 @@ OBJ_CACHE_Y_L_D <= OBJ_CACHE_Y_D(7 downto 0);
 OBJ_CACHE_Y_H_D <= OBJ_CACHE_Y_D(15 downto 8);
 OBJ_CACHE_Y_Q <= OBJ_CACHE_Y_H_Q & OBJ_CACHE_Y_L_Q;
 
-obj_cache_sl_l : entity work.dpram
-generic map (7,8)
+obj_cache_sl_l : entity work.DualPortRAM
+generic map (
+	addrbits	=> 7,
+	databits	=> 8
+)
 port map(
 	clock			=> CLK,
 	data_a		=> (others => '0'),
@@ -734,8 +756,11 @@ port map(
 	q_b			=> open
  );
 
-obj_cache_sl_h : entity work.dpram
-generic map (7,8)
+obj_cache_sl_h : entity work.DualPortRAM
+generic map (
+	addrbits	=> 7,
+	databits	=> 8
+)
 port map(
 	clock			=> CLK,
 	data_a		=> (others => '0'),
@@ -752,8 +777,11 @@ OBJ_CACHE_SL_L_D <= OBJ_CACHE_SL_D(7 downto 0);
 OBJ_CACHE_SL_H_D <= OBJ_CACHE_SL_D(15 downto 8);
 OBJ_CACHE_SL_Q <= OBJ_CACHE_SL_H_Q & OBJ_CACHE_SL_L_Q;
 
-obj_visinfo : entity work.dpram
-generic map (5,7)
+obj_visinfo : entity work.DualPortRAM
+generic map (
+	addrbits	=> 5,
+	databits	=> 7
+)
 port map(
 	clock			=> CLK,
 	data_a		=> (others => '0'),
@@ -766,8 +794,11 @@ port map(
 	q_b			=> open
  );
 
-obj_spinfo : entity work.dpram
-generic map (5,35)
+obj_spinfo : entity work.DualPortRAM
+generic map (
+	addrbits	=> 5,
+	databits	=> 35
+)
 port map(
 	clock			=> CLK,
 	data_a		=> (others => '0'),
@@ -780,8 +811,11 @@ port map(
 	q_b			=> open
  );
 
-cram : entity work.dpram
-generic map (6,9)
+cram : entity work.DualPortRAM
+generic map (
+	addrbits => 6,
+	databits => 9
+)
 port map(
 	address_a	=> CRAM_ADDR_A,
 	address_b	=> CRAM_ADDR_B,
@@ -849,8 +883,6 @@ IN_DMA <= DMA_FILL or DMA_COPY or DMA_VBUS;
 
 STATUS <= "111111" & FIFO_EMPTY & FIFO_FULL & VINT_TG68_PENDING & SOVR & SCOL & ODD & (IN_VBL or not DE) & IN_HBL & IN_DMA & PAL;
 
-INTERLACE <= LSM(1) and LSM(0);
-
 ----------------------------------------------------------------
 -- CPU INTERFACE
 ----------------------------------------------------------------
@@ -910,7 +942,7 @@ begin
 
 						-- In case of DMA VBUS request, hold the TG68 with DTACK_N
 						-- it should avoid the use of a CLKEN signal
-						if ADDR_SET_ACK = '0' then							
+						if ADDR_SET_ACK = '0' or (DMA_VBUS and not EXTERNAL_LOCK) = '1' then							
 							ADDR_SET_REQ <= '1';
 						else
 							ADDR_SET_REQ <= '0';
@@ -2447,40 +2479,6 @@ begin
 	end if;
 end process;
 
-V_DISP_HEIGHT_R <= conv_std_logic_vector(V_DISP_HEIGHT_V30, 9) when V30_R ='1'
-              else conv_std_logic_vector(V_DISP_HEIGHT_V28, 9);
-
-process( CLK )
-	variable V30prev : std_logic;
-begin
-	if rising_edge(CLK) then
-		CE_PIX <= '0';
-		if HV_PIXDIV = 0 then
-			V30prev := V30prev and V30;
-			
-			if HV_HCNT = H_INT_POS and HV_VCNT = 0 then
-				V30_R <= V30prev;
-				V30prev := '1';
-			end if;
-			
-			CE_PIX <= '1';
-			if HV_HCNT = HBLANK_END + H_DISP_WIDTH + 1 then 
-				HBL <= '1';
-			end if;
-			if HV_HCNT = HBLANK_END + 1 then 
-				HBL <= '0';
-			end if;
-
-			if HV_VCNT < V_DISP_HEIGHT_R then
-				VBL <= '0';
-			else
-				VBL <= '1';
-			end if;
-		end if;
-	end if;
-end process;
-
-
 -- TIMING MANAGEMENT
 PRE_V_ACTIVE <= '1' when HV_VCNT = "1"&x"FF" or HV_VCNT < V_DISP_HEIGHT - 1 else '0';
 V_ACTIVE <= '1' when HV_VCNT < V_DISP_HEIGHT else '0';
@@ -2673,7 +2671,6 @@ begin
 		if HV_HCNT = VSYNC_HSTART then
 			if HV_VCNT = VSYNC_START then
 				FF_VS <= '0';
-				FIELD_OUT <= LSM(1) and LSM(0) and not FIELD_LATCH;
 			end if;
 			if HV_VCNT = VSYNC_START + VS_LINES - 1 then
 				FF_VS <= '1';
@@ -2701,7 +2698,7 @@ begin
       if VS_END_DELAY /= 0 then
         VS_END_DELAY := VS_END_DELAY - 1;
       else
-        VS <= '0';
+        VS <= '1';
       end if;
       
     else
@@ -2715,18 +2712,57 @@ begin
       if VS_START_DELAY /= 0 then
         VS_START_DELAY := VS_START_DELAY - 1;
       else
-        VS <= '1';
+        VS <= '0';
       end if;
     end if;
   end if;  
 end process;
 
 -- VS <= FF_VS;
-HS <= not FF_HS;
+HS <= FF_HS;
 
 R <= FF_R;
 G <= FF_G;
 B <= FF_B;
+
+INTERLACE <= LSM(1) and LSM(0);
+
+V_DISP_HEIGHT_R <= conv_std_logic_vector(V_DISP_HEIGHT_V30, 9) when V30_R ='1'
+              else conv_std_logic_vector(V_DISP_HEIGHT_V28, 9);
+
+process( CLK )
+	variable V30prev : std_logic;
+begin
+	if rising_edge(CLK) then
+		CE_PIX <= '0';
+		if HV_PIXDIV = 0 then
+
+			if HV_HCNT = VSYNC_HSTART and HV_VCNT = VSYNC_START then
+				FIELD_OUT <= LSM(1) and LSM(0) and not FIELD_LATCH;
+			end if;
+
+			V30prev := V30prev and V30;
+			if HV_HCNT = H_INT_POS and HV_VCNT = 0 then
+				V30_R <= V30prev;
+				V30prev := '1';
+			end if;
+			
+			CE_PIX <= '1';
+			if HV_HCNT = HBLANK_END + H_DISP_WIDTH + 1 then 
+				HBL <= '1';
+			end if;
+			if HV_HCNT = HBLANK_END + 1 then 
+				HBL <= '0';
+			end if;
+
+			if HV_VCNT < V_DISP_HEIGHT_R then
+				VBL <= '0';
+			else
+				VBL <= '1';
+			end if;
+		end if;
+	end if;
+end process;
 
 ----------------------------------------------------------------
 -- VIDEO DEBUG
@@ -2749,7 +2785,7 @@ end process;
 ----------------------------------------------------------------
 -- DATA TRANSFER CONTROLLER
 ----------------------------------------------------------------
-VBUS_ADDR <= FF_VBUS_ADDR(23 downto 1);
+VBUS_ADDR <= FF_VBUS_ADDR;
 VBUS_SEL <= FF_VBUS_SEL;
 VBUS_BUSY <= DMA_VBUS;
 

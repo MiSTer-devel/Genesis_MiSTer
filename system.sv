@@ -280,7 +280,7 @@ reg         VDP_SEL;
 wire [15:0] VDP_DO;
 wire        VDP_DTACK_N;
 
-wire [23:1] VBUS_A;
+wire [23:0] VBUS_A;
 wire        VBUS_SEL;
 wire        VBUS_BUSY;
 
@@ -325,13 +325,17 @@ dpram #(15) vram_u
 reg vram_ack;
 always @(posedge MCLK) vram_ack <= vram_req;
 
-vdp vdp
+wire VDP_hs, VDP_vs;
+assign HS = ~VDP_hs;
+assign VS = ~VDP_vs;
+
+vdp #(1'b1) vdp
 (
 	.RST_n(~reset),
 	.CLK(MCLK),
 
 	.SEL(VDP_SEL),
-	.A(MBUS_A[4:1]),
+	.A({MBUS_A[4:1], 1'b0}),
 	.RNW(MBUS_RNW),
 	.DI(MBUS_DO),
 	.DO(VDP_DO),
@@ -367,8 +371,8 @@ vdp vdp
 	.R(RED),
 	.G(GREEN),
 	.B(BLUE),
-	.HS(HS),
-	.VS(VS),
+	.HS(VDP_hs),
+	.VS(VDP_vs),
 	.CE_PIX(CE_PIX),
 	.HBL(HBL),
 	.VBL(VBL)
@@ -679,7 +683,7 @@ always @(posedge MCLK) begin
 				end
 				else if(VBUS_SEL & VDP_MBUS_DTACK_N) begin
 					msrc <= MSRC_VDP;
-					MBUS_A <= VBUS_A;
+					MBUS_A <= VBUS_A[23:1];
 					data <= NO_DATA;
 					MBUS_DO <= 0;
 					mstate <= MBUS_SELECT;

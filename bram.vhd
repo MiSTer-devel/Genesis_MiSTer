@@ -100,6 +100,43 @@ BEGIN
 END SYN;
 
 --------------------------------------------------------------
+-- Dual port Block RAM same parameters on both ports (for VDP)
+--------------------------------------------------------------
+LIBRARY ieee;
+USE ieee.std_logic_1164.all;
+
+LIBRARY altera_mf;
+USE altera_mf.altera_mf_components.all;
+
+entity DualPortRAM is
+	generic (
+		addrbits    : integer := 8;
+		databits    : integer := 8
+	);
+	PORT
+	(
+		clock			: in  STD_LOGIC;
+
+		address_a	: in  STD_LOGIC_VECTOR (addrbits-1 DOWNTO 0);
+		data_a		: in  STD_LOGIC_VECTOR (databits-1 DOWNTO 0) := (others => '0');
+		wren_a		: in  STD_LOGIC := '0';
+		q_a			: out STD_LOGIC_VECTOR (databits-1 DOWNTO 0);
+
+		address_b	: in  STD_LOGIC_VECTOR (addrbits-1 DOWNTO 0) := (others => '0');
+		data_b		: in  STD_LOGIC_VECTOR (databits-1 DOWNTO 0) := (others => '0');
+		wren_b		: in  STD_LOGIC := '0';
+		q_b			: out STD_LOGIC_VECTOR (databits-1 DOWNTO 0)
+	);
+end entity;
+
+
+ARCHITECTURE SYN OF DualPortRAM IS
+BEGIN
+	ram : work.dpram_dif generic map(addrbits,databits,addrbits,databits)
+	port map(clock,address_a,data_a,'1',wren_a,q_a,'1',address_b,data_b,'1',wren_b,q_b,'1');
+END SYN;
+
+--------------------------------------------------------------
 -- Dual port Block RAM same parameters on both ports
 --------------------------------------------------------------
 LIBRARY ieee;
