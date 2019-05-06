@@ -130,7 +130,7 @@ assign AUDIO_MIX = 0;
 
 assign LED_DISK  = 0;
 assign LED_POWER = 0;
-assign LED_USER  = ioctl_download | sav_pending;
+assign LED_USER  = cart_download | sav_pending;
 
 
 //`define SOUND_DBG
@@ -142,6 +142,9 @@ localparam CONF_STR1 = {
 	"-;",
 	"O67,Region,JP,US,EU;",
 	"O8,Auto Region,No,Yes;",
+	"-;",
+	"FC,GG,Game Genie Code;",
+	"OO,Game Genie,ON,OFF;",
 	"-;",
 };
 localparam CONF_STR2 = {
@@ -240,6 +243,9 @@ hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR
 	.ps2_mouse(ps2_mouse)
 );
 
+wire code_index = ioctl_index == 8'd4;
+wire cart_download = ioctl_download & ~code_index;
+wire code_download = ioctl_download & code_index;
 
 ///////////////////////////////////////////////////
 wire clk_sys, clk_ram, locked;
@@ -252,6 +258,36 @@ pll pll
 	.outclk_1(clk_ram),
 	.locked(locked)
 );
+
+///////////////////////////////////////////////////
+// Code loading for WIDE IO (16 bit)
+reg [128:0] gg_code;
+
+// Code layout:
+// {clock bit, code flags,     32'b address, 32'b compare, 32'b replace}
+//  128        127:96          95:64         63:32         31:0
+// Integer values are in BIG endian byte order, so it up to the loader
+// or generator of the code to re-arrange them correctly.
+
+always_ff @(posedge clk_sys) begin
+	gg_code[128] <= 1'b0;
+
+	if (code_download & ioctl_wr) begin
+		case (ioctl_addr[3:0])
+			0:  gg_code[111:96]  <= ioctl_data; // Flags Bottom Word
+			2:  gg_code[127:112] <= ioctl_data; // Flags Top Word
+			4:  gg_code[79:64]   <= ioctl_data; // Address Bottom Word
+			6:  gg_code[95:80]   <= ioctl_data; // Address Top Word
+			8:  gg_code[47:32]   <= ioctl_data; // Compare Bottom Word
+			10: gg_code[63:48]   <= ioctl_data; // Compare top Word
+			12: gg_code[15:0]    <= ioctl_data; // Replace Bottom Word
+			14: begin
+				gg_code[31:16]   <= ioctl_data; // Replace Top Word
+				gg_code[128]     <=  1'b1;      // Clock it in
+			end
+		endcase
+	end
+end
 
 ///////////////////////////////////////////////////
 wire [3:0] r, g, b;
@@ -268,7 +304,7 @@ system system
 	.RESET_N(~reset),
 	.MCLK(clk_sys),
 
-	.LOADING(ioctl_download),
+	.LOADING(cart_download),
 	.EXPORT(|status[7:6]),
 	.PAL(PAL),
 	.SRAM_QUIRK(sram_quirk),
@@ -291,6 +327,8 @@ system system
 	.FIELD(VGA_F1),
 	.INTERLACE(interlace),
 	.FAST_FIFO(fifo_quirk),
+	.GG_EN(status[24]),
+	.GG_CODE(gg_code),
 
 	.J3BUT(~status[5]),
 	.JOY_1(status[4] ? joystick_1 : joystick_0),
@@ -318,7 +356,7 @@ system system
 	.BRAM_WE(sd_buff_wr & sd_ack),
 	.BRAM_CHANGE(bk_change),
 
-	.ROMSZ(ioctl_addr[24:1]),
+	.ROMSZ(rom_sz[24:1]),
 	.ROM_ADDR(rom_addr),
 	.ROM_DATA(rom_data),
 	.ROM_REQ(rom_rd),
@@ -332,7 +370,7 @@ always @(posedge clk_sys) begin
 	reg old_pal;
 	int to;
 	
-	if(~(reset | ioctl_download)) begin
+	if(~(reset | cart_download)) begin
 		old_pal <= PAL;
 		if(old_pal != PAL) to <= 5000000;
 	end
@@ -389,7 +427,7 @@ ddram ddram
 (
 	.*,
 
-   .wraddr(ioctl_addr),
+   .wraddr(cart_download ? ioctl_addr : rom_sz),
    .din({ioctl_data[7:0],ioctl_data[15:8]}),
    .we_req(rom_wr),
    .we_ack(rom_wrack),
@@ -402,15 +440,21 @@ ddram ddram
 
 reg  rom_wr;
 wire rom_wrack;
-
+reg [24:0] rom_sz;
 always @(posedge clk_sys) begin
 	reg old_download, old_reset;
-	old_download <= ioctl_download;
+	old_download <= cart_download;
 	old_reset <= reset;
 
 	if(~old_reset && reset) ioctl_wait <= 0;
-	if(~old_download && ioctl_download) rom_wr <= 0;
-	else begin
+	if (old_download & ~cart_download) begin
+		rom_sz <= ioctl_addr[24:0];
+		ioctl_wait <= 0;
+	end
+
+	if(~old_download && cart_download)
+		rom_wr <= 0;
+	else if (cart_download) begin
 		if(ioctl_wr) begin
 			ioctl_wait <= 1;
 			rom_wr <= ~rom_wr;
@@ -437,9 +481,9 @@ always @(posedge clk_sys) begin
 		endcase
 	end
 
-	old_download <= ioctl_download;
-	if(status[8] & (old_download ^ ioctl_download) & |ioctl_index) begin
-		region_set <= ioctl_download;
+	old_download <= cart_download;
+	if(status[8] & (old_download ^ cart_download) & |ioctl_index) begin
+		region_set <= cart_download;
 		region_req <= ioctl_index[7:6];
 	end
 end
@@ -453,11 +497,11 @@ reg ttn2_quirk = 0;
 always @(posedge clk_sys) begin
 	reg [55:0] cart_id;
 	reg old_download, old_reset;
-	old_download <= ioctl_download;
+	old_download <= cart_download;
 
-	if(~old_download && ioctl_download) {fifo_quirk,eeprom_quirk,sram_quirk,noram_quirk,pier_quirk,ttn2_quirk} <= 0;
+	if(~old_download && cart_download) {fifo_quirk,eeprom_quirk,sram_quirk,noram_quirk,pier_quirk,ttn2_quirk} <= 0;
 
-	if(ioctl_wr) begin
+	if(ioctl_wr & cart_download) begin
 		if(ioctl_addr == 'h182) cart_id[55:48] <= {ioctl_data[15:8]};
 		if(ioctl_addr == 'h184) cart_id[47:32] <= {ioctl_data[7:0],ioctl_data[15:8]};
 		if(ioctl_addr == 'h186) cart_id[31:16] <= {ioctl_data[7:0],ioctl_data[15:8]};
@@ -489,7 +533,7 @@ end
 /////////////////////////  BRAM SAVE/LOAD  /////////////////////////////
 
 
-wire downloading = ioctl_download;
+wire downloading = cart_download;
 
 reg bk_ena = 0;
 reg sav_pending = 0;
@@ -535,7 +579,7 @@ always @(posedge clk_sys) begin
 			sd_rd <=  bk_load;
 			sd_wr <= ~bk_load;
 		end
-		if(old_downloading & ~ioctl_download & |img_size & bk_ena) begin
+		if(old_downloading & ~cart_download & |img_size & bk_ena) begin
 			bk_state <= 1;
 			bk_loading <= 1;
 			sd_lba <= 0;
