@@ -55,10 +55,10 @@ constant H_TOTAL_WIDTH_H32      : integer := 342;
 constant H_TOTAL_WIDTH_H40      : integer := 420;
 
 constant HSYNC_START_H32        : integer := H_DISP_START_H32 + H_TOTAL_WIDTH_H32 - 512 - 7;
-constant HSYNC_START_H40        : integer := H_DISP_START_H40 + H_TOTAL_WIDTH_H40 - 512 - 10;
+constant HSYNC_START_H40        : integer := H_DISP_START_H40 + H_TOTAL_WIDTH_H40 - 512 - 14;
 
 constant HSYNC_END_H32          : integer := H_DISP_START_H32 + 24 - 7;
-constant HSYNC_END_H40          : integer := H_DISP_START_H40 + 24 - 10;
+constant HSYNC_END_H40          : integer := H_DISP_START_H40 + 32 - 14;
 
 constant VSYNC_HSTART_H32       : integer := HSYNC_START_H32;
 constant VSYNC_HSTART_H40       : integer := HSYNC_START_H40;
