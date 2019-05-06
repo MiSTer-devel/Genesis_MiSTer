@@ -94,6 +94,7 @@ entity vdp is
 		HS          : out std_logic;
 		VS          : out std_logic;
 
+		VSRAM01     : in  std_logic := '0';
 		VRAM_SPEED  : in std_logic := '1' -- 0 - full speed, 1 - FIFO throttle emulation
 	);
 end vdp;
@@ -394,6 +395,7 @@ signal BGEN_ACTIVATE	: std_logic;
 type bgbc_t is (
 	BGBC_INIT,
 	BGBC_HS_RD,
+	BGBC_GET_VSCROLL,
 	BGBC_CALC_Y,
 	BGBC_CALC_BASE,
 	BGBC_BASE_RD,
@@ -416,6 +418,7 @@ signal BGB_COLINFO_Q_B		: std_logic_vector(6 downto 0);
 
 signal BGB_X		: std_logic_vector(9 downto 0);
 signal BGB_POS		: std_logic_vector(9 downto 0);
+signal BGB_COL		: std_logic_vector(6 downto 0);
 signal BGB_Y		: std_logic_vector(10 downto 0);
 signal T_BGB_PRI	: std_logic;
 signal T_BGB_PAL	: std_logic_vector(1 downto 0);
@@ -435,6 +438,7 @@ signal BGB_VSRAM1_LATCH : std_logic_vector(10 downto 0);
 type bgac_t is (
 	BGAC_INIT,
 	BGAC_HS_RD,
+	BGAC_GET_VSCROLL,
 	BGAC_CALC_Y,
 	BGAC_CALC_BASE,
 	BGAC_BASE_RD,
@@ -454,6 +458,7 @@ signal BGA_COLINFO_Q_B		: std_logic_vector(6 downto 0);
 
 signal BGA_X		: std_logic_vector(9 downto 0);
 signal BGA_POS		: std_logic_vector(9 downto 0);
+signal BGA_COL		: std_logic_vector(6 downto 0);
 signal BGA_Y		: std_logic_vector(10 downto 0);
 signal T_BGA_PRI	: std_logic;
 signal T_BGA_PAL	: std_logic_vector(1 downto 0);
@@ -1169,6 +1174,7 @@ variable V_BGB_BASE		: std_logic_vector(15 downto 0);
 variable vscroll_mask	: std_logic_vector(10 downto 0);
 variable hscroll_mask	: std_logic_vector(9 downto 0);
 variable vscroll_val	: std_logic_vector(10 downto 0);
+variable vscroll_index  : std_logic_vector(4 downto 0);
 variable y_cells	: std_logic_vector(6 downto 0);
 
 -- synthesis translate_off
@@ -1182,6 +1188,9 @@ begin
 	elsif rising_edge(CLK) then
 			case BGBC is
 			when BGBC_DONE =>
+				if HV_HCNT = H_INT_POS and HV_PIXDIV = 0 and VSCR = '0' then
+					BGB_VSRAM1_LATCH <= VSRAM(1);
+				end if;
 				BGB_SEL <= '0';
 				BGB_COLINFO_WE_A <= '0';
 				BGB_COLINFO_ADDR_A <= (others => '0');
@@ -1220,23 +1229,48 @@ begin
 				if early_ack_bgb = '0' then
 					V_BGB_XSTART := "0000000000" - BGB_VRAM_DO(9 downto 0);
 					BGB_SEL <= '0';
-					BGB_X <= ( V_BGB_XSTART(9 downto 3) & "000" ) and hscroll_mask;
-					BGB_POS <= "0000000000" - ( "0000000" & V_BGB_XSTART(2 downto 0) );
-					BGBC <= BGBC_CALC_Y;
+					BGB_X <= ( V_BGB_XSTART(9 downto 4) & "0000" ) and hscroll_mask;
+					BGB_POS <= "0000000000" - ( "000000" & V_BGB_XSTART(3 downto 0) );
+					if V_BGB_XSTART(3 downto 0) = "0000" then
+						BGB_COL <= (others => '0');
+					else
+						BGB_COL <= "1111110"; -- -2
+					end if;
+					BGBC <= BGBC_GET_VSCROLL;
 				end if;
 
-			when BGBC_CALC_Y =>
+			when BGBC_GET_VSCROLL =>
 				BGB_COLINFO_WE_A <= '0';
-				if BGB_POS(9) = '1' or VSCR = '0' then
-					if LSM = "11" then
-						vscroll_val := BGB_VSRAM1_LATCH(10 downto 0);
+				if VSCR = '1' then
+					vscroll_index := BGB_COL(5 downto 1);
+					if vscroll_index <= 19 then
+						BGB_VSRAM1_LATCH <= VSRAM(CONV_INTEGER(vscroll_index & "1"));
+					elsif H40 = '0' then
+						BGB_VSRAM1_LATCH <= (others => '0');
+					elsif VSRAM01 = '1' then
+						-- using VSRAM(1) sometimes looks better (Gynoug)
+						BGB_VSRAM1_LATCH <= VSRAM(1);
 					else
-						vscroll_val := '0' & BGB_VSRAM1_LATCH(9 downto 0);
+						-- partial column gets the last read values AND'ed in H40 ("left column scroll bug")
+						BGB_VSRAM1_LATCH <= VSRAM(38) and VSRAM(39);
 					end if;
-				elsif LSM = "11" then
-					vscroll_val := VSRAM( CONV_INTEGER(BGB_POS(8 downto 4) & "1") )(10 downto 0);
+				end if;
+				BGBC <= BGBC_CALC_Y;
+
+			when BGBC_CALC_Y =>
+-- synthesis translate_off
+				write(L, string'("BGB COL = "));
+				hwrite(L, "00" & BGB_COL);
+				write(L, string'(" BGB X = "));
+				hwrite(L, "000000" & BGB_X(9 downto 0));
+				write(L, string'(" POS="));
+				hwrite(L, "000000" & BGB_POS(9 downto 0));
+				writeline(F,L);
+-- synthesis translate_on
+				if LSM = "11" then
+					vscroll_val := BGB_VSRAM1_LATCH(10 downto 0);
 				else
-					vscroll_val := '0' & VSRAM( CONV_INTEGER(BGB_POS(8 downto 4) & "1") )(9 downto 0);
+					vscroll_val := '0' & BGB_VSRAM1_LATCH(9 downto 0);
 				end if;
 				BGB_Y <= (BG_Y + vscroll_val) and vscroll_mask;
 				BGBC <= BGBC_CALC_BASE;
@@ -1352,7 +1386,8 @@ begin
 					else
 						BGB_POS <= BGB_POS + 1;
 						if BGB_X(2 downto 0) = "111" then
-							BGBC <= BGBC_CALC_Y;
+							BGB_COL <= BGB_COL + 1;
+							BGBC <= BGBC_GET_VSCROLL;
 						else
 							BGBC <= BGBC_LOOP;							
 						end if;
@@ -1396,6 +1431,7 @@ variable V_BGA_BASE		: std_logic_vector(15 downto 0);
 variable vscroll_mask	: std_logic_vector(10 downto 0);
 variable hscroll_mask	: std_logic_vector(9 downto 0);
 variable vscroll_val    : std_logic_vector(10 downto 0);
+variable vscroll_index  : std_logic_vector(4 downto 0);
 variable y_cells    : std_logic_vector(6 downto 0);
 -- synthesis translate_off
 file F		: text open write_mode is "bga_dbg.out";
@@ -1408,6 +1444,9 @@ begin
 	elsif rising_edge(CLK) then
 			case BGAC is
 			when BGAC_DONE =>
+				if HV_HCNT = H_INT_POS and HV_PIXDIV = 0 and VSCR = '0' then
+					BGA_VSRAM0_LATCH <= VSRAM(0);
+				end if;
 				BGA_SEL <= '0';
 				BGA_COLINFO_ADDR_A <= (others => '0');
 				BGA_COLINFO_WE_A <= '0';
@@ -1459,26 +1498,42 @@ begin
 				if early_ack_bga='0' then
 					V_BGA_XSTART := "0000000000" - BGA_VRAM_DO(9 downto 0);
 					BGA_SEL <= '0';
-					BGA_X <= ( V_BGA_XSTART(9 downto 3) & "000" ) and hscroll_mask;
-					BGA_POS <= "0000000000" - ( "0000000" & V_BGA_XSTART(2 downto 0) );
-					BGAC <= BGAC_CALC_Y;
+					BGA_X <= ( V_BGA_XSTART(9 downto 4) & "0000" ) and hscroll_mask;
+					BGA_POS <= "0000000000" - ( "000000" & V_BGA_XSTART(3 downto 0) );
+					if V_BGA_XSTART(3 downto 0) = "0000" then
+						BGA_COL <= (others => '0');
+					else
+						BGA_COL <= "1111110"; -- -2
+					end if;
+					BGAC <= BGAC_GET_VSCROLL;
 				end if;
 
-			when BGAC_CALC_Y =>
+			when BGAC_GET_VSCROLL =>
 				BGA_COLINFO_WE_A <= '0';
+				if VSCR = '1' then
+					vscroll_index := BGA_COL(5 downto 1);
+					if vscroll_index <= 19 then
+						BGA_VSRAM0_LATCH <= VSRAM(CONV_INTEGER(vscroll_index & '0'));
+					elsif H40 = '0' then
+						BGA_VSRAM0_LATCH <= (others => '0');
+					elsif VSRAM01 = '1' then
+						-- using VSRAM(0) sometimes looks better (Gynoug)
+						BGA_VSRAM0_LATCH <= VSRAM(0);
+					else
+						-- partial column gets the last read values AND'ed in H40 ("left column scroll bug")
+						BGA_VSRAM0_LATCH <= VSRAM(38) and VSRAM(39);
+					end if;
+				end if;
+				BGAC <= BGAC_CALC_Y;
+
+			when BGAC_CALC_Y =>
 				if WIN_H = '1' or WIN_V = '1' then
 					BGA_Y <= "00" & BG_Y;
 				else
-					if BGA_POS(9) = '1' or VSCR = '0' then
-						if LSM = "11" then
-							vscroll_val := BGA_VSRAM0_LATCH(10 downto 0);
-						else
-							vscroll_val := '0' & BGA_VSRAM0_LATCH(9 downto 0);
-						end if;
-					elsif LSM = "11" then
-						vscroll_val := VSRAM( CONV_INTEGER(BGA_POS(8 downto 4) & "0") )(10 downto 0);
+					if LSM = "11" then
+						vscroll_val := BGA_VSRAM0_LATCH(10 downto 0);
 					else
-						vscroll_val := '0' & VSRAM( CONV_INTEGER(BGA_POS(8 downto 4) & "0") )(9 downto 0);
+						vscroll_val := '0' & BGA_VSRAM0_LATCH(9 downto 0);
 					end if;
 					BGA_Y <= (BG_Y + vscroll_val) and vscroll_mask;
 				end if;
@@ -1556,14 +1611,14 @@ begin
 					and BGA_POS(3 downto 0) = "0000" and BGA_POS(8 downto 4) = WHP 
 				then
 					WIN_H <= not WIN_H;
-					BGAC <= BGAC_CALC_Y;				
+					BGAC <= BGAC_GET_VSCROLL;
 				elsif BGA_POS(9) = '0' and WIN_H = '1' and WRIGT = '0' 
 				--	and BGA_POS(3 downto 0) = "0000" and BGA_POS(8 downto 4) = WHP
 					and BGA_X(2 downto 0) = "000" and BGA_POS(8 downto 4) = WHP
 				then
 					WIN_H <= not WIN_H;
 					if WIN_V = '0' then
-						BGAC <= BGAC_CALC_Y;
+						BGAC <= BGAC_GET_VSCROLL;
 					end if;
 				elsif BGA_POS(1 downto 0) = "00" and BGA_SEL = '0' and (WIN_H = '1' or WIN_V = '1') then
 					BGA_COLINFO_WE_A <= '0';
@@ -1664,10 +1719,13 @@ begin
 						BGAC <= BGAC_DONE;
 					else
 						BGA_POS <= BGA_POS + 1;
+						if BGA_X(2 downto 0) = "111" then
+							BGA_COL <= BGA_COL + 1;
+						end if;
 						if BGA_X(2 downto 0) = "111" and (WIN_H = '0' and WIN_V = '0') then
-							BGAC <= BGAC_CALC_Y;
+							BGAC <= BGAC_GET_VSCROLL;
 						elsif BGA_POS(2 downto 0) = "111" and (WIN_H = '1' or WIN_V = '1') then
-							BGAC <= BGAC_CALC_Y;
+							BGAC <= BGAC_GET_VSCROLL;
 						else
 							BGAC <= BGAC_LOOP;							
 						end if;
@@ -2399,8 +2457,6 @@ begin
 				else
 					HV_VCNT <= HV_VCNT + 1;
 				end if;
-				BGB_VSRAM1_LATCH <= VSRAM(1);
-				BGA_VSRAM0_LATCH <= VSRAM(0);
 
 				if HV_VCNT = "1"&x"FF" then
 					-- FIELD changes at VINT, but the HV_COUNTER reflects the current field from line 0-0
