@@ -45,9 +45,6 @@ use STD.TEXTIO.ALL;
 use work.vdp_common.all;
 
 entity vdp is
-	generic (
-		EXTERNAL_LOCK : std_logic := '0'
-	);
 	port(
 		RST_N       : in std_logic;
 		CLK         : in std_logic;
@@ -62,7 +59,7 @@ entity vdp is
 		vram_req    : out std_logic;
 		vram_ack    : in std_logic;
 		vram_we     : out std_logic;
-		vram_a      : buffer std_logic_vector(14 downto 0);
+		vram_a      : out std_logic_vector(14 downto 0);
 		vram_d      : out std_logic_vector(15 downto 0);
 		vram_q      : in std_logic_vector(15 downto 0);
 		vram_u_n    : out std_logic;
@@ -73,12 +70,14 @@ entity vdp is
 		VINT_T80    : out std_logic;
 		INTACK      : in std_logic;
 
+		BR_N        : out std_logic;
+		BG_N        : in std_logic;
+		BGACK_N     : out std_logic;
+
 		VBUS_ADDR   : out std_logic_vector(23 downto 0);
 		VBUS_DATA   : in std_logic_vector(15 downto 0);
-		
 		VBUS_SEL    : out std_logic;
 		VBUS_DTACK_N: in std_logic;
-		VBUS_BUSY   : out std_logic;
 
 		PAL         : in std_logic := '0';
 
@@ -94,7 +93,7 @@ entity vdp is
 		HS          : out std_logic;
 		VS          : out std_logic;
 
-		VSRAM01     : in  std_logic := '0';
+		VSRAM01     : in std_logic := '0';
 		VRAM_SPEED  : in std_logic := '1' -- 0 - full speed, 1 - FIFO throttle emulation
 	);
 end vdp;
@@ -433,6 +432,7 @@ signal BGB_VRAM_DO_REG	: std_logic_vector(15 downto 0);
 signal BGB_SEL		: std_logic;
 signal BGB_DTACK_N	: std_logic;
 signal BGB_VSRAM1_LATCH : std_logic_vector(10 downto 0);
+signal BGB_VSRAM1_LAST_READ : std_logic_vector(10 downto 0);
 
 -- BACKGROUND A
 type bgac_t is (
@@ -473,6 +473,7 @@ signal BGA_VRAM_DO_REG	: std_logic_vector(15 downto 0);
 signal BGA_SEL		: std_logic;
 signal BGA_DTACK_N	: std_logic;
 signal BGA_VSRAM0_LATCH : std_logic_vector(10 downto 0);
+signal BGA_VSRAM0_LAST_READ : std_logic_vector(10 downto 0);
 
 signal WIN_V		: std_logic;
 signal WIN_H		: std_logic;
@@ -945,9 +946,7 @@ begin
 						end if;
 						ADDR_LATCH <= DI(2 downto 0) & ADDR(13 downto 0);
 
-						-- In case of DMA VBUS request, hold the TG68 with DTACK_N
-						-- it should avoid the use of a CLKEN signal
-						if ADDR_SET_ACK = '0' or (DMA_VBUS and not EXTERNAL_LOCK) = '1' then							
+						if ADDR_SET_ACK = '0' then
 							ADDR_SET_REQ <= '1';
 						else
 							ADDR_SET_REQ <= '0';
@@ -1190,6 +1189,7 @@ begin
 			when BGBC_DONE =>
 				if HV_HCNT = H_INT_POS and HV_PIXDIV = 0 and VSCR = '0' then
 					BGB_VSRAM1_LATCH <= VSRAM(1);
+					BGB_VSRAM1_LAST_READ <= VSRAM(1);
 				end if;
 				BGB_SEL <= '0';
 				BGB_COLINFO_WE_A <= '0';
@@ -1245,6 +1245,7 @@ begin
 					vscroll_index := BGB_COL(5 downto 1);
 					if vscroll_index <= 19 then
 						BGB_VSRAM1_LATCH <= VSRAM(CONV_INTEGER(vscroll_index & "1"));
+						BGB_VSRAM1_LAST_READ <= VSRAM(CONV_INTEGER(vscroll_index & "1"));
 					elsif H40 = '0' then
 						BGB_VSRAM1_LATCH <= (others => '0');
 					elsif VSRAM01 = '1' then
@@ -1252,7 +1253,7 @@ begin
 						BGB_VSRAM1_LATCH <= VSRAM(1);
 					else
 						-- partial column gets the last read values AND'ed in H40 ("left column scroll bug")
-						BGB_VSRAM1_LATCH <= VSRAM(38) and VSRAM(39);
+						BGB_VSRAM1_LATCH <= BGB_VSRAM1_LAST_READ and BGA_VSRAM0_LAST_READ;
 					end if;
 				end if;
 				BGBC <= BGBC_CALC_Y;
@@ -1446,6 +1447,7 @@ begin
 			when BGAC_DONE =>
 				if HV_HCNT = H_INT_POS and HV_PIXDIV = 0 and VSCR = '0' then
 					BGA_VSRAM0_LATCH <= VSRAM(0);
+					BGA_VSRAM0_LAST_READ <= VSRAM(0);
 				end if;
 				BGA_SEL <= '0';
 				BGA_COLINFO_ADDR_A <= (others => '0');
@@ -1514,6 +1516,7 @@ begin
 					vscroll_index := BGA_COL(5 downto 1);
 					if vscroll_index <= 19 then
 						BGA_VSRAM0_LATCH <= VSRAM(CONV_INTEGER(vscroll_index & '0'));
+						BGA_VSRAM0_LAST_READ <= VSRAM(CONV_INTEGER(vscroll_index & '0'));
 					elsif H40 = '0' then
 						BGA_VSRAM0_LATCH <= (others => '0');
 					elsif VSRAM01 = '1' then
@@ -1521,7 +1524,7 @@ begin
 						BGA_VSRAM0_LATCH <= VSRAM(0);
 					else
 						-- partial column gets the last read values AND'ed in H40 ("left column scroll bug")
-						BGA_VSRAM0_LATCH <= VSRAM(38) and VSRAM(39);
+						BGA_VSRAM0_LATCH <= BGA_VSRAM0_LAST_READ and BGB_VSRAM1_LAST_READ;
 					end if;
 				end if;
 				BGAC <= BGAC_CALC_Y;
@@ -2843,7 +2846,6 @@ end process;
 ----------------------------------------------------------------
 VBUS_ADDR <= FF_VBUS_ADDR;
 VBUS_SEL <= FF_VBUS_SEL;
-VBUS_BUSY <= DMA_VBUS;
 
 process( RST_N, CLK )
 -- synthesis translate_off
@@ -2884,6 +2886,9 @@ begin
 		
 		DTC <= DTC_IDLE;
 		DMAC <= DMA_IDLE;
+
+		BR_N <= '1';
+		BGACK_N <= '1';
 		
 	elsif rising_edge(CLK) then
 
@@ -3121,6 +3126,7 @@ begin
 				if CODE(5) = '1' and PENDING = '1' then
 					if REG(23)(7) = '0' then
 						DMA_VBUS <= '1';
+						BR_N <= '0';
 					else
 						if REG(23)(6) = '0' then
 							DMA_FILL <= '1';
@@ -3368,19 +3374,23 @@ begin
 ----------------------------------------------------------------
 				
 			when DMA_VBUS_INIT =>
+				if BG_N = '0' then
+					BGACK_N <= '0';
+					BR_N <= '1';
 -- synthesis translate_off
-				write(L, string'("VDP DMA VBUS SRC=["));
-				hwrite(L, REG(23)(6 downto 0) & REG(22) & REG(21) & '0');
-				write(L, string'("] DST=["));
-				hwrite(L, x"00" & ADDR);				
-				write(L, string'("] LEN=["));
-				hwrite(L, x"00" & REG(20) & REG(19));
-				write(L, string'("]"));
-				writeline(F,L);									
+					write(L, string'("VDP DMA VBUS SRC=["));
+					hwrite(L, REG(23)(6 downto 0) & REG(22) & REG(21) & '0');
+					write(L, string'("] DST=["));
+					hwrite(L, x"00" & ADDR);				
+					write(L, string'("] LEN=["));
+					hwrite(L, x"00" & REG(20) & REG(19));
+					write(L, string'("]"));
+					writeline(F,L);									
 -- synthesis translate_on						
-				DMA_LENGTH <= REG(20) & REG(19);
-				DMA_SOURCE <= REG(22) & REG(21);
-				DMAC <= DMA_VBUS_RD;
+					DMA_LENGTH <= REG(20) & REG(19);
+					DMA_SOURCE <= REG(22) & REG(21);
+					DMAC <= DMA_VBUS_RD;
+				end if;
 				
 			when DMA_VBUS_RD =>
 				FF_VBUS_SEL <= '1';
@@ -3419,6 +3429,7 @@ begin
 					REG(21) <= DMA_SOURCE(7 downto 0);
 					if DMA_LENGTH = 0 then
 						DMA_VBUS <= '0';
+						BGACK_N <= '1';
 						DMAC <= DMA_IDLE;
 -- synthesis translate_off										
 						write(L, string'("VDP DMA VBUS END"));

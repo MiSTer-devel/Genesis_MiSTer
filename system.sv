@@ -161,6 +161,9 @@ wire        M68K_UDS_N;
 wire        M68K_LDS_N;
 wire        M68K_RNW;
 wire  [2:0] M68K_FC;
+wire        M68K_BG_N;
+wire        M68K_BR_N;
+wire        M68K_BGACK_N;
 
 reg   [2:0] M68K_IPL_N;
 always @(posedge MCLK) begin
@@ -199,12 +202,13 @@ fx68k M68K
 	.FC1(M68K_FC[1]),
 	.FC2(M68K_FC[2]),
 
-	.BGn(),
-	.DTACKn(M68K_MBUS_DTACK_N | VBUS_BUSY),
+	.BGn(M68K_BG_N),
+	.BRn(M68K_BR_N),
+	.BGACKn(M68K_BGACK_N),
+
+	.DTACKn(M68K_MBUS_DTACK_N),
 	.VPAn(~M68K_INTACK),
 	.BERRn(1),
-	.BRn(1),
-	.BGACKn(1),
 	.IPL0n(M68K_IPL_N[0]),
 	.IPL1n(M68K_IPL_N[1]),
 	.IPL2n(M68K_IPL_N[2]),
@@ -282,7 +286,6 @@ wire        VDP_DTACK_N;
 
 wire [23:0] VBUS_A;
 wire        VBUS_SEL;
-wire        VBUS_BUSY;
 
 wire        M68K_HINT;
 wire        M68K_VINT;
@@ -329,7 +332,7 @@ wire VDP_hs, VDP_vs;
 assign HS = ~VDP_hs;
 assign VS = ~VDP_vs;
 
-vdp #(1'b1) vdp
+vdp vdp
 (
 	.RST_n(~reset),
 	.CLK(MCLK),
@@ -360,7 +363,10 @@ vdp #(1'b1) vdp
 	.VBUS_data(VDP_MBUS_D),
 	.VBUS_sel(VBUS_SEL),
 	.VBUS_dtack_n(VDP_MBUS_DTACK_N),
-	.VBUS_busy(VBUS_BUSY),
+
+	.BG_N(M68K_BG_N),
+	.BR_N(M68K_BR_N),
+	.BGACK_N(M68K_BGACK_N),
 
 	.VRAM_SPEED(~FAST_FIFO),
 	.VSRAM01(1),
@@ -666,7 +672,7 @@ always @(posedge MCLK) begin
 				MBUS_RNW <= 1;
 				MBUS_UDS_N <= 1;
 				MBUS_LDS_N <= 1;
-				if(~M68K_AS_N & M68K_MBUS_DTACK_N & M68K_CLKENn & ~VBUS_BUSY) begin
+				if(~M68K_AS_N & M68K_MBUS_DTACK_N & M68K_CLKENn) begin
 					msrc <= MSRC_M68K;
 					MBUS_A <= M68K_A[23:1];
 					data <= NO_DATA;
@@ -674,7 +680,7 @@ always @(posedge MCLK) begin
 					MBUS_RNW <= M68K_RNW;
 					mstate <= MBUS_SELECT;
 				end
-				else if(Z80_IO & ~Z80_ZBUS & Z80_MBUS_DTACK_N & ~VBUS_BUSY) begin
+				else if(Z80_IO & ~Z80_ZBUS & Z80_MBUS_DTACK_N & M68K_BR_N & M68K_BGACK_N) begin
 					msrc <= MSRC_Z80;
 					MBUS_A <= Z80_A[15] ? {BAR[23:15],Z80_A[14:1]} : {16'hC000, Z80_A[7:1]};
 					data <= 16'hFFFF;
