@@ -93,8 +93,8 @@ entity vdp is
 		HS          : out std_logic;
 		VS          : out std_logic;
 
-		VSRAM01     : in std_logic := '0';
-		VRAM_SPEED  : in std_logic := '1' -- 0 - full speed, 1 - FIFO throttle emulation
+		VRAM_SPEED  : in std_logic := '1'; -- 0 - full speed, 1 - FIFO throttle emulation
+		VSCROLL_BUG : in std_logic := '1'  -- 0 - use nicer effect, 1 - HW original
 	);
 end vdp;
 
@@ -1248,12 +1248,12 @@ begin
 						BGB_VSRAM1_LAST_READ <= VSRAM(CONV_INTEGER(vscroll_index & "1"));
 					elsif H40 = '0' then
 						BGB_VSRAM1_LATCH <= (others => '0');
-					elsif VSRAM01 = '1' then
-						-- using VSRAM(1) sometimes looks better (Gynoug)
-						BGB_VSRAM1_LATCH <= VSRAM(1);
-					else
+					elsif VSCROLL_BUG = '1' then
 						-- partial column gets the last read values AND'ed in H40 ("left column scroll bug")
 						BGB_VSRAM1_LATCH <= BGB_VSRAM1_LAST_READ and BGA_VSRAM0_LAST_READ;
+					else
+						-- using VSRAM(1) sometimes looks better (Gynoug)
+						BGB_VSRAM1_LATCH <= VSRAM(1);
 					end if;
 				end if;
 				BGBC <= BGBC_CALC_Y;
@@ -1519,12 +1519,12 @@ begin
 						BGA_VSRAM0_LAST_READ <= VSRAM(CONV_INTEGER(vscroll_index & '0'));
 					elsif H40 = '0' then
 						BGA_VSRAM0_LATCH <= (others => '0');
-					elsif VSRAM01 = '1' then
-						-- using VSRAM(0) sometimes looks better (Gynoug)
-						BGA_VSRAM0_LATCH <= VSRAM(0);
-					else
+					elsif VSCROLL_BUG = '1' then
 						-- partial column gets the last read values AND'ed in H40 ("left column scroll bug")
 						BGA_VSRAM0_LATCH <= BGA_VSRAM0_LAST_READ and BGB_VSRAM1_LAST_READ;
+					else
+						-- using VSRAM(0) sometimes looks better (Gynoug)
+						BGA_VSRAM0_LATCH <= VSRAM(0);
 					end if;
 				end if;
 				BGAC <= BGAC_CALC_Y;
