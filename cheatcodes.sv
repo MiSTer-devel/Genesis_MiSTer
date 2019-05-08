@@ -54,10 +54,10 @@ always_comb begin
 	dup_index = 0;
 	found_dup = 0;
 
-	for (x = 0; x < MAX_CODES; x = x + 1'b1) begin
+	for (x = 0; x < MAX_CODES; x = x + 1) begin
 		if (codes[x][ADDR_S-:ADDR_WIDTH] == code_addr) begin
 			dup_index = x[INDEX_SIZE-1:0];
-			found_dup = 1'b1;
+			found_dup = 1;
 		end
 	end
 end
@@ -70,7 +70,7 @@ always_ff @(posedge clk) begin
 	if (reset) begin
 		next_index <= 0;
 		code_change <= 0;
-		for (x = 0; x < MAX_CODES; x = x + 1) codes[x] <= {CODE_WIDTH{1'd0}};
+		for (x = 0; x < MAX_CODES; x = x + 1) codes[x] <= '0;
 	end else begin
 		code_change <= code[128];
 		if (code[128] && ~code_change && (found_dup || next_index < MAX_CODES)) begin // detect posedge
@@ -83,20 +83,14 @@ end
 
 always_comb begin
 	int x;
-	genie_ovr = 1'b0;
-	genie_data = 8'd0;
-	x = 0;
+	genie_ovr = 0;
+	genie_data = '0;
 
 	if (enable) begin
-		for (x = 0; x < MAX_CODES; x = x + 1'b1) begin
+		for (x = 0; x < MAX_CODES; x = x + 1) begin
 			if (codes[x][ENA_F_S] && codes[x][ADDR_S-:ADDR_WIDTH] == addr_in) begin
-				if (codes[x][COMP_F_S]) begin        // Check for compare bit if needed
-					if (codes[x][COMP_S-:DATA_WIDTH] == data_in) begin
-						genie_ovr = 1'b1;
-						genie_data = codes[x][DATA_S-:DATA_WIDTH];
-					end
-				end else begin                 // Otherwise just match
-					genie_ovr = 1'b1;
+				if (!codes[x][COMP_F_S] || (codes[x][COMP_S-:DATA_WIDTH] == data_in)) begin
+					genie_ovr = 1;
 					genie_data = codes[x][DATA_S-:DATA_WIDTH];
 				end
 			end
