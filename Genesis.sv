@@ -143,15 +143,19 @@ localparam CONF_STR1 = {
 	"O67,Region,JP,US,EU;",
 	"O8,Auto Region,No,Yes;",
 	"-;",
-	"FC,GG,Game Genie Code;",
-	"OO,Game Genie,ON,OFF;",
-	"-;",
+	"C,Cheats;",
 };
+
 localparam CONF_STR2 = {
-	"G,Load Backup RAM;"
+	"O,Cheats enabled,Yes,No;",
+	"-;",
 };
 
 localparam CONF_STR3 = {
+	"G,Load Backup RAM;"
+};
+
+localparam CONF_STR4 = {
 	"H,Save Backup RAM;",
 	"OD,Autosave,No,Yes;",
 	"-;",
@@ -202,12 +206,12 @@ wire        forced_scandoubler;
 wire [10:0] ps2_key;
 wire [24:0] ps2_mouse;
 
-hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR3)>>3) + 2), .PS2DIV(1000), .WIDE(1)) hps_io
+hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR3)>>3) + ($size(CONF_STR4)>>3) + 3), .PS2DIV(1000), .WIDE(1)) hps_io
 (
 	.clk_sys(clk_sys),
 	.HPS_BUS(HPS_BUS),
 
-	.conf_str({CONF_STR1,bk_ena ? "R" : "+",CONF_STR2,bk_ena ? "R" : "+",CONF_STR3}),
+	.conf_str({CONF_STR1,gg_available ? "O" : "+",CONF_STR2,bk_ena ? "R" : "+",CONF_STR3,bk_ena ? "R" : "+",CONF_STR4}),
 	.joystick_0(joystick_0),
 	.joystick_1(joystick_1),
 	.joystick_2(joystick_2),
@@ -243,7 +247,7 @@ hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR
 	.ps2_mouse(ps2_mouse)
 );
 
-wire code_index = ioctl_index == 8'd4;
+wire code_index = &ioctl_index;
 wire cart_download = ioctl_download & ~code_index;
 wire code_download = ioctl_download & code_index;
 
@@ -262,6 +266,7 @@ pll pll
 ///////////////////////////////////////////////////
 // Code loading for WIDE IO (16 bit)
 reg [128:0] gg_code;
+wire        gg_available;
 
 // Code layout:
 // {clock bit, code flags,     32'b address, 32'b compare, 32'b replace}
@@ -327,8 +332,11 @@ system system
 	.FIELD(VGA_F1),
 	.INTERLACE(interlace),
 	.FAST_FIFO(fifo_quirk),
+	
+	.GG_RESET(code_download && ioctl_wr && !ioctl_addr),
 	.GG_EN(status[24]),
 	.GG_CODE(gg_code),
+	.GG_AVAILABLE(gg_available),
 
 	.J3BUT(~status[5]),
 	.JOY_1(status[4] ? joystick_1 : joystick_0),

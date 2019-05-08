@@ -54,8 +54,10 @@ module system
 	input         PIER_QUIRK,
 	input         TTN2_QUIRK,
 
+	input         GG_RESET,
 	input         GG_EN,
 	input [128:0] GG_CODE,
+	output        GG_AVAILABLE,
 
 	input  [14:0] BRAM_A,
 	input  [15:0] BRAM_DI,
@@ -226,11 +228,12 @@ wire [15:0] genie_data;
 
 CODES #(.ADDR_WIDTH(24), .DATA_WIDTH(16)) codes (
 	.clk(MCLK),
-	.cold_reset(LOADING),
+	.reset(LOADING | GG_RESET),
 	.enable(~GG_EN),
 	.addr_in({M68K_A[23:1], 1'b0}),
 	.data_in(M68K_MBUS_D),
 	.code(GG_CODE),
+	.available(GG_AVAILABLE),
 	.genie_ovr(genie_ovr),
 	.genie_data(genie_data)
 );
