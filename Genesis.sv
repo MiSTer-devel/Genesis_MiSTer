@@ -1,6 +1,6 @@
 //============================================================================
 //  FPGAGen port to MiSTer
-//  Copyright (c) 2017,2018 Sorgelig
+//  Copyright (c) 2017-2019 Sorgelig
 //
 //  YM2612 implementation by Jose Tejada Gomez. Twitter: @topapate
 //  Original Genesis code: Copyright (c) 2010-2013 Gregory Estrade (greg@torlus.com) 
@@ -64,7 +64,9 @@ module emu
 	output [15:0] AUDIO_R,
 	output        AUDIO_S, // 1 - signed audio samples, 0 - unsigned
 	output  [1:0] AUDIO_MIX, // 0 - no mix, 1 - 25%, 2 - 50%, 3 - 100% (mono)
-	input         TAPE_IN,
+
+	//ADC
+	inout   [3:0] ADC_BUS,
 
 	// SD-SPI
 	output        SD_SCK,
@@ -117,6 +119,7 @@ module emu
 	input         OSD_STATUS
 );
 
+assign ADC_BUS  = 'Z;
 assign USER_OUT = '1;
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
