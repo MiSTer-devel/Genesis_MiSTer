@@ -144,14 +144,14 @@ always @(negedge MCLK) begin
 
 		M68K_CLKENp <= 0;
 		VCLKCNT <= VCLKCNT + 1'b1;
-		if (VCLKCNT == (turbo ? 4'd3 : 4'd6)) begin
+		if (VCLKCNT == (turbo ? 4'd1 : 4'd6)) begin
 			VCLKCNT <= 0;
 			M68K_CLKENp <= 1;
 			turbo <= TURBO;
 		end
 
 		M68K_CLKENn <= 0;
-		if (VCLKCNT == (turbo ? 4'd1 : 4'd3)) begin
+		if (VCLKCNT == (turbo ? 4'd0 : 4'd3)) begin
 			M68K_CLKENn <= 1;
 		end
 
