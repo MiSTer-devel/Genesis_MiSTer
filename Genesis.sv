@@ -168,7 +168,9 @@ localparam CONF_STR4 = {
 	"OIJ,Mouse,None,Port1,Port2;",
 	"OK,Mouse Flip Y,No,Yes;",
 	"OEF,Audio Filter,Model 1,Model 2,Minimal,No Filter;",
-    "ON,HiFi PCM,No,Yes;",
+   "ON,HiFi PCM,No,Yes;",
+	"-;",
+   "OP,CPU speed,Normal,Turbo;",
 	"-;",
 `ifdef SOUND_DBG
 	"OB,Enable FM,Yes,No;",
@@ -320,6 +322,8 @@ system system
 
 	.DAC_LDATA(AUDIO_L),
 	.DAC_RDATA(AUDIO_R),
+	
+	.TURBO(status[25]),
 
 	.RED(r),
 	.GREEN(g),

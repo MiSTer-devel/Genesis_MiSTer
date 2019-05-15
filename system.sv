@@ -54,6 +54,8 @@ module system
 	input         PIER_QUIRK,
 	input         TTN2_QUIRK,
 
+	input         TURBO,
+
 	input         GG_RESET,
 	input         GG_EN,
 	input [128:0] GG_CODE,
@@ -104,21 +106,26 @@ always @(posedge MCLK) if(M68K_CLKENn) reset <= ~RESET_N | LOADING;
 wire M68K_CLKEN = M68K_CLKENp;
 reg  M68K_CLKENp, M68K_CLKENn;
 reg  Z80_CLKEN, PSG_CLKEN;
+reg  FM_CLKEN;
 
 always @(negedge MCLK) begin
+	reg [3:0] FCLKCNT = 0;
 	reg [3:0] VCLKCNT = 0;
 	reg [3:0] ZCLKCNT = 0;
 	reg [3:0] PCLKCNT = 0;
 	reg [3:0] ZCLKMAX = 0;
+	reg turbo = 0;
 
 	if(~RESET_N | LOADING) begin
 		VCLKCNT <= 0;
 		PCLKCNT <= 0;
+		FCLKCNT <= 0;
 		Z80_CLKEN <= 1;
 		PSG_CLKEN <= 1;
 		M68K_CLKENp <= 1;
 		M68K_CLKENn <= 1;
 		ZCLKMAX <= TTN2_QUIRK ? 4'd13 : 4'd14;
+		turbo <= 0;
 	end
 	else begin
 		Z80_CLKEN <= 0;
@@ -137,14 +144,22 @@ always @(negedge MCLK) begin
 
 		M68K_CLKENp <= 0;
 		VCLKCNT <= VCLKCNT + 1'b1;
-		if (VCLKCNT == 6) begin
+		if (VCLKCNT == (turbo ? 4'd3 : 4'd6)) begin
 			VCLKCNT <= 0;
 			M68K_CLKENp <= 1;
+			turbo <= TURBO;
 		end
 
 		M68K_CLKENn <= 0;
-		if (VCLKCNT == 3) begin
+		if (VCLKCNT == (turbo ? 4'd1 : 4'd3)) begin
 			M68K_CLKENn <= 1;
+		end
+
+		FM_CLKEN <= 0;
+		FCLKCNT <= FCLKCNT + 1'b1;
+		if (FCLKCNT == 6) begin
+			FCLKCNT <= 0;
+			FM_CLKEN <= 1;
 		end
 	end
 end
@@ -371,7 +386,7 @@ vdp vdp
 	.BR_N(M68K_BR_N),
 	.BGACK_N(M68K_BGACK_N),
 
-	.VRAM_SPEED(~FAST_FIFO),
+	.VRAM_SPEED(~(FAST_FIFO|TURBO)),
 	.VSCROLL_BUG(0),
 
 	.FIELD_OUT(FIELD),
@@ -1045,7 +1060,7 @@ jt12 fm
 (
 	.rst(~Z80_RESET_N),
 	.clk(MCLK),
-	.cen(M68K_CLKEN),
+	.cen(FM_CLKEN),
 
 	.cs_n(0),
 	.addr(ZBUS_A[1:0]),
