@@ -58,6 +58,8 @@ module system
 	input         GG_EN,
 	input [128:0] GG_CODE,
 	output        GG_AVAILABLE,
+	
+	input  [1:0]  M68K_SPEED,
 
 	input  [14:0] BRAM_A,
 	input  [15:0] BRAM_DI,
@@ -101,18 +103,25 @@ always @(posedge MCLK) if(M68K_CLKENn) reset <= ~RESET_N | LOADING;
 //--------------------------------------------------------------
 // CLOCK ENABLERS
 //--------------------------------------------------------------
-wire M68K_CLKEN = M68K_CLKENp;
+wire YM2612_CLKEN;
+wire M68K_CLKEN = YM2612_CLKEN;
 reg  M68K_CLKENp, M68K_CLKENn;
 reg  Z80_CLKEN, PSG_CLKEN;
 
 always @(negedge MCLK) begin
+	reg [3:0] YMCLKCNT = 0;
 	reg [3:0] VCLKCNT = 0;
+	reg [3:0] VCLKCNTPMAX = 0;
+	reg [3:0] VCLKCNTNMAX = 0;
 	reg [3:0] ZCLKCNT = 0;
 	reg [3:0] PCLKCNT = 0;
 	reg [3:0] ZCLKMAX = 0;
 
 	if(~RESET_N | LOADING) begin
+		YM2612_CLKEN <= 0;
 		VCLKCNT <= 0;
+		VCLKCNTPMAX <= 6;
+		VCLKCNTNMAX <= 3;
 		PCLKCNT <= 0;
 		Z80_CLKEN <= 1;
 		PSG_CLKEN <= 1;
@@ -134,17 +143,41 @@ always @(negedge MCLK) begin
 			PCLKCNT <= 0;
 			PSG_CLKEN <= 1;
 		end
-
+		
+		VCLKCNTPMAX <= 6;
+		VCLKCNTNMAX <= 3;
+		if (M68K_SPEED == 1) begin
+			VCLKCNTPMAX <= 4;
+			VCLKCNTNMAX <= 2;
+		end
+		else if (M68K_SPEED == 2) begin
+			VCLKCNTPMAX <= 2;
+			VCLKCNTNMAX <= 1;
+		end
+		else if (M68K_SPEED == 3) begin
+			VCLKCNTPMAX <= 12;
+			VCLKCNTNMAX <= 6;
+		end
+		
+		VCLKCNT <= VCLKCNT + 1'b1;	
+		
 		M68K_CLKENp <= 0;
-		VCLKCNT <= VCLKCNT + 1'b1;
-		if (VCLKCNT == 6) begin
+		if (VCLKCNT >= VCLKCNTPMAX) begin
 			VCLKCNT <= 0;
 			M68K_CLKENp <= 1;
 		end
 
 		M68K_CLKENn <= 0;
-		if (VCLKCNT == 3) begin
+		if (VCLKCNT == VCLKCNTNMAX) begin
 			M68K_CLKENn <= 1;
+		end
+		
+		YMCLKCNT <= YMCLKCNT + 1'b1;
+
+		YM2612_CLKEN <= 0;
+		if (YMCLKCNT == 6) begin
+			YMCLKCNT <= 0;
+			YM2612_CLKEN <= 1;
 		end
 	end
 end
@@ -1045,7 +1078,7 @@ jt12 fm
 (
 	.rst(~Z80_RESET_N),
 	.clk(MCLK),
-	.cen(M68K_CLKEN),
+	.cen(YM2612_CLKEN),
 
 	.cs_n(0),
 	.addr(ZBUS_A[1:0]),

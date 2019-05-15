@@ -159,6 +159,8 @@ localparam CONF_STR4 = {
 	"H,Save Backup RAM;",
 	"OD,Autosave,No,Yes;",
 	"-;",
+	"OST,68k Speed,1x,1.5x,3x,0.5x;",
+	"-;",
 	"O9,Aspect ratio,4:3,16:9;",
 	"O13,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
 	"-;",
@@ -337,6 +339,8 @@ system system
 	.GG_EN(status[24]),
 	.GG_CODE(gg_code),
 	.GG_AVAILABLE(gg_available),
+	
+	.M68K_SPEED(status[29:28]),
 
 	.J3BUT(~status[5]),
 	.JOY_1(status[4] ? joystick_1 : joystick_0),
