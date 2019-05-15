@@ -139,7 +139,7 @@ assign LED_USER  = cart_download | sav_pending;
 //`define SOUND_DBG
 
 `include "build_id.v"
-localparam CONF_STR1 = {
+localparam CONF_STR = {
 	"Genesis;;",
 	"FS,BINGENMD ;",
 	"-;",
@@ -147,20 +147,11 @@ localparam CONF_STR1 = {
 	"O8,Auto Region,No,Yes;",
 	"-;",
 	"C,Cheats;",
-};
-
-localparam CONF_STR2 = {
-	"O,Cheats enabled,Yes,No;",
+	"H1OO,Cheats enabled,Yes,No;",
 	"-;",
-};
-
-localparam CONF_STR3 = {
-	"G,Load Backup RAM;"
-};
-
-localparam CONF_STR4 = {
-	"H,Save Backup RAM;",
-	"OD,Autosave,No,Yes;",
+	"D0RG,Load Backup RAM;",
+	"D0RH,Save Backup RAM;",
+	"D0OD,Autosave,No,Yes;",
 	"-;",
 	"O9,Aspect ratio,4:3,16:9;",
 	"O13,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
@@ -185,6 +176,7 @@ localparam CONF_STR4 = {
 };
 
 
+wire [15:0] status_menumask = {~gg_available,~bk_ena};
 wire [31:0] status;
 wire  [1:0] buttons;
 wire [11:0] joystick_0,joystick_1,joystick_2,joystick_3;
@@ -200,8 +192,8 @@ reg         sd_rd = 0;
 reg         sd_wr = 0;
 wire        sd_ack;
 wire  [7:0] sd_buff_addr;
-wire  [15:0] sd_buff_dout;
-wire  [15:0] sd_buff_din;
+wire [15:0] sd_buff_dout;
+wire [15:0] sd_buff_din;
 wire        sd_buff_wr;
 wire        img_mounted;
 wire        img_readonly;
@@ -211,12 +203,13 @@ wire        forced_scandoubler;
 wire [10:0] ps2_key;
 wire [24:0] ps2_mouse;
 
-hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR3)>>3) + ($size(CONF_STR4)>>3) + 3), .PS2DIV(1000), .WIDE(1)) hps_io
+hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(1)) hps_io
 (
 	.clk_sys(clk_sys),
 	.HPS_BUS(HPS_BUS),
 
-	.conf_str({CONF_STR1,gg_available ? "O" : "+",CONF_STR2,bk_ena ? "R" : "+",CONF_STR3,bk_ena ? "R" : "+",CONF_STR4}),
+	.conf_str(CONF_STR),
+
 	.joystick_0(joystick_0),
 	.joystick_1(joystick_1),
 	.joystick_2(joystick_2),
@@ -228,6 +221,7 @@ hps_io #(.STRLEN(($size(CONF_STR1)>>3) + ($size(CONF_STR2)>>3) + ($size(CONF_STR
 	.status(status),
 	.status_in({status[31:8],region_req,status[5:0]}),
 	.status_set(region_set),
+	.status_menumask(status_menumask),
 
 	.ioctl_download(ioctl_download),
 	.ioctl_index(ioctl_index),
