@@ -54,7 +54,7 @@ module system
 	input         PIER_QUIRK,
 	input         TTN2_QUIRK,
 
-	input         TURBO,
+	input   [1:0] TURBO,
 
 	input         GG_RESET,
 	input         GG_EN,
@@ -114,7 +114,8 @@ always @(negedge MCLK) begin
 	reg [3:0] ZCLKCNT = 0;
 	reg [3:0] PCLKCNT = 0;
 	reg [3:0] ZCLKMAX = 0;
-	reg turbo = 0;
+	reg [3:0] VCLKMAX = 0;
+	reg [3:0] VCLKMID = 0;
 
 	if(~RESET_N | LOADING) begin
 		VCLKCNT <= 0;
@@ -125,7 +126,8 @@ always @(negedge MCLK) begin
 		M68K_CLKENp <= 1;
 		M68K_CLKENn <= 1;
 		ZCLKMAX <= TTN2_QUIRK ? 4'd13 : 4'd14;
-		turbo <= 0;
+		VCLKMAX = 6;
+		VCLKMID = 3;
 	end
 	else begin
 		Z80_CLKEN <= 0;
@@ -144,14 +146,15 @@ always @(negedge MCLK) begin
 
 		M68K_CLKENp <= 0;
 		VCLKCNT <= VCLKCNT + 1'b1;
-		if (VCLKCNT == (turbo ? 4'd1 : 4'd6)) begin
+		if (VCLKCNT == VCLKMAX) begin
 			VCLKCNT <= 0;
 			M68K_CLKENp <= 1;
-			turbo <= TURBO;
+			VCLKMAX <= (TURBO == 2) ? 4'd1 : (TURBO == 1) ? 4'd3 : 4'd6;
+			VCLKMID <= (TURBO == 2) ? 4'd0 : (TURBO == 1) ? 4'd1 : 4'd3;
 		end
 
 		M68K_CLKENn <= 0;
-		if (VCLKCNT == (turbo ? 4'd0 : 4'd3)) begin
+		if (VCLKCNT == VCLKMID) begin
 			M68K_CLKENn <= 1;
 		end
 
