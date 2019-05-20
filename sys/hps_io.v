@@ -332,6 +332,7 @@ always@(posedge clk_sys) begin
 					'h18: sd_ack <= 1;
 					'h29: io_dout <= {4'hA, stflg};
 					'h2B: io_dout <= 1;
+					'h2F: io_dout <= 1;
 				endcase
 
 				sd_buff_addr <= 0;

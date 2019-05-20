@@ -172,7 +172,7 @@ reg  rack;
 wire io_strobe = ~rack & io_clk;
 
 always @(posedge clk_sys) begin
-	if(~io_wait | io_strobe) begin
+	if(~(io_wait | vs_wait) | io_strobe) begin
 		rack <= io_clk;
 		io_ack <= rack;
 	end
@@ -223,17 +223,22 @@ reg  [11:0] VSET = 0;
 reg   [2:0] scaler_flt;
 reg         lowlat = 0;
 
+reg         vs_wait = 0;
+
 always@(posedge clk_sys) begin
 	reg  [7:0] cmd;
 	reg        has_cmd;
 	reg        old_strobe;
 	reg  [7:0] cnt = 0;
+	reg        vs_d0,vs_d1,vs_d2;
 
 	old_strobe <= io_strobe;
 	coef_wr <= 0;
 
 	if(~io_uio) begin
 		has_cmd <= 0;
+		cmd <= 0;
+		if(has_cmd && cmd == 'h2F) FB_SET <= ~FB_SET;
 	end
 	else
 	if(~old_strobe & io_strobe) begin
@@ -241,6 +246,7 @@ always@(posedge clk_sys) begin
 			has_cmd <= 1;
 			cmd <= io_din[7:0];
 			cnt <= 0;
+			if(io_din[7:0] == 'h30) vs_wait <= 1;
 		end
 		else begin
 			if(cmd == 1) begin
@@ -251,15 +257,15 @@ always@(posedge clk_sys) begin
 				cfg_set <= 0;
 				cnt <= cnt + 1'd1;
 				if(cnt<8) begin
-					case(cnt)
-						0: if(WIDTH  != io_din[11:0]) begin WIDTH  <= io_din[11:0]; end
-						1: if(HFP    != io_din[11:0]) begin HFP    <= io_din[11:0]; end
-						2: if(HS     != io_din[11:0]) begin HS     <= io_din[11:0]; end
-						3: if(HBP    != io_din[11:0]) begin HBP    <= io_din[11:0]; end
-						4: if(HEIGHT != io_din[11:0]) begin HEIGHT <= io_din[11:0]; end
-						5: if(VFP    != io_din[11:0]) begin VFP    <= io_din[11:0]; end
-						6: if(VS     != io_din[11:0]) begin VS     <= io_din[11:0]; end
-						7: if(VBP    != io_din[11:0]) begin VBP    <= io_din[11:0]; end
+					case(cnt[2:0])
+						0: if(WIDTH  != io_din[11:0]) WIDTH  <= io_din[11:0];
+						1: if(HFP    != io_din[11:0]) HFP    <= io_din[11:0];
+						2: if(HS     != io_din[11:0]) HS     <= io_din[11:0];
+						3: if(HBP    != io_din[11:0]) HBP    <= io_din[11:0];
+						4: if(HEIGHT != io_din[11:0]) HEIGHT <= io_din[11:0];
+						5: if(VFP    != io_din[11:0]) VFP    <= io_din[11:0];
+						6: if(VS     != io_din[11:0]) VS     <= io_din[11:0];
+						7: if(VBP    != io_din[11:0]) VBP    <= io_din[11:0];
 					endcase
 					if(cnt == 1) begin
 						cfg_custom_p1 <= 0;
@@ -278,6 +284,17 @@ always@(posedge clk_sys) begin
 					if(cnt == 8) lowlat <= io_din[15];
 				end
 			end
+			if(cmd == 'h2F) begin
+				cnt <= cnt + 1'd1;
+				case(cnt[2:0])
+					0: {FB_EN,FB_FMT,FB_VSET}<= io_din[15:0];
+					1: FB_BASE[15:0]  <= io_din[15:0];
+					2: FB_BASE[31:16] <= io_din[15:0];
+					3: FB_WIDTH       <= io_din[11:0];
+					4: FB_HEIGHT      <= io_din[11:0];
+					5: {FB_ARY,FB_ARX}<= io_din[15:0];
+				endcase
+			end
 			if(cmd == 'h25) {led_overtake, led_state} <= io_din;
 			if(cmd == 'h26) vol_att <= io_din[4:0];
 			if(cmd == 'h27) VSET    <= io_din[11:0];
@@ -285,6 +302,12 @@ always@(posedge clk_sys) begin
 			if(cmd == 'h2B) scaler_flt <= io_din[2:0];
 		end
 	end
+	
+	vs_d0 <= HDMI_TX_VS;
+	if(vs_d0 == HDMI_TX_VS) vs_d1 <= vs_d0;
+
+	vs_d2 <= vs_d1;
+	if(~vs_d2 & vs_d1) vs_wait <= 0;
 end
 
 always @(posedge clk_sys) begin
@@ -409,7 +432,6 @@ wire         vbuf_write;
 
 ascal 
 #(
-	.RAMBASE(32'h20000000),
 	.N_DW(128),
 	.N_AW(28)
 )
@@ -417,7 +439,7 @@ ascal
 (
 	.reset_na (~reset_req),
 	.run      (1),
-	.freeze   (0),
+	.freeze   (FB_MODE),
 
 	.i_clk  (clk_vid),
 	.i_ce   (ce_pix),
@@ -428,11 +450,12 @@ ascal
 	.i_vs   (vs),
 	.i_fl   (f1),
 	.i_de   (de),
-	.iauto  (1),
+	.iauto  (~FB_MODE),
 	.himin  (0),
-	.himax  (0),
+	.himax  (FB_WIDTH),
 	.vimin  (0),
-	.vimax  (0),
+	.vimax  (FB_HEIGHT),
+	.format (SC_FMT),
 
 	.o_clk  (clk_hdmi),
 	.o_ce   (1),
@@ -442,7 +465,7 @@ ascal
 	.o_hs   (HDMI_TX_HS),
 	.o_vs   (HDMI_TX_VS),
 	.o_de   (hdmi_de),
-	.o_lltune (lltune),
+	.o_lltune(lltune),
 	.htotal (WIDTH+HFP+HBP+HS),
 	.hsstart(WIDTH + HFP),
 	.hsend  (WIDTH + HFP + HS),
@@ -456,7 +479,7 @@ ascal
 	.vmin   (vmin),
 	.vmax   (vmax),
 
-	.mode     ({~lowlat,|scaler_flt,2'b00}),
+	.mode     ({~lowlat & ~FB_MODE,|scaler_flt,2'b00}),
 	.poly_clk (clk_sys),
 	.poly_a   (coef_addr),
 	.poly_dw  (coef_data),
@@ -471,8 +494,23 @@ ascal
 	.avl_address      (vbuf_address),
 	.avl_write        (vbuf_write),
 	.avl_read         (vbuf_read),
-	.avl_byteenable   (vbuf_byteenable)
+	.avl_byteenable   (vbuf_byteenable),
+	.avl_base         (SC_BASE)
 );
+
+reg        FB_EN     = 0;
+reg        FB_SET    = 0;
+reg [11:0] FB_VSET   = 0;
+reg  [2:0] FB_FMT    = 0;
+reg [11:0] FB_WIDTH  = 320;
+reg [11:0] FB_HEIGHT = 240;
+reg  [7:0] FB_ARX    = 4;
+reg  [7:0] FB_ARY    = 3;
+reg [31:0] FB_BASE   = 32'h20000000;
+
+reg [31:0] SC_BASE   = 32'h20000000;
+reg        FB_MODE   = 0;
+reg  [1:0] SC_FMT    = 1;
 
 reg [11:0] hmin;
 reg [11:0] hmax;
@@ -485,16 +523,49 @@ always @(posedge clk_vid) begin
 	reg  [2:0] state;
 	reg [11:0] videow;
 	reg [11:0] videoh;
+	
+	reg        old_vs;
+	reg [11:0] vset;
+	reg        fb_set = 0;
+	reg        fb_en = 0;
+	
+	old_vs <= HDMI_TX_VS;
+	if(old_vs & ~HDMI_TX_VS) begin
+		fb_set <= FB_SET;
+		if(fb_set ^ FB_SET) begin
+			SC_BASE <= FB_EN ? FB_BASE : 32'h20000000;
+			fb_en <= FB_EN;
+		end
+	end
+	else if(~old_vs & HDMI_TX_VS) begin
+		FB_MODE <= fb_en;
+		SC_FMT <= fb_en ? FB_FMT[1:0] : 2'd1;
+	end
 
 	state <= state + 1'd1;
 	case(state)
-		0: begin
+		0: if(FB_MODE) begin
+				if(FB_ARX && FB_ARY) begin
+					wcalc <= FB_VSET ? (FB_VSET*FB_ARX)/FB_ARY : (HEIGHT*FB_ARX)/FB_ARY;
+					hcalc <= (WIDTH*FB_ARY)/FB_ARX;
+					vset  <= FB_VSET;
+				end
+				else begin
+					hmin <= 0;
+					vmin <= 0;
+					hmax <= WIDTH;
+					vmax <= HEIGHT;
+					state<= 0;
+				end
+			end
+			else begin
+				vset  <= VSET;
 				wcalc <= VSET ? (VSET*ARX)/ARY : (HEIGHT*ARX)/ARY;
 				hcalc <= (WIDTH*ARY)/ARX;
 			end
 		6: begin
-				videow <= (!VSET && (wcalc > WIDTH))     ? WIDTH  : wcalc[11:0];
-				videoh <= VSET ? VSET : (hcalc > HEIGHT) ? HEIGHT : hcalc[11:0];
+				videow <= (!vset && (wcalc > WIDTH))     ? WIDTH  : wcalc[11:0];
+				videoh <= vset ? vset : (hcalc > HEIGHT) ? HEIGHT : hcalc[11:0];
 			end
 		7: begin
 				hmin <= ((WIDTH  - videow)>>1);
@@ -512,7 +583,7 @@ pll_hdmi_adj pll_hdmi_adj
 	.clk(FPGA_CLK1_50),
 	.reset_na(~reset_req),
 
-	.llena(lowlat),
+	.llena(lowlat & ~FB_MODE),
 	.lltune(lltune),
 	.locked(led_locked),
 	.i_waitrequest(adj_waitrequest),
