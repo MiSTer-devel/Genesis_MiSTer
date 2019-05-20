@@ -329,10 +329,8 @@ signal FIELD		: std_logic;
 signal FIELD_LATCH	: std_logic;
 
 signal X			: std_logic_vector(8 downto 0);
-signal PIXDIV		: std_logic_vector(3 downto 0);
 
 signal DISP_ACTIVE	: std_logic;
-signal DISP_ACTIVE_LAST_COLUMN	: std_logic;
 
 -- HV COUNTERS
 signal HV_PIXDIV	: std_logic_vector(3 downto 0);
@@ -534,7 +532,6 @@ signal OBJ_COLINFO_ADDR_WR_REND : std_logic_vector(8 downto 0);
 signal OBJ_COLINFO_WE_SP3       : std_logic;
 signal OBJ_COLINFO_WE_REND      : std_logic;
 signal OBJ_COLINFO_D_SP3        : std_logic_vector(6 downto 0);
-signal OBJ_COLINFO_D_REND       : std_logic_vector(6 downto 0);
 
 -- PART 1
 signal SP1E_ACTIVATE	: std_logic;
@@ -644,7 +641,6 @@ signal FF_G			: std_logic_vector(3 downto 0);
 signal FF_B			: std_logic_vector(3 downto 0);
 signal FF_VS		: std_logic;
 signal FF_HS		: std_logic;
-signal PIXOUT		: std_logic;
 
 begin
 
@@ -705,7 +701,7 @@ OBJ_COLINFO_ADDR_A <= OBJ_COLINFO_ADDR_RD_SP3 when SP3C /= SP3C_DONE else OBJ_CO
 OBJ_COLINFO_ADDR_B <= OBJ_COLINFO_ADDR_WR_SP3 when SP3C /= SP3C_DONE else OBJ_COLINFO_ADDR_WR_REND;
 OBJ_COLINFO_WE_A <= '0';
 OBJ_COLINFO_WE_B <= OBJ_COLINFO_WE_SP3 when SP3C /= SP3C_DONE else OBJ_COLINFO_WE_REND;
-OBJ_COLINFO_D_B <= OBJ_COLINFO_D_SP3 when SP3C /= SP3C_DONE else OBJ_COLINFO_D_REND;
+OBJ_COLINFO_D_B <= OBJ_COLINFO_D_SP3 when SP3C /= SP3C_DONE else (others => '0');
 
 obj_cache_y_l : entity work.DualPortRAM
 generic map (
@@ -2542,9 +2538,6 @@ end process;
 PRE_V_ACTIVE <= '1' when HV_VCNT = "1"&x"FF" or HV_VCNT < V_DISP_HEIGHT - 1 else '0';
 V_ACTIVE <= '1' when HV_VCNT < V_DISP_HEIGHT else '0';
 DISP_ACTIVE <= '1' when V_ACTIVE = '1' and HV_HCNT > HBLANK_END and HV_HCNT <= HBLANK_END + H_DISP_WIDTH else '0';
--- pixel output does not start immediately when DISP_ACTIVE becomes '1'. Thus
--- the last pixel column needs some extra time after DISP_ACTIVE becomes '0' to display
-DISP_ACTIVE_LAST_COLUMN	<= '1' when HV_HCNT = HBLANK_END + H_DISP_WIDTH + 1 else '0';
 -- Background generation runs during active display.
 -- It starts with reading the horizontal scroll values from the VRAM
 BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HSCROLL_READ else '0';
@@ -2561,151 +2554,118 @@ DT_ACTIVE <= '1';
 
 -- PIXEL COUNTER AND OUTPUT
 -- ALSO CLEARS THE SPRITE COLINFO BUFFER RIGHT AFTER RENDERING
-process( RST_N, CLK )
+process( CLK )
 	variable col : std_logic_vector(5 downto 0);
 	variable cold: std_logic_vector(5 downto 0);
 begin
-	OBJ_COLINFO_D_REND <= (others => '0');
-	if RST_N = '0' then
-		X <= (others => '0');
-		PIXDIV <= (others => '0');
-		PIXOUT <= '0';
-		
-	elsif rising_edge(CLK) then
-		if DISP_ACTIVE = '0' and DISP_ACTIVE_LAST_COLUMN = '0' then
-			X <= (others => '0');
-			PIXDIV <= (others => '0');
-			PIXOUT <= '0';
-			
-			FF_R <= (others => '0');
-			FF_G <= (others => '0');
-			FF_B <= (others => '0');
+	if rising_edge(CLK) then
+		OBJ_COLINFO_WE_REND <= '0';
 
-			BGB_COLINFO_ADDR_B <= (others => '0');
-			BGA_COLINFO_ADDR_B <= (others => '0');
-			OBJ_COLINFO_WE_REND <= '0';
-		else
-			PIXDIV <= PIXDIV + 1;
+		case HV_PIXDIV is
+		when "0000" =>
+			BGB_COLINFO_ADDR_B <= X;
+			BGA_COLINFO_ADDR_B <= X;
+			OBJ_COLINFO_ADDR_RD_REND <= X;
+			OBJ_COLINFO_ADDR_WR_REND <= X;
 
-			case PIXDIV is
-			when "0000" =>
-				BGB_COLINFO_ADDR_B <= X;
-				BGA_COLINFO_ADDR_B <= X;
-				OBJ_COLINFO_ADDR_RD_REND <= X;
-				OBJ_COLINFO_ADDR_WR_REND <= X;
-				OBJ_COLINFO_WE_REND <= '0';
+		when "0010" =>
+			if SHI = '1' and BGA_COLINFO_Q_B(6) = '0' and BGB_COLINFO_Q_B(6) = '0' then
+				--if all layers are normal priority, then shadowed
+				PIX_MODE <= PIX_SHADOW;
+			else
+				PIX_MODE <= PIX_NORMAL;
+			end if;
 
-			when "0010" =>
-				if SHI = '1' and BGA_COLINFO_Q_B(6) = '0' and BGB_COLINFO_Q_B(6) = '0' then
-					--if all layers are normal priority, then shadowed
+		when "0011" =>
+			if SHI = '1' and (OBJ_COLINFO_Q_A(6) = '1' or
+				((BGA_COLINFO_Q_B(6) = '0' or BGA_COLINFO_Q_B(3 downto 0) = "0000") and
+				 (BGB_COLINFO_Q_B(6) = '0' or BGB_COLINFO_Q_B(3 downto 0) = "0000"))) then
+				--sprite is visible
+				if OBJ_COLINFO_Q_A(5 downto 0) = "111110" then
+					--if sprite is palette 3/color 14 increase intensity
+					if PIX_MODE = PIX_SHADOW then 
+						PIX_MODE <= PIX_NORMAL;
+					else
+						PIX_MODE <= PIX_HIGHLIGHT;
+					end if;
+				elsif OBJ_COLINFO_Q_A(5 downto 0) = "111111" then
+					-- if sprite is visible and palette 3/color 15, decrease intensity
 					PIX_MODE <= PIX_SHADOW;
-				else
+				elsif (OBJ_COLINFO_Q_A(6) = '1' and OBJ_COLINFO_Q_A(3 downto 0) /= "0000") or 
+						 OBJ_COLINFO_Q_A(3 downto 0) = "1110" then
+					--sprite color 14 or high prio always shows up normal
 					PIX_MODE <= PIX_NORMAL;
 				end if;
+			end if;
 
-			when "0011" =>
-				if SHI = '1' and (OBJ_COLINFO_Q_A(6) = '1' or
-					((BGA_COLINFO_Q_B(6) = '0' or BGA_COLINFO_Q_B(3 downto 0) = "0000") and
-					 (BGB_COLINFO_Q_B(6) = '0' or BGB_COLINFO_Q_B(3 downto 0) = "0000"))) then
-					--sprite is visible
-					if OBJ_COLINFO_Q_A(5 downto 0) = "111110" then
-						--if sprite is palette 3/color 14 increase intensity
-						if PIX_MODE = PIX_SHADOW then 
-							PIX_MODE <= PIX_NORMAL;
-						else
-							PIX_MODE <= PIX_HIGHLIGHT;
-						end if;
-					elsif OBJ_COLINFO_Q_A(5 downto 0) = "111111" then
-						-- if sprite is visible and palette 3/color 15, decrease intensity
-						PIX_MODE <= PIX_SHADOW;
-					elsif (OBJ_COLINFO_Q_A(6) = '1' and OBJ_COLINFO_Q_A(3 downto 0) /= "0000") or 
-					       OBJ_COLINFO_Q_A(3 downto 0) = "1110" then
-						--sprite color 14 or high prio always shows up normal
-						PIX_MODE <= PIX_NORMAL;
-					end if;
-				end if;
+			if DE='0' then
+				col := BGCOL;
+			elsif OBJ_COLINFO_Q_A(3 downto 0) /= "0000" and OBJ_COLINFO_Q_A(6) = '1' and
+				(SHI='0' or OBJ_COLINFO_Q_A(5 downto 1) /= "11111") then
+				col := OBJ_COLINFO_Q_A(5 downto 0);
+			elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" and BGA_COLINFO_Q_B(6) = '1' then
+				col := BGA_COLINFO_Q_B(5 downto 0);
+			elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" and BGB_COLINFO_Q_B(6) = '1' then
+				col := BGB_COLINFO_Q_B(5 downto 0);
+			elsif OBJ_COLINFO_Q_A(3 downto 0) /= "0000" and
+				(SHI='0' or OBJ_COLINFO_Q_A(5 downto 1) /= "11111") then
+				col := OBJ_COLINFO_Q_A(5 downto 0);
+			elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" then
+				col := BGA_COLINFO_Q_B(5 downto 0);
+			elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" then
+				col := BGB_COLINFO_Q_B(5 downto 0);
+			else
+				col := BGCOL;
+			end if;
 
-				if DE='0' then
-					col := BGCOL;
-				elsif OBJ_COLINFO_Q_A(3 downto 0) /= "0000" and OBJ_COLINFO_Q_A(6) = '1' and
-					(SHI='0' or OBJ_COLINFO_Q_A(5 downto 1) /= "11111") then
-					col := OBJ_COLINFO_Q_A(5 downto 0);
-				elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" and BGA_COLINFO_Q_B(6) = '1' then
-					col := BGA_COLINFO_Q_B(5 downto 0);
-				elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" and BGB_COLINFO_Q_B(6) = '1' then
-					col := BGB_COLINFO_Q_B(5 downto 0);
-				elsif OBJ_COLINFO_Q_A(3 downto 0) /= "0000" and
-					(SHI='0' or OBJ_COLINFO_Q_A(5 downto 1) /= "11111") then
-					col := OBJ_COLINFO_Q_A(5 downto 0);
-				elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" then
-					col := BGA_COLINFO_Q_B(5 downto 0);
-				elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" then
-					col := BGB_COLINFO_Q_B(5 downto 0);
-				else
-					col := BGCOL;
-				end if;
-
-				case DBG(8 downto 7) is
-					when "00" => cold := BGCOL;
-					when "01" => cold := OBJ_COLINFO_Q_A(5 downto 0);
-					when "10" => cold := BGA_COLINFO_Q_B(5 downto 0);
-					when "11" => cold := BGB_COLINFO_Q_B(5 downto 0);
-					when others => null;
-				end case;
-
-				if DBG(6) = '1' then
-					col := cold;
-				elsif DBG(8 downto 7) /= "00" then
-					col := col and cold;
-				end if;
-
-				CRAM_ADDR_B <= col;
-
-			when "0101" =>
-				if DISP_ACTIVE_LAST_COLUMN = '1' then
-					FF_R <= (others => '0');
-					FF_G <= (others => '0');
-					FF_B <= (others => '0');
-				else
-					case PIX_MODE is
-					when PIX_SHADOW =>
-						-- half brightness
-						FF_B <= '0' & CRAM_Q_B(8 downto 6);
-						FF_G <= '0' & CRAM_Q_B(5 downto 3);
-						FF_R <= '0' & CRAM_Q_B(2 downto 0);
-
-					when PIX_NORMAL =>
-						-- normal brightness
-						FF_B <= CRAM_Q_B(8 downto 6) & '0';
-						FF_G <= CRAM_Q_B(5 downto 3) & '0';
-						FF_R <= CRAM_Q_B(2 downto 0) & '0';
-					
-					when PIX_HIGHLIGHT =>
-						-- increased brightness
-						FF_B <= '0' & CRAM_Q_B(8 downto 6) + 7;
-						FF_G <= '0' & CRAM_Q_B(5 downto 3) + 7;
-						FF_R <= '0' & CRAM_Q_B(2 downto 0) + 7;
-					end case;
-				end if;
-				OBJ_COLINFO_WE_REND <= '1';
-
-			when "0111" =>
-				OBJ_COLINFO_WE_REND <= '0';
-			
-			when others => null;
+			case DBG(8 downto 7) is
+				when "00" => cold := BGCOL;
+				when "01" => cold := OBJ_COLINFO_Q_A(5 downto 0);
+				when "10" => cold := BGA_COLINFO_Q_B(5 downto 0);
+				when "11" => cold := BGB_COLINFO_Q_B(5 downto 0);
+				when others => null;
 			end case;
 
-			if (H40 = '1' and PIXDIV = 8-1) or
-			   (H40 = '0' and RS0 = '0' and PIXDIV = 10-1) or
-			   (H40 = '0' and RS0 = '1' and PIXDIV = 8-1) then
-				PIXDIV <= (others => '0');
-				X <= X + 1;
-				PIXOUT <= '1';
-			else
-				PIXOUT <= '0';
+			if DBG(6) = '1' then
+				col := cold;
+			elsif DBG(8 downto 7) /= "00" then
+				col := col and cold;
 			end if;
-		end if;
 
+			CRAM_ADDR_B <= col;
+
+		when "0101" =>
+			if DISP_ACTIVE = '0' then
+				FF_R <= (others => '0');
+				FF_G <= (others => '0');
+				FF_B <= (others => '0');
+				X    <= (others => '0');
+			else
+				case PIX_MODE is
+				when PIX_SHADOW =>
+					-- half brightness
+					FF_B <= '0' & CRAM_Q_B(8 downto 6);
+					FF_G <= '0' & CRAM_Q_B(5 downto 3);
+					FF_R <= '0' & CRAM_Q_B(2 downto 0);
+
+				when PIX_NORMAL =>
+					-- normal brightness
+					FF_B <= CRAM_Q_B(8 downto 6) & '0';
+					FF_G <= CRAM_Q_B(5 downto 3) & '0';
+					FF_R <= CRAM_Q_B(2 downto 0) & '0';
+				
+				when PIX_HIGHLIGHT =>
+					-- increased brightness
+					FF_B <= '0' & CRAM_Q_B(8 downto 6) + 7;
+					FF_G <= '0' & CRAM_Q_B(5 downto 3) + 7;
+					FF_R <= '0' & CRAM_Q_B(2 downto 0) + 7;
+				end case;
+				OBJ_COLINFO_WE_REND <= '1';
+				X <= X + 1;
+			end if;
+
+		when others => null;
+		end case;
 	end if;
 end process;
 
@@ -2794,7 +2754,8 @@ process( CLK )
 begin
 	if rising_edge(CLK) then
 		CE_PIX <= '0';
-		if HV_PIXDIV = 0 then
+		if HV_PIXDIV = "0101" then
+			CE_PIX <= '1';
 
 			if HV_HCNT = VSYNC_HSTART and HV_VCNT = VSYNC_START then
 				FIELD_OUT <= LSM(1) and LSM(0) and not FIELD_LATCH;
@@ -2806,7 +2767,6 @@ begin
 				V30prev := '1';
 			end if;
 			
-			CE_PIX <= '1';
 			if HV_HCNT = HBLANK_END + H_DISP_WIDTH + 1 then 
 				HBL <= '1';
 			end if;
@@ -2827,14 +2787,14 @@ end process;
 -- VIDEO DEBUG
 ----------------------------------------------------------------
 -- synthesis translate_off
-process( PIXOUT )
+process( CE_PIX )
 	file F		: text open write_mode is "vdp.out";
 	variable L	: line;
 	variable R	: std_logic_vector(2 downto 0);
 	variable G	: std_logic_vector(2 downto 0);
 	variable B	: std_logic_vector(2 downto 0);
 begin
-	if rising_edge( PIXOUT ) then
+	if rising_edge( CE_PIX ) then
 		hwrite(L, FF_R & '0' & FF_G & '0' & FF_B & '0');
 		writeline(F,L);
 	end if;
