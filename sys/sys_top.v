@@ -528,23 +528,41 @@ always @(posedge clk_vid) begin
 	reg [11:0] videoh;
 	
 	reg        old_vs;
+	reg        vsd1,vsd2;
 	reg [11:0] vset;
-	reg        fb_set = 0;
+	reg        fb_set1, fb_set2 = 0;
 	reg        fb_en = 0;
+
+	reg  [1:0] trans = 0;
 	
-	old_vs <= HDMI_TX_VS;
-	if(old_vs & ~HDMI_TX_VS) begin
-		fb_set <= FB_SET;
-		if(fb_set ^ FB_SET) begin
-			SC_BASE <= FB_EN ? FB_BASE : VIDEO_BUF;
-			fb_en <= FB_EN;
-			if(FB_EN) SC_FREEZE <= 1;
+	vsd1 <= HDMI_TX_VS;
+	if(vsd1 == HDMI_TX_VS) vsd2 <= vsd1;
+
+	old_vs <= vsd2;
+	if(old_vs & ~vsd2) begin
+		if(trans) trans <= trans - 1'd1;
+		if(trans == 2) fb_en <= FB_EN;
+		if(trans == 1) begin
+			SC_MODE <= fb_en;
+			SC_BASE <= fb_en ? FB_BASE     : VIDEO_BUF;
+			SC_FMT  <= fb_en ? FB_FMT[1:0] : 2'd1;
+			if(~fb_en) SC_FREEZE <= 0;
 		end
 	end
-	else if(~old_vs & HDMI_TX_VS) begin
-		SC_MODE <= fb_en;
-		SC_FMT <= fb_en ? FB_FMT[1:0] : 2'd1;
-		if(~fb_en) SC_FREEZE <= 0;
+
+	fb_set1 <= FB_SET;
+	fb_set2 <= fb_set1;
+	if(fb_set2 ^ fb_set1) begin
+		if(FB_EN) SC_FREEZE <= 1;
+
+		//already in FB mode - safe to switch the address/format now
+		if(SC_MODE & FB_EN) begin
+			SC_BASE <= FB_BASE;
+			SC_FMT  <= FB_FMT[1:0];
+		end
+		else begin
+			trans <= 3;
+		end
 	end
 
 	state <= state + 1'd1;
