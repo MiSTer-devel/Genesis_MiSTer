@@ -430,7 +430,8 @@ ARCHITECTURE rtl OF ascal IS
     CASE format IS
       WHEN "00" => -- 16bpp
         RETURN shift(16 TO 119) &
-          '0' & pix.r(7 DOWNTO 3) & pix.g(7 DOWNTO 3) & pix.b(7 DOWNTO 3);
+          pix.g(5 DOWNTO 3) & pix.b(7 DOWNTO 3) &
+          '0' & pix.r(7 DOWNTO 3) & pix.g(7 DOWNTO 6);
       WHEN "01" => -- 24bpp
         RETURN shift(24 TO 119) & pix.r & pix.g & pix.b;
       WHEN OTHERS => -- 32bpp
@@ -445,26 +446,30 @@ ARCHITECTURE rtl OF ascal IS
                        format : unsigned(1 DOWNTO 0)) RETURN unsigned IS
     VARIABLE dw : unsigned(N_DW-1 DOWNTO 0);
   BEGIN
+    dw:=i_dw;
     CASE format IS
       WHEN "00" => -- 16bpp
-        dw:=shift(128-N_DW+8 TO 119) &
-             '0' & pix.r(7 DOWNTO 3) & pix.g(7 DOWNTO 3) & pix.b(7 DOWNTO 3);
+        IF (N_DW=128 AND (acpt MOD 8)=7) OR (N_DW=64 AND (acpt MOD 4)=3) THEN
+          dw:=shift(128-N_DW+8 TO 119) &
+               pix.g(5 DOWNTO 3) & pix.b(7 DOWNTO 3) &
+               '0' & pix.r(7 DOWNTO 3) & pix.g(7 DOWNTO 6);
+        END IF;
       WHEN "01" => -- 24bpp
         IF N_DW=128 THEN
           IF    acpt=5 THEN  dw:=shift(0 TO 119) & pix.r;
           ELSIF acpt=10 THEN dw:=shift(8 TO 119) & pix.r & pix.g;
           ELSIF acpt=15 THEN dw:=shift(16 TO 119) & pix.r & pix.g & pix.b;
-          ELSE               dw:=i_dw;
           END IF;
         ELSE -- N_DW=64
           IF    (acpt MOD 8)=2 THEN dw:=shift(72 TO 119) & pix.r & pix.g;
           ELSIF (acpt MOD 8)=5 THEN dw:=shift(64 TO 119) & pix.r;
           ELSIF (acpt MOD 8)=7 THEN dw:=shift(80 TO 119) & pix.r & pix.g & pix.b;
-          ELSE                       dw:=i_dw;
           END IF;
         END IF;
       WHEN OTHERS => -- 32bpp
-        dw:=shift(128-N_DW+24 TO 119) & pix.r & pix.g & pix.b & x"00";
+        IF (N_DW=128 AND (acpt MOD 4)=3) OR (N_DW=64 AND (acpt MOD 8)=7) THEN
+          dw:=shift(128-N_DW+24 TO 119) & pix.r & pix.g & pix.b & x"00";
+        END IF;
     END CASE;
     RETURN dw;
   END FUNCTION;
@@ -553,9 +558,9 @@ ARCHITECTURE rtl OF ascal IS
   BEGIN
     CASE format IS
       WHEN "00" => -- 16bpp
-        RETURN (r=>shift(1 TO 5) & shift(1 TO 3),
-                g=>shift(6 TO 10) & shift(6 TO 8),
-                b=>shift(11 TO 15) & shift(11 TO 13));
+        RETURN (r=>shift(9 TO 13) & shift(11 TO 13),
+                g=>shift(14 TO 15) & shift(0 TO 2) & shift(14 TO 15) & shift(0),
+                b=>shift(3 TO 7) & shift(3 TO 5));
       WHEN OTHERS => -- 24bpp / 32bpp
         RETURN (r=>shift(0 TO 7),g=>shift(8 TO 15),b=>shift(16 TO 23));
     END CASE;
@@ -918,7 +923,7 @@ BEGIN
       
       ------------------------------------------------------
       i_head(127 DOWNTO 120)<=x"01"; -- Header type
-      i_head(119 DOWNTO 112)<="000000" & i_format;
+      i_head(119 DOWNTO 112)<="000000" & i_format; -- Header format
       i_head(111 DOWNTO 96)<="0000" & to_unsigned(N_BURST,12); -- Header size
       i_head(95 DOWNTO 80)<=x"0000"; -- Attributes. TBD
       i_head(80)<=i_inter;
@@ -940,7 +945,7 @@ BEGIN
       i_pfl<=i_fl;
       i_pde<=i_de;
       i_pce<=i_ce;
-      --i_phs<=i_hs;
+      i_phs<=i_hs;
       
       ------------------------------------------------------
       IF i_pce='1' THEN
@@ -948,7 +953,7 @@ BEGIN
         i_vs_pre<=i_pvs;
         i_de_pre<=i_pde;
         i_fl_pre<=i_pfl;
-        --i_hs_pre<=i_phs;
+        i_hs_pre<=i_phs;
         
         ----------------------------------------------------
         -- Detect interlaced video
@@ -1063,7 +1068,7 @@ BEGIN
         ----------------------------------------------------
         -- Downscaling vertical
         i_divstart<='0';
-        IF i_de_delay=15 THEN
+        IF i_de_delay=16 THEN
           IF (i_vacc + 2*i_ovsize) < 2*i_vsize THEN
             i_vacc<=(i_vacc + 2*i_ovsize) MOD 8192;
             i_vnp<='0';
@@ -1108,7 +1113,7 @@ BEGIN
         
         i_hnp1<=i_hnp;  i_hnp2<=i_hnp1; i_hnp3<=i_hnp2; i_hnp4<=i_hnp3; 
         i_ven1<=i_ven;  i_ven2<=i_ven1; i_ven3<=i_ven2; i_ven4<=i_ven3;
-        i_ven5<=i_ven4; i_ven6<=i_ven5; --i_ven7<=i_ven6;
+        i_ven5<=i_ven4; i_ven6<=i_ven5; i_ven7<=i_ven6;
         
         -- C1 : DIV 1. Pipelined 4 bits non-restoring divider
         dir_v:=x"000";
@@ -1202,18 +1207,18 @@ BEGIN
         
         IF i_pde='0' AND i_de_pre='1' THEN
           i_de_delay<=0;
-        ELSIF i_de_delay<17 THEN
+        ELSIF i_de_delay<18 THEN
           i_de_delay<=i_de_delay+1;
         END IF;
        
-        IF i_de_delay=15 THEN
+        IF i_de_delay=16 THEN
           i_lwad<=0;
           i_lrad<=0;
           i_vcpt<=i_vcpt+1;
           i_hacc<=(i_hsize - i_ohsize + 8192) MOD 8192;
           i_hbcpt<=0;
         END IF;
-        IF i_de_delay=16 THEN
+        IF i_de_delay=17 THEN
           i_acpt<=0;
           i_wad<=2*BLEN-1;
         END IF;
@@ -1421,7 +1426,7 @@ BEGIN
       avl_read_sync2<=avl_read_sync;
       avl_read_pulse<=avl_read_sync XOR avl_read_sync2;
       avl_rbib  <=o_bib;
-      avl_radrs <=o_adrs; -- <ASYNC>
+      avl_radrs <=o_adrs AND (avl_size - 1); -- <ASYNC>
       avl_rline <=o_rline; -- <ASYNC>
       
       --------------------------------------------
@@ -1453,9 +1458,6 @@ BEGIN
       --------------------------------------------
       CASE avl_state IS
         WHEN sIDLE =>
-          IF avl_o_vs='0' AND avl_o_vs_sync='1' THEN
-            avl_wad<=0;
-          END IF;
           IF avl_write_sr='1' THEN
             avl_state<=sWRITE;
             avl_write_clr<='1';
@@ -1473,7 +1475,6 @@ BEGIN
                 avl_wadrs(N_AW+NB_LA-1 DOWNTO NB_LA) +
                 avl_i_offset1(N_AW+NB_LA-1 DOWNTO NB_LA));
             END IF;
-
             
           ELSIF avl_read_sr='1' AND avl_reading='0' THEN
             IF avl_rbib='0' THEN
