@@ -238,7 +238,6 @@ always@(posedge clk_sys) begin
 	if(~io_uio) begin
 		has_cmd <= 0;
 		cmd <= 0;
-		if(has_cmd && cmd == 'h2F) FB_SET <= ~FB_SET;
 	end
 	else
 	if(~old_strobe & io_strobe) begin
@@ -286,13 +285,16 @@ always@(posedge clk_sys) begin
 			end
 			if(cmd == 'h2F) begin
 				cnt <= cnt + 1'd1;
-				case(cnt[2:0])
-					0: {FB_EN,FB_FMT,FB_VSET}<= io_din[15:0];
+				case(cnt[3:0])
+					0: {FB_FLT,FB_FMT,FB_EN} <= io_din[4:0];
 					1: FB_BASE[15:0]  <= io_din[15:0];
 					2: FB_BASE[31:16] <= io_din[15:0];
 					3: FB_WIDTH       <= io_din[11:0];
 					4: FB_HEIGHT      <= io_din[11:0];
-					5: {FB_ARY,FB_ARX}<= io_din[15:0];
+					5: FB_HMIN        <= io_din[11:0];
+					6: FB_HMAX        <= io_din[11:0];
+					7: FB_VMIN        <= io_din[11:0];
+					8: FB_VMAX        <= io_din[11:0];
 				endcase
 			end
 			if(cmd == 'h25) {led_overtake, led_state} <= io_din;
@@ -432,6 +434,7 @@ wire         vbuf_write;
 
 ascal 
 #(
+	.RAMBASE(32'h20000000),
 	.N_DW(128),
 	.N_AW(28)
 )
@@ -439,7 +442,7 @@ ascal
 (
 	.reset_na (~reset_req),
 	.run      (1),
-	.freeze   (SC_FREEZE),
+	.freeze   (0),
 
 	.i_clk    (clk_vid),
 	.i_ce     (ce_pix),
@@ -450,12 +453,11 @@ ascal
 	.i_vs     (vs),
 	.i_fl     (f1),
 	.i_de     (de),
-	.iauto    (~SC_MODE),
+	.iauto    (1),
 	.himin    (0),
-	.himax    (FB_WIDTH),
+	.himax    (0),
 	.vimin    (0),
-	.vimax    (FB_HEIGHT),
-	.format   (SC_FMT),
+	.vimax    (0),
 
 	.o_clk    (clk_hdmi),
 	.o_ce     (1),
@@ -479,11 +481,17 @@ ascal
 	.vmin     (vmin),
 	.vmax     (vmax),
 
-	.mode     ({~lowlat & ~SC_MODE,|scaler_flt,2'b00}),
+	.mode     ({~lowlat,FB_EN ? FB_FLT : |scaler_flt,2'b00}),
 	.poly_clk (clk_sys),
 	.poly_a   (coef_addr),
 	.poly_dw  (coef_data),
 	.poly_wr  (coef_wr),
+
+	.o_fb_ena         (FB_EN),
+	.o_fb_hsize       (FB_WIDTH),
+	.o_fb_vsize       (FB_HEIGHT),
+	.o_fb_format      (FB_FMT),
+	.o_fb_base        (FB_BASE),
 
 	.avl_clk          (clk_100m),
 	.avl_waitrequest  (vbuf_waitrequest),
@@ -494,26 +502,19 @@ ascal
 	.avl_address      (vbuf_address),
 	.avl_write        (vbuf_write),
 	.avl_read         (vbuf_read),
-	.avl_byteenable   (vbuf_byteenable),
-	.avl_base         ({3'b001,SC_BASE[28:0]}) // make sure the address is in FPGA space
+	.avl_byteenable   (vbuf_byteenable)
 );
 
-localparam VIDEO_BUF = 32'h20000000;
-
 reg        FB_EN     = 0;
-reg        FB_SET    = 0;
-reg [11:0] FB_VSET   = 0;
+reg        FB_FLT    = 0;
 reg  [2:0] FB_FMT    = 0;
-reg [11:0] FB_WIDTH  = 320;
-reg [11:0] FB_HEIGHT = 240;
-reg  [7:0] FB_ARX    = 4;
-reg  [7:0] FB_ARY    = 3;
-reg [31:0] FB_BASE   = VIDEO_BUF;
-
-reg [31:0] SC_BASE   = VIDEO_BUF;
-reg        SC_MODE   = 0;
-reg  [1:0] SC_FMT    = 1;
-reg        SC_FREEZE = 0;
+reg [11:0] FB_WIDTH  = 0;
+reg [11:0] FB_HEIGHT = 0;
+reg [11:0] FB_HMIN   = 0;
+reg [11:0] FB_HMAX   = 0;
+reg [11:0] FB_VMIN   = 0;
+reg [11:0] FB_VMAX   = 0;
+reg [31:0] FB_BASE   = 0;
 
 reg [11:0] hmin;
 reg [11:0] hmax;
@@ -527,68 +528,22 @@ always @(posedge clk_vid) begin
 	reg [11:0] videow;
 	reg [11:0] videoh;
 	
-	reg        old_vs;
-	reg        vsd1,vsd2;
-	reg [11:0] vset;
-	reg        fb_set1, fb_set2 = 0;
-	reg        fb_en = 0;
-
-	reg  [1:0] trans = 0;
-	
-	vsd1 <= HDMI_TX_VS;
-	if(vsd1 == HDMI_TX_VS) vsd2 <= vsd1;
-
-	old_vs <= vsd2;
-	if(old_vs & ~vsd2) begin
-		if(trans) trans <= trans - 1'd1;
-		if(trans == 2) fb_en <= FB_EN;
-		if(trans == 1) begin
-			SC_MODE <= fb_en;
-			SC_BASE <= fb_en ? FB_BASE     : VIDEO_BUF;
-			SC_FMT  <= fb_en ? FB_FMT[1:0] : 2'd1;
-			if(~fb_en) SC_FREEZE <= 0;
-		end
-	end
-
-	fb_set1 <= FB_SET;
-	fb_set2 <= fb_set1;
-	if(fb_set2 ^ fb_set1) begin
-		if(FB_EN) SC_FREEZE <= 1;
-
-		//already in FB mode - safe to switch the address/format now
-		if(SC_MODE & FB_EN) begin
-			SC_BASE <= FB_BASE;
-			SC_FMT  <= FB_FMT[1:0];
-		end
-		else begin
-			trans <= 3;
-		end
-	end
-
 	state <= state + 1'd1;
 	case(state)
-		0: if(SC_MODE) begin
-				if(FB_ARX && FB_ARY) begin
-					wcalc <= FB_VSET ? (FB_VSET*FB_ARX)/FB_ARY : (HEIGHT*FB_ARX)/FB_ARY;
-					hcalc <= (WIDTH*FB_ARY)/FB_ARX;
-					vset  <= FB_VSET;
-				end
-				else begin
-					hmin <= 0;
-					vmin <= 0;
-					hmax <= WIDTH  - 1'd1;
-					vmax <= HEIGHT - 1'd1;
-					state<= 0;
-				end
+		0: if(FB_EN) begin
+				hmin <= FB_HMIN;
+				vmin <= FB_VMIN;
+				hmax <= FB_HMAX;
+				vmax <= FB_VMAX;
+				state<= 0;
 			end
 			else begin
-				vset  <= VSET;
 				wcalc <= VSET ? (VSET*ARX)/ARY : (HEIGHT*ARX)/ARY;
 				hcalc <= (WIDTH*ARY)/ARX;
 			end
 		6: begin
-				videow <= (!vset && (wcalc > WIDTH))     ? WIDTH  : wcalc[11:0];
-				videoh <= vset ? vset : (hcalc > HEIGHT) ? HEIGHT : hcalc[11:0];
+				videow <= (!VSET && (wcalc > WIDTH))     ? WIDTH  : wcalc[11:0];
+				videoh <= VSET ? VSET : (hcalc > HEIGHT) ? HEIGHT : hcalc[11:0];
 			end
 		7: begin
 				hmin <= ((WIDTH  - videow)>>1);
@@ -606,7 +561,7 @@ pll_hdmi_adj pll_hdmi_adj
 	.clk(FPGA_CLK1_50),
 	.reset_na(~reset_req),
 
-	.llena(lowlat & ~SC_MODE),
+	.llena(lowlat),
 	.lltune(lltune),
 	.locked(led_locked),
 	.i_waitrequest(adj_waitrequest),

@@ -85,6 +85,8 @@ USE ieee.numeric_std.ALL;
 
 -- MASK      : Enable / Disable selected interpoler
 --             0:Nearest 1:Bilinear 2:SharpBilinear 3:Bicubic 4:Polyphase
+-- RAMBASE   : RAM base address for framebuffer
+-- RAMSIZE   : RAM allocated for one framebuffer (needs x3 if triple-buffering)
 --             Must be a power of two
 -- INTER     : True=Autodetect interlaced video False=Force progressive scan
 -- HEADER    : True=Add image properties header
@@ -102,6 +104,8 @@ USE ieee.numeric_std.ALL;
 ENTITY ascal IS
   GENERIC (
     MASK      : unsigned(7 DOWNTO 0) :=x"FF";
+    RAMBASE   : unsigned(31 DOWNTO 0);
+    RAMSIZE   : unsigned(31 DOWNTO 0) := x"0080_0000"; -- =8MB
     INTER     : boolean := true;
     HEADER    : boolean := true;
     DOWNSCALE : boolean := true;
@@ -138,7 +142,16 @@ ENTITY ascal IS
     o_clk : IN  std_logic; -- Output clock
     
     -- Border colour R G B
-    o_border : IN unsigned(23 DOWNTO 0) := x"000000";
+    o_border   : IN unsigned(23 DOWNTO 0) := x"000000";
+    
+    ------------------------------------
+    -- Framebuffer mode
+    o_fb_ena    : IN std_logic; -- Enable Framebuffer Mode
+    o_fb_hsize  : IN natural RANGE 0 TO 4095;
+    o_fb_vsize  : IN natural RANGE 0 TO 4095;
+    o_fb_format : IN unsigned(1 DOWNTO 0); --  00=16bpp, 01=24bpp 10=32bpp
+    o_fb_base   : IN unsigned(31 DOWNTO 0) :=x"0000_0000";
+    
     ------------------------------------
     -- Low lag PLL tuning
     o_lltune : OUT unsigned(15 DOWNTO 0);
@@ -198,11 +211,7 @@ ENTITY ascal IS
     avl_write          : OUT   std_logic;
     avl_read           : OUT   std_logic;
     avl_byteenable     : OUT   std_logic_vector(N_DW/8-1 DOWNTO 0);
-
-    -- RAMBASE : RAM base address for framebuffer
-    -- RAMSIZE : RAM allocated for one framebuffer (needs x3 if triple-buffer)
-    avl_base        : IN    unsigned(31 DOWNTO 0);
-    avl_size        : IN    unsigned(31 DOWNTO 0) := x"0080_0000"; -- =8MB
+    
     ------------------------------------
     reset_na           : IN    std_logic
     );
@@ -330,11 +339,11 @@ ARCHITECTURE rtl OF ascal IS
   SIGNAL avl_readack : std_logic;
   SIGNAL avl_radrs,avl_wadrs : unsigned(31 DOWNTO 0);
   SIGNAL avl_rbib : std_logic;
-  SIGNAL avl_base_mem : unsigned(31 DOWNTO 0);
   SIGNAL avl_i_offset0,avl_o_offset0 : unsigned(31 DOWNTO 0);
   SIGNAL avl_i_offset1,avl_o_offset1 : unsigned(31 DOWNTO 0);
   SIGNAL avl_reset_na : std_logic;
   SIGNAL avl_o_vs_sync,avl_o_vs : std_logic;
+  SIGNAL avl_fb_ena : std_logic;
   
   FUNCTION buf_next(a,b : natural RANGE 0 TO 2) RETURN natural IS
   BEGIN
@@ -1031,7 +1040,7 @@ BEGIN
           i_hburst<=(i_hrsize*2 + N_BURST - 1) / N_BURST;
         ELSIF i_format="01" THEN -- 24bpp
           i_hburst<=(i_hrsize*3 + N_BURST - 1) / N_BURST;
-        ELSE
+        ELSE -- 32bpp
           i_hburst<=(i_hrsize*4 + N_BURST - 1) / N_BURST;
         END IF;
         ----------------------------------------------------
@@ -1416,7 +1425,7 @@ BEGIN
       avl_write_sync2<=avl_write_sync;
       avl_write_pulse<=avl_write_sync XOR avl_write_sync2;
       IF avl_write_pulse='1' THEN
-        avl_wadrs <=i_wadrs AND (avl_size - 1); -- <ASYNC>
+        avl_wadrs <=i_wadrs AND (RAMSIZE - 1); -- <ASYNC>
         avl_wline <=i_wline; -- <ASYNC>
         avl_walt  <=i_walt; -- <ASYNC>
       END IF;
@@ -1426,22 +1435,25 @@ BEGIN
       avl_read_sync2<=avl_read_sync;
       avl_read_pulse<=avl_read_sync XOR avl_read_sync2;
       avl_rbib  <=o_bib;
-      avl_radrs <=o_adrs AND (avl_size - 1); -- <ASYNC>
+      avl_radrs <=o_adrs AND (RAMSIZE - 1); -- <ASYNC>
       avl_rline <=o_rline; -- <ASYNC>
       
       --------------------------------------------
-      avl_o_offset0<=buf_offset(o_obuf0,avl_base_mem,avl_size);  -- <ASYNC>
-      avl_o_offset1<=buf_offset(o_obuf1,avl_base_mem,avl_size);  -- <ASYNC>
-      avl_i_offset0<=buf_offset(o_ibuf0,avl_base_mem,avl_size);  -- <ASYNC>
-      avl_i_offset1<=buf_offset(o_ibuf1,avl_base_mem,avl_size);  -- <ASYNC>
-      
-      avl_o_vs_sync<=o_vsv(0); -- <SYNC>
+      avl_o_vs_sync<=o_vsv(0); -- <ASYNC>
       avl_o_vs<=avl_o_vs_sync;
       
-      IF avl_o_vs_sync='0' AND avl_o_vs='1' THEN
-        -- Copy framebuffer base address at VS falling edge
-        avl_base_mem<=avl_base;
+      avl_fb_ena<=o_fb_ena; -- <ASYNC>
+      IF avl_fb_ena='0' THEN
+        avl_o_offset0<=buf_offset(o_obuf0,RAMBASE,RAMSIZE);  -- <ASYNC>
+        avl_o_offset1<=buf_offset(o_obuf1,RAMBASE,RAMSIZE);  -- <ASYNC>
+      ELSIF avl_o_vs_sync='0' AND avl_o_vs='1' THEN
+         -- Copy framebuffer base address at VS falling edge
+        avl_o_offset0<=o_fb_base; -- <ASYNC>
+        avl_o_offset1<=o_fb_base; -- <ASYNC>
       END IF;
+      
+      avl_i_offset0<=buf_offset(o_ibuf0,RAMBASE,RAMSIZE);  -- <ASYNC>
+      avl_i_offset1<=buf_offset(o_ibuf1,RAMBASE,RAMSIZE);  -- <ASYNC>
       
       --------------------------------------------
       avl_dw<=swap(unsigned(avl_readdata));
@@ -1649,12 +1661,26 @@ BEGIN
       IF o_vsv(1)='1' AND o_vsv(0)='0' AND o_bufup1='1' THEN
         o_obuf1<=buf_next(o_obuf1,o_ibuf1);
         o_bufup1<='0';
-        o_hburst <=i_hburst; -- <ASYNC> Bursts per line
         o_ihsize<=i_hrsize; -- <ASYNC>
         o_ivsize<=i_vrsize; -- <ASYNC>
         o_hdown<=i_hdown; -- <ASYNC>
         o_vdown<=i_vdown; -- <ASYNC>
       END IF;
+      -- Framebuffer mode.
+      IF o_fb_ena='1' THEN
+        o_ihsize<=o_fb_hsize;
+        o_ivsize<=o_fb_vsize;
+        o_format<=o_fb_format;
+      END IF;
+      
+      IF o_format="00" THEN -- 16bpp
+        o_hburst<=(o_ihsize*2 + N_BURST - 1) / N_BURST;
+      ELSIF o_format="01" THEN -- 24bpp
+        o_hburst<=(o_ihsize*3 + N_BURST - 1) / N_BURST;
+      ELSE -- 32bpp
+        o_hburst<=(o_ihsize*4 + N_BURST - 1) / N_BURST;
+      END IF;
+      
       IF o_vsv(1)='1' AND o_vsv(0)='0' AND o_bufup0='1' THEN
         o_obuf0<=buf_next(o_obuf0,o_ibuf0);
         o_bufup0<='0';
@@ -1791,7 +1817,7 @@ BEGIN
       o_adrs_pre<=to_integer(o_vacpt) * o_hburst;
       o_rline<=o_vacpt(0); -- Even/Odd line for interlaced video
       IF o_adrsa='1' THEN
-        IF HEADER THEN
+        IF HEADER AND o_fb_ena='0' THEN
           IF o_fload=2 THEN
             o_adrs<=to_unsigned((o_hbcpt + 1) * N_BURST,32);
             o_alt<="1111";
