@@ -218,12 +218,13 @@ reg  [6:0] coef_addr;
 reg  [8:0] coef_data;
 reg        coef_wr = 0;
 
-wire  [7:0] ARX, ARY;
-reg  [11:0] VSET = 0;
-reg   [2:0] scaler_flt;
-reg         lowlat = 0;
+wire [7:0] ARX, ARY;
+reg [11:0] VSET = 0;
+reg  [2:0] scaler_flt;
+reg        lowlat = 0;
+reg        cfg_dis = 0;
 
-reg         vs_wait = 0;
+reg        vs_wait = 0;
 
 always@(posedge clk_sys) begin
 	reg  [7:0] cmd;
@@ -280,7 +281,7 @@ always@(posedge clk_sys) begin
 						cfg_custom_t <= ~cfg_custom_t;
 						cnt[2:0] <= 3'b100;
 					end
-					if(cnt == 8) lowlat <= io_din[15];
+					if(cnt == 8) {lowlat,cfg_dis} <= io_din[15:14];
 				end
 			end
 			if(cmd == 'h2F) begin
@@ -346,6 +347,11 @@ cyclonev_hps_interface_peripheral_spi_master spi
 	.ss_in_n(1)
 );
 
+wire [63:0] f2h_irq = {HDMI_TX_VS};
+cyclonev_hps_interface_interrupts interrupts
+(
+	.irq(f2h_irq)
+);
 
 ///////////////////////////  RESET  ///////////////////////////////////
 
@@ -537,9 +543,18 @@ always @(posedge clk_vid) begin
 				vmax <= FB_VMAX;
 				state<= 0;
 			end
-			else begin
+			else if(ARX && ARY) begin
 				wcalc <= VSET ? (VSET*ARX)/ARY : (HEIGHT*ARX)/ARY;
 				hcalc <= (WIDTH*ARY)/ARX;
+			end
+			else begin
+				hmin <= 0;
+				hmax <= WIDTH - 1'd1;
+				vmin <= 0;
+				vmax <= HEIGHT - 1'd1;
+				wcalc<= WIDTH;
+				hcalc<= HEIGHT;
+				state<= 0;
 			end
 		6: begin
 				videow <= (!VSET && (wcalc > WIDTH))     ? WIDTH  : wcalc[11:0];
@@ -562,7 +577,7 @@ pll_hdmi_adj pll_hdmi_adj
 	.reset_na(~reset_req),
 
 	.llena(lowlat),
-	.lltune(lltune),
+	.lltune({16{hdmi_config_done | cfg_dis}} & lltune),
 	.locked(led_locked),
 	.i_waitrequest(adj_waitrequest),
 	.i_write(adj_write),
@@ -650,10 +665,12 @@ always @(posedge FPGA_CLK1_50) begin
 	if(old_wait & ~adj_waitrequest & gotd) cfg_ready <= 1;
 end
 
+wire hdmi_config_done;
 hdmi_config hdmi_config
 (
 	.iCLK(FPGA_CLK1_50),
-	.iRST_N(cfg_ready & ~HDMI_TX_INT),
+	.iRST_N(cfg_ready & ~HDMI_TX_INT & ~cfg_dis),
+	.done(hdmi_config_done),
 
 	.I2C_SCL(HDMI_I2C_SCL),
 	.I2C_SDA(HDMI_I2C_SDA),

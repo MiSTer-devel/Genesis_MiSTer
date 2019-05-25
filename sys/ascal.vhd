@@ -149,7 +149,7 @@ ENTITY ascal IS
     o_fb_ena    : IN std_logic; -- Enable Framebuffer Mode
     o_fb_hsize  : IN natural RANGE 0 TO 4095;
     o_fb_vsize  : IN natural RANGE 0 TO 4095;
-    o_fb_format : IN unsigned(1 DOWNTO 0); --  00=16bpp, 01=24bpp 10=32bpp
+    o_fb_format : IN unsigned(2 DOWNTO 0); --  00=16bpp, 01=24bpp, 10=32bpp, bit2: R/B, B/R
     o_fb_base   : IN unsigned(31 DOWNTO 0) :=x"0000_0000";
     
     ------------------------------------
@@ -364,7 +364,7 @@ ARCHITECTURE rtl OF ascal IS
   -- Output
   SIGNAL o_run : std_logic;
   SIGNAL o_mode,o_hmode,o_vmode : unsigned(4 DOWNTO 0);
-  SIGNAL o_format : unsigned(1 DOWNTO 0);
+  SIGNAL o_format : unsigned(2 DOWNTO 0);
   SIGNAL o_htotal,o_hsstart,o_hsend : uint12;
   SIGNAL o_hmin,o_hmax,o_hdisp : uint12;
   SIGNAL o_hsize,o_vsize : uint12;
@@ -437,7 +437,7 @@ ARCHITECTURE rtl OF ascal IS
                         format : unsigned(1 DOWNTO 0)) RETURN unsigned IS
   BEGIN
     CASE format IS
-      WHEN "00" => -- 16bpp
+      WHEN "00" | "11" => -- 16bpp
         RETURN shift(16 TO 119) &
           pix.g(5 DOWNTO 3) & pix.b(7 DOWNTO 3) &
           '0' & pix.r(7 DOWNTO 3) & pix.g(7 DOWNTO 6);
@@ -457,7 +457,7 @@ ARCHITECTURE rtl OF ascal IS
   BEGIN
     dw:=i_dw;
     CASE format IS
-      WHEN "00" => -- 16bpp
+      WHEN "00" | "11" => -- 16bpp
         IF (N_DW=128 AND (acpt MOD 8)=7) OR (N_DW=64 AND (acpt MOD 4)=3) THEN
           dw:=shift(128-N_DW+8 TO 119) &
                pix.g(5 DOWNTO 3) & pix.b(7 DOWNTO 3) &
@@ -487,7 +487,7 @@ ARCHITECTURE rtl OF ascal IS
                         format : unsigned(1 DOWNTO 0)) RETURN boolean IS
   BEGIN
     CASE format IS
-      WHEN "00" => -- 16bpp
+      WHEN "00" | "11" => -- 16bpp
         RETURN (N_DW=128 AND ((acpt MOD 8)=7)) OR
                (N_DW=64  AND ((acpt MOD 4)=3));
       WHEN "01" => -- 24bpp
@@ -506,7 +506,7 @@ ARCHITECTURE rtl OF ascal IS
     VARIABLE shift_v : unsigned(0 TO N_DW+15);
   BEGIN
     CASE format IS
-      WHEN "00" => -- 16bpp
+      WHEN "00" | "11" => -- 16bpp
         IF (N_DW=128 AND (acpt MOD 8)=0) OR (N_DW=64 AND (acpt MOD 4)=0) THEN
           shift_v:=dr & dr(15 DOWNTO 0);
         ELSE
@@ -549,10 +549,9 @@ ARCHITECTURE rtl OF ascal IS
                         format : unsigned(1 DOWNTO 0)) RETURN boolean IS
   BEGIN
     CASE format IS
-      WHEN "00" => -- 16bpp
+      WHEN "00" | "11" => -- 16bpp
         RETURN (N_DW=128 AND ((acpt MOD 8)=0)) OR
                (N_DW=64  AND ((acpt MOD 4)=0));
-        
       WHEN "01" => -- 24bpp
         RETURN (N_DW=128 AND (acpt=0 OR acpt=5 OR acpt=10)) OR
                (N_DW=64  AND ((acpt MOD 8)=0 OR (acpt MOD 8)=2 OR (acpt MOD 8)=5));
@@ -563,15 +562,29 @@ ARCHITECTURE rtl OF ascal IS
   END FUNCTION;
 
   FUNCTION shift_opix (shift  : unsigned(0 TO N_DW+15);
-                       format : unsigned(1 DOWNTO 0)) RETURN type_pix IS
+                       format : unsigned(2 DOWNTO 0)) RETURN type_pix IS
   BEGIN
     CASE format IS
-      WHEN "00" => -- 16bpp
+      WHEN "000" => -- 16bpp 1555
         RETURN (r=>shift(9 TO 13) & shift(11 TO 13),
                 g=>shift(14 TO 15) & shift(0 TO 2) & shift(14 TO 15) & shift(0),
                 b=>shift(3 TO 7) & shift(3 TO 5));
-      WHEN OTHERS => -- 24bpp / 32bpp
+      WHEN "001"|"010" => -- 24bpp / 32bpp
         RETURN (r=>shift(0 TO 7),g=>shift(8 TO 15),b=>shift(16 TO 23));
+      WHEN "011" => -- 16bpp 565
+        RETURN (r=>shift(9 TO 13) & shift(11 TO 13),
+                g=>shift(14 TO 15) & shift(0 TO 3) & shift(14 TO 15),
+                b=>shift(4 TO 8) & shift(4 TO 6));
+      WHEN "100" => -- 16bpp 1555
+        RETURN (b=>shift(9 TO 13) & shift(11 TO 13),
+                g=>shift(14 TO 15) & shift(0 TO 2) & shift(14 TO 15) & shift(0),
+                r=>shift(3 TO 7) & shift(3 TO 5));
+      WHEN "111" => -- 16bpp 565
+        RETURN (b=>shift(9 TO 13) & shift(11 TO 13),
+                g=>shift(14 TO 15) & shift(0 TO 3) & shift(14 TO 15),
+                r=>shift(4 TO 8) & shift(4 TO 6));
+      WHEN OTHERS => -- 24bpp / 32bpp
+        RETURN (b=>shift(0 TO 7),g=>shift(8 TO 15),r=>shift(16 TO 23));
     END CASE;
   END FUNCTION;
   
@@ -954,7 +967,7 @@ BEGIN
       i_pfl<=i_fl;
       i_pde<=i_de;
       i_pce<=i_ce;
-      i_phs<=i_hs;
+      --i_phs<=i_hs;
       
       ------------------------------------------------------
       IF i_pce='1' THEN
@@ -962,7 +975,7 @@ BEGIN
         i_vs_pre<=i_pvs;
         i_de_pre<=i_pde;
         i_fl_pre<=i_pfl;
-        i_hs_pre<=i_phs;
+        --i_hs_pre<=i_phs;
         
         ----------------------------------------------------
         -- Detect interlaced video
@@ -1036,7 +1049,7 @@ BEGIN
           i_vmax<=vimax; -- <ASYNC>
         END IF;
 
-        IF i_format="00" THEN -- 16bpp
+        IF i_format="00" OR i_format="11" THEN -- 16bpp
           i_hburst<=(i_hrsize*2 + N_BURST - 1) / N_BURST;
         ELSIF i_format="01" THEN -- 24bpp
           i_hburst<=(i_hrsize*3 + N_BURST - 1) / N_BURST;
@@ -1122,7 +1135,7 @@ BEGIN
         
         i_hnp1<=i_hnp;  i_hnp2<=i_hnp1; i_hnp3<=i_hnp2; i_hnp4<=i_hnp3; 
         i_ven1<=i_ven;  i_ven2<=i_ven1; i_ven3<=i_ven2; i_ven4<=i_ven3;
-        i_ven5<=i_ven4; i_ven6<=i_ven5; i_ven7<=i_ven6;
+        i_ven5<=i_ven4; i_ven6<=i_ven5; --i_ven7<=i_ven6;
         
         -- C1 : DIV 1. Pipelined 4 bits non-restoring divider
         dir_v:=x"000";
@@ -1619,7 +1632,7 @@ BEGIN
     ELSIF rising_edge(o_clk) THEN
       ------------------------------------------------------
       o_mode   <=mode; -- <ASYNC> ?
-      o_format<=format; -- <ASYNC> ?
+      o_format <='0'&format; -- <ASYNC> ?
       
       o_run    <=run; -- <ASYNC> ?
       
@@ -1673,9 +1686,9 @@ BEGIN
         o_format<=o_fb_format;
       END IF;
       
-      IF o_format="00" THEN -- 16bpp
+      IF o_format(1 downto 0)="00" OR o_format(1 downto 0)="11" THEN -- 16bpp
         o_hburst<=(o_ihsize*2 + N_BURST - 1) / N_BURST;
-      ELSIF o_format="01" THEN -- 24bpp
+      ELSIF o_format(1 downto 0)="01" THEN -- 24bpp
         o_hburst<=(o_ihsize*3 + N_BURST - 1) / N_BURST;
       ELSE -- 32bpp
         o_hburst<=(o_ihsize*4 + N_BURST - 1) / N_BURST;
@@ -1904,11 +1917,11 @@ BEGIN
           o_last1<=o_last;
           o_last2<=o_last1;
           
-          IF shift_onext(o_acpt,o_format) THEN
+          IF shift_onext(o_acpt,o_format(1 downto 0)) THEN
             o_ad<=(o_ad+1) MOD (2*BLEN);
           END IF;
           
-          IF o_adturn='1' AND (shift_onext((o_acpt+1) MOD 16,o_format)) AND
+          IF o_adturn='1' AND (shift_onext((o_acpt+1) MOD 16,o_format(1 downto 0))) AND
             (((o_ad MOD BLEN=0) AND o_lastv(0)='0') OR o_last2='1')  THEN
             o_copy<='0';
             lev_dec_v:='1';
@@ -1927,7 +1940,7 @@ BEGIN
       
       ------------------------------------------------------
       IF o_sh3='1' THEN
-        shift_v:=shift_opack(o_acpt4,o_shift,o_dr,o_format);
+        shift_v:=shift_opack(o_acpt4,o_shift,o_dr,o_format(1 downto 0));
         o_shift<=shift_v;
         
         o_hpix0<=shift_opix(shift_v,o_format);
