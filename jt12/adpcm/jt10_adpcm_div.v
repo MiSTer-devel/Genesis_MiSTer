@@ -41,11 +41,11 @@ wire [dw:0] sub = { r[dw-2:0], d[dw-1] } - b;
 
 always @(posedge clk or negedge rst_n)
     if( !rst_n ) begin
-        cycle <= 'd0;
+        cycle <= 0;
     end else if(cen) begin
         if( start ) begin
-            cycle <= ~'d0;
-            r     <=  'd0;
+            cycle <= {dw{1'd1}};
+            r     <= 0;
             d     <= a;
         end else if(cycle[0]) begin
             cycle <= { 1'b0, cycle[dw-1:1] };

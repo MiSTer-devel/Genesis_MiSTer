@@ -21,6 +21,7 @@
 `timescale 1ns / 1ps
 
 // This implementation follows that of Alexey Khokholov (Nuke.YKT) in C language.
+// altera message_off 10030
 
 module jt12_pm (
 	input [4:0] lfo_mod,
