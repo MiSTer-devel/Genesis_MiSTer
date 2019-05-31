@@ -627,7 +627,7 @@ wire [15:0] svp_sram_addr;
 wire [16:1] temp;
 wire [15:0] svp_dram_q_a, svp_dram_q_b;
 
-assign temp = (msrc != MSRC_VDP) ? MBUS_A[16:1] : (MBUS_A[16:1] - 1);
+assign temp = (msrc != MSRC_VDP) ? MBUS_A[16:1] : (MBUS_A[16:1] - 1'd1);
 assign svp_sram_addr = MBUS_A[23:16] == 8'h39 ? {1'b0,temp[15:13],temp[6:2],temp[12:7],temp[1]} :	//cell arrange 1
 							  MBUS_A[23:16] == 8'h3A ? {1'b0,temp[15:12],temp[5:2],temp[11:6],temp[1]} :	//cell arrange 2
 							  temp;
@@ -731,22 +731,22 @@ reg  [3:0] mstate;
 reg  [1:0] msrc;
 	
 localparam	MSRC_NONE = 0,
-			MSRC_M68K = 1,
-			MSRC_Z80  = 2,
-			MSRC_VDP  = 3;
+				MSRC_M68K = 1,
+				MSRC_Z80  = 2,
+				MSRC_VDP  = 3;
 
 localparam 	MBUS_IDLE     = 0,
-			MBUS_SELECT   = 1,
-			MBUS_RAM_READ = 2,
-			MBUS_ROM_READ = 3,
-			MBUS_VDP_READ = 4,
-			MBUS_IO_READ  = 5,
-			MBUS_JCRT_READ= 6,
-			MBUS_SRAM_READ= 7,
-			MBUS_ZBUS_PRE = 8,
-			MBUS_ZBUS_READ= 9,
-			MBUS_SVP_READ = 10,
-			MBUS_FINISH   = 11; 
+				MBUS_SELECT   = 1,
+				MBUS_RAM_READ = 2,
+				MBUS_ROM_READ = 3,
+				MBUS_VDP_READ = 4,
+				MBUS_IO_READ  = 5,
+				MBUS_JCRT_READ= 6,
+				MBUS_SRAM_READ= 7,
+				MBUS_ZBUS_PRE = 8,
+				MBUS_ZBUS_READ= 9,
+				MBUS_SVP_READ = 10,
+				MBUS_FINISH   = 11; 
 				
 always @(posedge MCLK) begin
 	reg [15:0] data;

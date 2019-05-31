@@ -333,7 +333,7 @@ system system
 	.FIELD(VGA_F1),
 	.INTERLACE(interlace),
 	.FAST_FIFO(fifo_quirk),
-	.SVP_QUIRK(1), 
+	.SVP_QUIRK(svp_quirk), 
 	
 	.GG_RESET(code_download && ioctl_wr && !ioctl_addr),
 	.GG_EN(status[24]),
@@ -514,12 +514,13 @@ reg fifo_quirk = 0;
 reg noram_quirk = 0;
 reg pier_quirk = 0;
 reg ttn2_quirk = 0;
+reg svp_quirk = 0;
 always @(posedge clk_sys) begin
 	reg [55:0] cart_id;
 	reg old_download, old_reset;
 	old_download <= cart_download;
 
-	if(~old_download && cart_download) {fifo_quirk,eeprom_quirk,sram_quirk,noram_quirk,pier_quirk,ttn2_quirk} <= 0;
+	if(~old_download && cart_download) {fifo_quirk,eeprom_quirk,sram_quirk,noram_quirk,pier_quirk,ttn2_quirk,svp_quirk} <= 0;
 
 	if(ioctl_wr & cart_download) begin
 		if(ioctl_addr == 'h182) cart_id[55:48] <= {ioctl_data[15:8]};
@@ -546,6 +547,8 @@ always @(posedge clk_sys) begin
 			else if({cart_id,ioctl_data[7:0]} == "T-574023") pier_quirk <= 1;   // Pier Solar Reprint
 			else if({cart_id,ioctl_data[7:0]} == "T-574013") pier_quirk <= 1;   // Pier Solar 1st Edition
 			else if({cart_id,ioctl_data[7:0]} == "TITAN002") ttn2_quirk <= 1;   // Titan Overdrive 2
+			else if({cart_id,ioctl_data[7:0]} == "MK-1229 ") svp_quirk <= 1;    // Virtua Racing EU/US
+			else if({cart_id,ioctl_data[7:0]} == "G-7001  ") svp_quirk <= 1;    // Virtua Racing JP
 		end
 	end
 end
