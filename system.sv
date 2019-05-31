@@ -1168,12 +1168,10 @@ wire        FM_SEL = ZBUS_A[14:13] == 2'b10;
 wire  [7:0] FM_DO;
 wire [15:0] FM_right;
 wire [15:0] FM_left;
-wire signed [15:0] FM_LPF_right;
-wire signed [15:0] FM_LPF_left;
-wire signed [15:0] FM_PREMIX_L;
-wire signed [15:0] FM_PREMIX_R;
-wire signed [15:0] PRE_LPF_L;
-wire signed [15:0] PRE_LPF_R;
+wire [15:0] FM_LPF_right;
+wire [15:0] FM_LPF_left;
+wire [15:0] PRE_LPF_L;
+wire [15:0] PRE_LPF_R;
 
 jt12 fm
 (
@@ -1186,32 +1184,15 @@ jt12 fm
 	.wr_n(~(FM_SEL & ZBUS_WE)),
 	.din(ZBUS_DO),
 	.dout(FM_DO),
-    .en_hifi_pcm( EN_HIFI_PCM ),
+	.en_hifi_pcm( EN_HIFI_PCM ),
 	.snd_left(FM_left),
 	.snd_right(FM_right)
 );
 
-jt12_genmix genmix
-(
-	.rst(~Z80_RESET_N),
-	.clk(MCLK),
-	.fm_left(FM_PREMIX_L),
-	.fm_right(FM_PREMIX_R),
-	.psg_snd(PSG_SND),
-	.fm_en(ENABLE_FM),
-	.psg_en(ENABLE_PSG),
-	.snd_left(PRE_LPF_L),
-	.snd_right(PRE_LPF_R)
-);
-
-//Low-pass FM separately for Model 2 Genesis filter
-assign FM_PREMIX_L = (LPF_MODE == 2'b01) ? FM_LPF_left : FM_left; 
-assign FM_PREMIX_R = (LPF_MODE == 2'b01) ? FM_LPF_right : FM_right;
-
 genesis_fm_lpf fm_lpf_l
 (
 	.clk(MCLK),
-	.reset(~Z80_RESET_N),
+	.reset(reset),
 	.in(FM_left),
 	.out(FM_LPF_left)
 );
@@ -1219,22 +1200,37 @@ genesis_fm_lpf fm_lpf_l
 genesis_fm_lpf fm_lpf_r
 (
 	.clk(MCLK),
-	.reset(~Z80_RESET_N),
+	.reset(reset),
 	.in(FM_right),
 	.out(FM_LPF_right)
 );
 
-genesis_lpf lpf_right(
+jt12_genmix genmix
+(
+	.rst(reset),
 	.clk(MCLK),
-	.reset(~Z80_RESET_N),
+	.fm_left((LPF_MODE == 2'b01) ? FM_LPF_left : FM_left),
+	.fm_right((LPF_MODE == 2'b01) ? FM_LPF_right : FM_right),
+	.psg_snd(PSG_SND),
+	.fm_en(ENABLE_FM),
+	.psg_en(ENABLE_PSG),
+	.snd_left(PRE_LPF_L),
+	.snd_right(PRE_LPF_R)
+);
+
+genesis_lpf lpf_right
+(
+	.clk(MCLK),
+	.reset(reset),
 	.lpf_mode(LPF_MODE[1:0]),
 	.in(PRE_LPF_R),
 	.out(DAC_RDATA)
 );
 
-genesis_lpf lpf_left(
+genesis_lpf lpf_left
+(
 	.clk(MCLK),
-	.reset(~Z80_RESET_N),
+	.reset(reset),
 	.lpf_mode(LPF_MODE[1:0]),
 	.in(PRE_LPF_L),
 	.out(DAC_LDATA)

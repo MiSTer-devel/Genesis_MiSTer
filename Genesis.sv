@@ -357,7 +357,7 @@ system system
 	.ENABLE_FM(1),
 	.ENABLE_PSG(1),
 `endif
-    .EN_HIFI_PCM(status[23]), // Option "N"
+	.EN_HIFI_PCM(status[23]), // Option "N"
 	.LPF_MODE(status[15:14]),
 
 	.BRAM_A({sd_lba[6:0],sd_buff_addr}),
