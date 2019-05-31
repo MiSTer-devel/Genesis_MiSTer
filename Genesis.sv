@@ -333,6 +333,7 @@ system system
 	.FIELD(VGA_F1),
 	.INTERLACE(interlace),
 	.FAST_FIFO(fifo_quirk),
+	.SVP_QUIRK(1), 
 	
 	.GG_RESET(code_download && ioctl_wr && !ioctl_addr),
 	.GG_EN(status[24]),
@@ -369,7 +370,12 @@ system system
 	.ROM_ADDR(rom_addr),
 	.ROM_DATA(rom_data),
 	.ROM_REQ(rom_rd),
-	.ROM_ACK(rom_rdack)
+	.ROM_ACK(rom_rdack),
+	
+	.ROM_ADDR2(rom_addr2),
+	.ROM_DATA2(rom_data2),
+	.ROM_REQ2(rom_rd2),
+	.ROM_ACK2(rom_rdack2) 
 );
 
 wire PAL = status[7];
@@ -428,23 +434,28 @@ video_mixer #(.LINE_LENGTH(320), .HALF_DEPTH(1)) video_mixer
 
 ///////////////////////////////////////////////////
 
-wire [24:1] rom_addr;
-wire [15:0] rom_data;
-wire rom_rd, rom_rdack;
+wire [24:1] rom_addr, rom_addr2;
+wire [15:0] rom_data, rom_data2;
+wire rom_rd, rom_rdack, rom_rd2, rom_rdack2; 
 
 ddram ddram
 (
 	.*,
-
-   .wraddr(cart_download ? ioctl_addr : rom_sz),
-   .din({ioctl_data[7:0],ioctl_data[15:8]}),
-   .we_req(rom_wr),
-   .we_ack(rom_wrack),
-
-   .rdaddr(rom_addr),
-   .dout(rom_data),
-   .rd_req(rom_rd),
-   .rd_ack(rom_rdack)
+	
+	.wraddr(cart_download ? ioctl_addr : rom_sz),
+	.din({ioctl_data[7:0],ioctl_data[15:8]}),
+	.we_req(rom_wr),
+	.we_ack(rom_wrack),
+	
+	.rdaddr(rom_addr),
+	.dout(rom_data),
+	.rd_req(rom_rd),
+	.rd_ack(rom_rdack),
+	
+	.rdaddr2(rom_addr2),
+	.dout2(rom_data2),
+	.rd_req2(rom_rd2),
+	.rd_ack2(rom_rdack2) 
 );
 
 reg  rom_wr;

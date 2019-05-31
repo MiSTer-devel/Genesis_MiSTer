@@ -53,6 +53,7 @@ module system
 	input         NORAM_QUIRK,
 	input         PIER_QUIRK,
 	input         TTN2_QUIRK,
+	input         SVP_QUIRK, 
 
 	input   [1:0] TURBO,
 
@@ -94,6 +95,12 @@ module system
 	input  [15:0] ROM_DATA,
 	output reg    ROM_REQ,
 	input         ROM_ACK,
+	
+	output [24:1] ROM_ADDR2,
+	input  [15:0] ROM_DATA2,
+	output        ROM_REQ2,
+	input         ROM_ACK2, 
+	
 	input         EN_HIFI_PCM
 );
 
@@ -553,7 +560,7 @@ dpram_dif #(16,8,15,16) sram
 	.address_a(sram_addr),
 	.data_a(sram_di),
 	.wren_a(sram_wren),
-	.q_a(sram_q[7:0]),
+	.q_a(sram_q),
 
 	.address_b(LOADING ? ram_rst_a : BRAM_A),
 	.data_b(LOADING ? 16'h0000 : BRAM_DI),
@@ -583,10 +590,91 @@ STM95XXX pier_eeprom
 	.cs_n(ep_cs),
 	.wp_n(1'b1),
 	.ram_addr(m95_addr),
-	.ram_q(sram_q[7:0]),
+	.ram_q(sram_q),
 	.ram_di(m95_di),
 	.ram_RnW(m95_rnw)
 );
+
+//-----------------------------------------------------------------------
+// SVP
+//-----------------------------------------------------------------------
+reg          SVP_CLKEN;
+
+reg          SVP_SEL;
+wire  [15:0] SVP_DO;
+wire         SVP_DTACK_N;
+
+wire  [20:1] SVP_ROM_A;
+reg   [15:0] SVP_ROM_D;
+
+wire  [16:1] SVP_DRAM_A;
+wire  [15:0] SVP_DRAM_DO;
+wire         SVP_DRAM_WE;
+
+reg          SVP_HALTED;
+
+always @(posedge MCLK) begin
+	if(reset) begin
+		SVP_CLKEN <= 0;
+	end
+	else begin
+		SVP_CLKEN <= ~SVP_CLKEN;
+	end
+end
+
+
+wire [15:0] svp_sram_addr;
+wire [16:1] temp;
+wire [15:0] svp_dram_q_a, svp_dram_q_b;
+
+assign temp = (msrc != MSRC_VDP) ? MBUS_A[16:1] : (MBUS_A[16:1] - 1);
+assign svp_sram_addr = MBUS_A[23:16] == 8'h39 ? {1'b0,temp[15:13],temp[6:2],temp[12:7],temp[1]} :	//cell arrange 1
+							  MBUS_A[23:16] == 8'h3A ? {1'b0,temp[15:12],temp[5:2],temp[11:6],temp[1]} :	//cell arrange 2
+							  temp;
+							  
+dpram_dif #(16,16,16,16) svp_dram
+(
+	.clock(MCLK),
+	.address_a(svp_sram_addr),
+	.data_a(MBUS_DO),
+	.wren_a(SRAM_SEL & ~MBUS_RNW),
+	.q_a(svp_dram_q_a),
+
+	.address_b(SVP_DRAM_A),
+	.data_b(SVP_DRAM_DO),
+	.wren_b(SVP_DRAM_WE),
+	.q_b(svp_dram_q_b)
+);
+
+
+SVP svp
+(
+	.CLK(MCLK),
+	.CE(SVP_CLKEN),
+	.RST_N(~reset),
+	.ENABLE(SVP_QUIRK),
+	
+	.BUS_A(MBUS_A[3:1]),
+	.BUS_DO(SVP_DO),
+	.BUS_DI(MBUS_DO),
+	.BUS_SEL(SVP_SEL),
+	.BUS_RNW(MBUS_RNW),
+	.BUS_DTACK_N(SVP_DTACK_N),
+	
+	.ROM_A(SVP_ROM_A),
+	.ROM_DI(ROM_DATA2),
+	.ROM_REQ(ROM_REQ2),
+	.ROM_ACK(ROM_ACK2),
+	
+	.DRAM_A(SVP_DRAM_A),
+	.DRAM_DI(svp_dram_q_b),
+	.DRAM_DO(SVP_DRAM_DO),
+	.DRAM_WE(SVP_DRAM_WE),
+	
+	.HALTED(SVP_HALTED)
+);
+
+assign ROM_ADDR2 = {4'b0000,SVP_ROM_A}; 
 
 //-----------------------------------------------------------------------
 // 68K RAM
@@ -639,30 +727,30 @@ reg        MBUS_LDS_N;
 reg [4:0]  BANK_REG[0:7];
 reg [2:0]  BANK_MODE; //0 = none, 1 = BANK SRAM, 2 = BANK ROM
 
+reg  [3:0] mstate;
+reg  [1:0] msrc;
+	
+localparam	MSRC_NONE = 0,
+			MSRC_M68K = 1,
+			MSRC_Z80  = 2,
+			MSRC_VDP  = 3;
 
-
+localparam 	MBUS_IDLE     = 0,
+			MBUS_SELECT   = 1,
+			MBUS_RAM_READ = 2,
+			MBUS_ROM_READ = 3,
+			MBUS_VDP_READ = 4,
+			MBUS_IO_READ  = 5,
+			MBUS_JCRT_READ= 6,
+			MBUS_SRAM_READ= 7,
+			MBUS_ZBUS_PRE = 8,
+			MBUS_ZBUS_READ= 9,
+			MBUS_SVP_READ = 10,
+			MBUS_FINISH   = 11; 
+				
 always @(posedge MCLK) begin
-	reg  [3:0] mstate;
-	reg  [1:0] msrc;
 	reg [15:0] data;
 	reg  [3:0] pier_count;
-	
-	localparam	MSRC_NONE = 0,
-					MSRC_M68K = 1,
-					MSRC_Z80  = 2,
-					MSRC_VDP  = 3;
-
-	localparam 	MBUS_IDLE     = 0,
-					MBUS_SELECT   = 1,
-					MBUS_RAM_READ = 2,
-					MBUS_ROM_READ = 3,
-					MBUS_VDP_READ = 4,
-					MBUS_IO_READ  = 5,
-					MBUS_JCRT_READ= 6,
-					MBUS_SRAM_READ= 7,
-					MBUS_ZBUS_PRE = 8,
-					MBUS_ZBUS_READ= 9,
-					MBUS_FINISH   = 10;
 
 	if (reset) begin
 		M68K_MBUS_DTACK_N <= 1;
@@ -670,6 +758,7 @@ always @(posedge MCLK) begin
 		VDP_MBUS_DTACK_N  <= 1;
 		VDP_SEL <= 0;
 		IO_SEL <= 0;
+		SVP_SEL <= 0; 
 		ZBUS_SEL <= 0;
 		BANK_MODE <= 0;
 		mstate <= MBUS_IDLE;
@@ -746,6 +835,16 @@ always @(posedge MCLK) begin
 						SRAM_SEL <= 1;
 						mstate <= MBUS_SRAM_READ;
 					end
+					else if(SVP_QUIRK && MBUS_A[23:19] == 'b00110) begin
+						// 300000-37FFFF (+mirrors) SVP DRAM
+						SRAM_SEL <= 1;
+						mstate <= MBUS_SRAM_READ;
+					end
+					else if(SVP_QUIRK && (MBUS_A[23:16] == 8'h39 || MBUS_A[23:16] == 8'h3A)) begin
+						// 390000-3AFFFF SVP DRAM cell arrange 1/2
+						SRAM_SEL <= 1;
+						mstate <= MBUS_SRAM_READ;
+					end 
 					else if (MBUS_A < ROMSZ) begin
 						if (PIER_QUIRK) BANK_MODE <= (MBUS_A >= 23'h140000) ? 3'h3 : 3'h0;
 						ROM_REQ <= ~ROM_ACK;
@@ -804,6 +903,12 @@ always @(posedge MCLK) begin
 						end
 						mstate <= MBUS_FINISH;
 					end
+					
+					//SVP: A15000-A5000F 
+					if(MBUS_A[23:4] == 20'hA1500) begin
+						SVP_SEL <= 1;
+						mstate <= MBUS_SVP_READ;
+					end 
 
 					//VDP: C00000-C0001F (+mirrors)
 					if(MBUS_A[23:21] == 3'b110 && !MBUS_A[18:16] && !MBUS_A[7:5]) begin
@@ -868,7 +973,11 @@ always @(posedge MCLK) begin
 
 		MBUS_SRAM_READ:
 			begin
-				data <= {sram_q,sram_q};
+				if (SVP_QUIRK) begin
+					data <= svp_dram_q_a;
+				end else begin
+					data <= {sram_q,sram_q};
+				end 
 				mstate <= MBUS_FINISH;
 			end
 
@@ -892,6 +1001,13 @@ always @(posedge MCLK) begin
 				data <= JCART_DO & 16'h3F7F;
 				mstate <= MBUS_FINISH;
 			end
+
+		MBUS_SVP_READ:
+			if(~SVP_DTACK_N) begin
+				SVP_SEL <= 0;
+				data <= SVP_DO;
+				mstate <= MBUS_FINISH;
+			end 
 
 		MBUS_FINISH:
 			begin
