@@ -135,7 +135,6 @@ assign LED_DISK  = 0;
 assign LED_POWER = 0;
 assign LED_USER  = cart_download | sav_pending;
 
-
 //`define SOUND_DBG
 
 `include "build_id.v"
@@ -143,8 +142,8 @@ localparam CONF_STR = {
 	"Genesis;;",
 	"FS,BINGENMD ;",
 	"-;",
-	"O67,Region,JP,US,EU;",
-	"O8,Auto Region,No,Yes;",
+	"O67,Region (F1-4),JP,US,EU,Auto;",
+	"H2ORS,Auto Region Order,U>J>E,J>U>E,E>U>J;",
 	"-;",
 	"C,Cheats;",
 	"H1OO,Cheats Enabled,Yes,No;",
@@ -170,13 +169,13 @@ localparam CONF_STR = {
 	"OB,Enable FM,Yes,No;",
 	"OC,Enable PSG,Yes,No;",
 `endif	
-	"R0,Reset;",
+	"R0,Reset (F5);",
 	"J1,A,B,C,Start,Mode,X,Y,Z;",
 	"V,v",`BUILD_DATE
 };
 
 
-wire [15:0] status_menumask = {~gg_available,~bk_ena};
+wire [15:0] status_menumask = {~region_order_ena,~gg_available,~bk_ena};
 wire [31:0] status;
 wire  [1:0] buttons;
 wire [11:0] joystick_0,joystick_1,joystick_2,joystick_3;
@@ -219,8 +218,8 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(1)) hps_io
 	.new_vmode(new_vmode),
 
 	.status(status),
-	.status_in({status[31:8],region_req,status[5:0]}),
-	.status_set(region_set),
+	.status_in({status[31:8],region_osd,status[5:0]}),
+	.status_set(status_set),
 	.status_menumask(status_menumask),
 
 	.ioctl_download(ioctl_download),
@@ -301,7 +300,7 @@ wire hblank, vblank;
 wire interlace;
 
 assign DDRAM_CLK = clk_ram;
-wire reset = RESET | status[0] | buttons[1] | region_set | bk_loading;
+wire reset = RESET | status[0] | buttons[1] | bk_loading | key_reset;
 
 system system
 (
@@ -309,7 +308,7 @@ system system
 	.MCLK(clk_sys),
 
 	.LOADING(cart_download),
-	.EXPORT(|status[7:6]),
+	.EXPORT(|core_region),
 	.PAL(PAL),
 	.SRAM_QUIRK(sram_quirk),
 	.EEPROM_QUIRK(eeprom_quirk),
@@ -371,25 +370,6 @@ system system
 	.ROM_REQ(rom_rd),
 	.ROM_ACK(rom_rdack)
 );
-
-wire PAL = status[7];
-
-reg new_vmode;
-always @(posedge clk_sys) begin
-	reg old_pal;
-	int to;
-	
-	if(~(reset | cart_download)) begin
-		old_pal <= PAL;
-		if(old_pal != PAL) to <= 5000000;
-	end
-	else to <= 5000000;
-	
-	if(to) begin
-		to <= to - 1;
-		if(to == 1) new_vmode <= ~new_vmode;
-	end
-end
 
 wire [2:0] scale = status[3:1];
 wire [2:0] sl = scale ? scale - 1'd1 : 3'd0;
@@ -473,29 +453,69 @@ always @(posedge clk_sys) begin
 	end
 end
 
-reg  [1:0] region_req;
-reg        region_set = 0;
+/////////////////////////  key accelerator  /////////////////////////////
+
+reg [1:0] region_osd; // use to set the OSD menu region when an accelerator key is pressed
+reg status_set = 0; // notification to the OSD menu an input value has been changed
+reg key_reset = 0;
 
 wire       pressed = ps2_key[9];
 wire [8:0] code    = ps2_key[8:0];
 always @(posedge clk_sys) begin
-	reg old_state, old_download = 0;
+	reg old_state = 0;
 	old_state <= ps2_key[10];
-
+		
 	if(old_state != ps2_key[10]) begin
 		casex(code)
-			'h005: begin region_req <= 0; region_set <= pressed; end // F1
-			'h006: begin region_req <= 1; region_set <= pressed; end // F2
-			'h004: begin region_req <= 2; region_set <= pressed; end // F3
+			'h005: begin region_osd <= 0; status_set <= pressed; end // F1
+			'h006: begin region_osd <= 1; status_set <= pressed; end // F2
+			'h004: begin region_osd <= 2; status_set <= pressed; end // F3
+			'h00C: begin region_osd <= 3; status_set <= pressed; end // F4
+			'h003: begin key_reset <= pressed; end // F5
 		endcase
 	end
-
-	old_download <= cart_download;
-	if(status[8] & (old_download ^ cart_download) & |ioctl_index) begin
-		region_set <= cart_download;
-		region_req <= ioctl_index[7:6];
-	end
 end
+
+/////////////////////////  Cartridge header  /////////////////////////////
+
+// read the header of the loaded file/cart
+//.ascii  "SEGA MEGA DRIVE "                                              /* Console Name (16) */
+//        .ascii  "(C)SEGA 2012.MAR"                                      /* Copyright Information (16) */
+//        .ascii  "MY PROG                                         "      /* Domestic Name (48) */
+//        .ascii  "MY PROG                                         "      /* Overseas Name (48) */
+//        .ascii  "GM 00000000-00"                                        /* Serial Number (2, 14) */
+//        .word   0x0000                                                  /* Checksum (2) */
+//        .ascii  "JD              "                                      /* I/O Support (16) */
+//        .long   0x00000000                                              /* ROM Start Address (4) */
+//        .long   0x20000                                                 /* ROM End Address (4) */
+//        .long   0x00FF0000                                              /* Start of Backup RAM (4) */
+//        .long    0x00FFFFFF                                             /* End of Backup RAM (4) */
+//        .ascii  "                        "                              /* Modem Support (12) */
+//        .ascii  "                                        "              /* Memo (40) */
+//        .ascii  "JUE             "                                      /* Country Support (16) */
+
+function automatic [1:0] region_code;
+	// E = Europe
+	// J = Japan
+	// U = USA
+	// other code which run as europe        
+	// A = Asia
+	// B = Brazil
+	// 4 = Brazil
+	// F = France
+	// 8 = Hong Kong
+		
+	input [7:0] region_char;
+	
+	if (region_char== "J") region_code = 0;
+	else if (region_char== "U") region_code= 1;
+	else if (region_char== " ") region_code = 3; // special case, not a real region code
+	else region_code = 2;
+
+endfunction
+
+reg cart_reg_ready = 0;
+reg [5:0] cart_reg; // get the 3 region code at most
 
 reg sram_quirk = 0;
 reg eeprom_quirk = 0;
@@ -504,19 +524,21 @@ reg noram_quirk = 0;
 reg pier_quirk = 0;
 reg ttn2_quirk = 0;
 always @(posedge clk_sys) begin
-	reg [55:0] cart_id;
-	reg old_download, old_reset;
+	reg [55:0] cart_id; // 7+1 char id string on 14
+	reg old_download;
 	old_download <= cart_download;
 
-	if(~old_download && cart_download) {fifo_quirk,eeprom_quirk,sram_quirk,noram_quirk,pier_quirk,ttn2_quirk} <= 0;
-
+	// re-initialization
+	if(~old_download && cart_download) {fifo_quirk,eeprom_quirk,sram_quirk,noram_quirk,pier_quirk,ttn2_quirk,cart_reg,cart_reg_ready} <= 0;
+	
 	if(ioctl_wr & cart_download) begin
+		// get the cartridge id string (partial id, only 8 char of the id)
 		if(ioctl_addr == 'h182) cart_id[55:48] <= {ioctl_data[15:8]};
 		if(ioctl_addr == 'h184) cart_id[47:32] <= {ioctl_data[7:0],ioctl_data[15:8]};
 		if(ioctl_addr == 'h186) cart_id[31:16] <= {ioctl_data[7:0],ioctl_data[15:8]};
 		if(ioctl_addr == 'h188) cart_id[15:00] <= {ioctl_data[7:0],ioctl_data[15:8]};
 		if(ioctl_addr == 'h18A) begin
-			     if({cart_id,ioctl_data[7:0]} == "T-081276") sram_quirk <= 1;   // NFL Quarterback Club
+			if({cart_id,ioctl_data[7:0]} == "T-081276") sram_quirk <= 1;   // NFL Quarterback Club
 			else if({cart_id,ioctl_data[7:0]} == "T-81406 ") sram_quirk <= 1;   // NBA Jam TE
 			else if({cart_id,ioctl_data[7:0]} == "T-081586") sram_quirk <= 1;   // NFL Quarterback Club '96
 			else if({cart_id,ioctl_data[7:0]} == "T-81576 ") sram_quirk <= 1;   // College Slam
@@ -536,6 +558,70 @@ always @(posedge clk_sys) begin
 			else if({cart_id,ioctl_data[7:0]} == "T-574013") pier_quirk <= 1;   // Pier Solar 1st Edition
 			else if({cart_id,ioctl_data[7:0]} == "TITAN002") ttn2_quirk <= 1;   // Titan Overdrive 2
 		end
+		
+		// get the cartridge region string (partial only the first 3 char)
+		if(ioctl_addr == 'h1F0) cart_reg[5:2] <= {region_code(ioctl_data[7:0]),region_code(ioctl_data[15:8])};
+		if(ioctl_addr == 'h1F2) cart_reg[1:0] <= region_code(ioctl_data[7:0]);
+	end
+		
+	if (old_download && ~cart_download) cart_reg_ready <= 1; // cart downloading finished
+end
+
+/////////////////////////  Region/video Mode selection  /////////////////////////////
+reg [1:0] core_region; // use to store the region of the system
+reg region_order_ena = 0; // use to display the region order option
+
+// only the first bit is taken 
+// 0 for jp (0 == 00 ) and us (1 == 01)
+// 1 for eu (2 = 10) 
+wire PAL = core_region[1]; 
+
+reg new_vmode;
+always @(posedge clk_sys) begin
+	reg old_pal;
+	int to;
+	
+	if(~(reset | cart_download)) begin
+		old_pal <= PAL;
+		if(old_pal != PAL) to <= 5000000;
+	end
+	else to <= 5000000;
+	
+	if(to) begin
+		to <= to - 1;
+		if(to == 1) new_vmode <= ~new_vmode;
+	end
+end
+
+always @(posedge clk_sys) begin
+	reg [5:0] order;
+
+	if (status[7:6] == 3) begin // auto region selection
+		region_order_ena <= 1;
+		if (~OSD_STATUS) // only update the region when the user quit the osd
+			if (cart_reg_ready) begin // cart downloading finished			
+				// select the order according to the user choice
+				case (status[28:27])
+					0: begin order[5:4] <= 1; order[3:2] <= 0; order[1:0] <= 2; end // U>J>E
+					1: begin order[5:4] <= 0; order[3:2] <= 1; order[1:0] <= 2; end // J>U>E
+					2: begin order[5:4] <= 2; order[3:2] <= 1; order[1:0] <= 0; end // E>U>J
+					default : begin order[5:4] <= 1; order[3:2] <= 0; order[1:0] <= 2; end // U>J>E, shall not happen
+				endcase
+				
+				// check if the first region choice is in the header
+				if ((cart_reg[5:4] == order[5:4]) || (cart_reg[3:2] == order[5:4]) || (cart_reg[1:0] == order[5:4]))
+					core_region <= order[5:4];
+				// if not, check if the second choice is in the header
+				else if ((cart_reg[5:4] == order[3:2]) || (cart_reg[3:2] == order[3:2]) || (cart_reg[1:0] == order[3:2])) 
+					core_region <= order[3:2];
+				// if the first 2 preferred region code has not been found, the third one shall be there
+				else
+					core_region <= order[1:0];					
+			end
+	end else begin // manual region selection
+		region_order_ena <= 0;
+		if (~OSD_STATUS) 	// only update the region when the user quit the osd
+			core_region <= status[7:6];
 	end
 end
 
