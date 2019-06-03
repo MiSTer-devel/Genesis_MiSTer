@@ -189,7 +189,7 @@ begin
 			CA <= '0';
 			DTACK_N <= '1';
 			BUS_DO <= (others => '0');
-			HALT <= '0';
+			HALT <= '1';
 		elsif rising_edge(CLK) then
 			if EN = '1' then
 				if SSP_ESB = '1' then
@@ -226,12 +226,11 @@ begin
 				elsif BUS_SEL = '1' and DTACK_N = '1' then
 					if BUS_RNW = '0' then
 						case BUS_A is
-							when "000" =>
+							when "000" | "001" =>
 								XST <= BUS_DI;
-								CA <= '1';
-							when "001" =>
-								XST <= BUS_DI;
-								CA <= '1';
+								if BUS_DI /= x"0000" then
+									CA <= '1';
+								end if;
 							when "011" => 
 								if BUS_DI(3 downto 0) = x"A" then
 									HALT <= '1';

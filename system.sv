@@ -611,8 +611,6 @@ wire  [16:1] SVP_DRAM_A;
 wire  [15:0] SVP_DRAM_DO;
 wire         SVP_DRAM_WE;
 
-reg          SVP_HALTED;
-
 always @(posedge MCLK) begin
 	if(reset) begin
 		SVP_CLKEN <= 0;
@@ -646,32 +644,29 @@ dpram_dif #(16,16,16,16) svp_dram
 	.q_b(svp_dram_q_b)
 );
 
-
 SVP svp
 (
 	.CLK(MCLK),
 	.CE(SVP_CLKEN),
 	.RST_N(~reset),
 	.ENABLE(SVP_QUIRK),
-	
+
 	.BUS_A(MBUS_A[3:1]),
 	.BUS_DO(SVP_DO),
 	.BUS_DI(MBUS_DO),
 	.BUS_SEL(SVP_SEL),
 	.BUS_RNW(MBUS_RNW),
 	.BUS_DTACK_N(SVP_DTACK_N),
-	
+
 	.ROM_A(SVP_ROM_A),
 	.ROM_DI(ROM_DATA2),
 	.ROM_REQ(ROM_REQ2),
 	.ROM_ACK(ROM_ACK2),
-	
+
 	.DRAM_A(SVP_DRAM_A),
 	.DRAM_DI(svp_dram_q_b),
 	.DRAM_DO(SVP_DRAM_DO),
-	.DRAM_WE(SVP_DRAM_WE),
-	
-	.HALTED(SVP_HALTED)
+	.DRAM_WE(SVP_DRAM_WE)
 );
 
 assign ROM_ADDR2 = {4'b0000,SVP_ROM_A}; 
