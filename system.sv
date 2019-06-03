@@ -530,7 +530,7 @@ always_comb begin
 	case(BANK_MODE)
 		2'h2: ROM_ADDR = {BANK_REG[MBUS_A[21:19]], MBUS_A[18:1]};
 		2'h3: ROM_ADDR = {BANK_REG[pier_bank[20:18]], MBUS_A[18:1]};
-		default: ROM_ADDR = MBUS_A;
+		default: ROM_ADDR = (msrc == MSRC_VDP && SVP_QUIRK) ? MBUS_A - 1'd1 : MBUS_A;
 	endcase
 end
 
@@ -550,7 +550,7 @@ always_comb begin
 	end else begin
 		sram_addr = MBUS_A[16:1];
 		sram_di = MBUS_DO[7:0];
-		sram_wren = (SRAM_SEL & ~MBUS_RNW);
+		sram_wren = SRAM_SEL & ~MBUS_RNW & ~SVP_QUIRK;
 	end
 end
 

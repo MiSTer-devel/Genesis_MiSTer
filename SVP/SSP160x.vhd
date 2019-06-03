@@ -29,7 +29,9 @@ entity SSP160x is
 		ST56			: out std_logic_vector(1 downto 0);
 		
 		BLIND_RD		: out std_logic;
-		BLIND_WR		: out std_logic
+		BLIND_WR		: out std_logic;
+
+		INST_NON		: out std_logic
 	);
 end SSP160x;
 
@@ -169,58 +171,75 @@ begin
 			when x"00" => 
 				INST.AD <= IA_REGX;
 				INST.AS <= IA_REGY;
+				INST.RAM <= "00";
 			when x"20" | x"60" | x"80" | x"A0" | x"C0" | x"E0" =>
 				INST.AD <= IA_ACC;
 				INST.AS <= IA_REGY;
+				INST.RAM <= "00";
 			when x"02" | x"03" =>
 				INST.AD <= IA_REGX;
 				INST.AS <= IA_PTR;
+				INST.RAM <= IR(8)&not IR(8);
 			when x"22" | x"62" | x"82" | x"A2" | x"C2" | x"E2" |
 				  x"23" | x"63" | x"83" | x"A3" | x"C3" | x"E3" =>
 				INST.AD <= IA_ACC;
 				INST.AS <= IA_PTR;
+				INST.RAM <= IR(8)&not IR(8);
 			when x"04" | x"05" =>
 				INST.AD <= IA_PTR;
 				INST.AS <= IA_REGX;
+				INST.RAM <= IR(8)&not IR(8);
 			when x"06" | x"26" | x"66" | x"86" | x"A6" | x"C6" | x"E6" |
 				  x"07" | x"27" | x"67" | x"87" | x"A7" | x"C7" | x"E7" =>
 				INST.AD <= IA_ACC;
 				INST.AS <= IA_RAM;
+				INST.RAM <= IR(8)&not IR(8);
 			when x"08" =>
 				INST.AD <= IA_REGX;
 				INST.AS <= IA_IMM16;
+				INST.RAM <= "00";
 			when x"28" | x"68" | x"88" | x"A8" | x"C8" | x"E8" =>
 				INST.AD <= IA_ACC;
 				INST.AS <= IA_IMM16;
+				INST.RAM <= "00";
 			when x"0A" | x"0B" =>
 				INST.AD <= IA_REGX;
 				INST.AS <= IA_INDPTR;
+				INST.RAM <= IR(8)&not IR(8);
 			when x"2A" | x"6A" | x"8A" | x"AA" | x"CA" | x"EA" |
 				  x"2B" | x"6B" | x"8B" | x"AB" | x"CB" | x"EB" =>
 				INST.AD <= IA_ACC;
 				INST.AS <= IA_INDPTR;
+				INST.RAM <= IR(8)&not IR(8);
 			when x"0C" | x"0D" =>
 				INST.AD <= IA_PTR;
 				INST.AS <= IA_IMM16;
+				INST.RAM <= IR(8)&not IR(8);
 			when x"0E" | x"0F" =>
 				INST.AD <= IA_RAM;
 				INST.AS <= IA_ACC;
+				INST.RAM <= IR(8)&not IR(8);
 			when x"12" | x"13" =>
 				INST.AD <= IA_REGX;
 				INST.AS <= IA_PREG;
+				INST.RAM <= "00";
 			when x"32" | x"72" | x"92" | x"B2" | x"D2" | x"F2" |
 				  x"33" | x"73" | x"93" | x"B3" | x"D3" | x"F3" =>
 				INST.AD <= IA_ACC;
 				INST.AS <= IA_PREG;
+				INST.RAM <= "00";
 			when x"14" | x"15" =>
 				INST.AD <= IA_PREG;
 				INST.AS <= IA_REGX;
+				INST.RAM <= "00";
 			when x"18" | x"19" | x"1A" | x"1C" | x"1D" | x"1E" =>
 				INST.AD <= IA_PREG;
 				INST.AS <= IA_IMM8;
+				INST.RAM <= "00";
 			when x"38" | x"78" | x"98" | x"B8" | x"D8" | x"F8" =>
 				INST.AD <= IA_ACC;
 				INST.AS <= IA_IMM8;
+				INST.RAM <= "00";
 			when x"37" | x"97" | x"B7" =>
 				INST.AD <= IA_ACC;
 				INST.AS <= IA_PTR;
@@ -228,17 +247,23 @@ begin
 			when x"48" | x"49" | x"4C" | x"4D" =>
 				INST.AD <= IA_NON;
 				INST.AS <= IA_IMM16;
+				INST.RAM <= "00";
 			when x"4A" =>
 				INST.AD <= IA_REGX;
 				INST.AS <= IA_INDACC;
+				INST.RAM <= "00";
 			when x"90" =>
 				INST.AD <= IA_ACC;
 				INST.AS <= IA_ACC;
+				INST.RAM <= "00";
 			when others =>
 				INST.AD <= IA_NON;
 				INST.AS <= IA_NON;
+				INST.RAM <= "00";
 		end case; 
 	end process;
+	
+	INST_NON <= '1' when INST.IT = IT_NON else '0';
 	
 	process(CLK, RST_N)
 	begin
@@ -331,7 +356,7 @@ begin
 	end process;
 	
 	--ALU
-	process(INST, A, P, SRC_DATA, ALU_R)
+	process(INST, A, P, SRC_DATA)
 	variable B : std_logic_vector(31 downto 0);
 	begin
 		if INST.AS = IA_REGY and INST.Y = REG_P then
@@ -593,7 +618,7 @@ begin
 			PREG <= (others => (others => '0'));
 		elsif rising_edge(CLK) then
 			if EN = '1' and LAST_CYCLE = '1' then
-				if INST.AD = IA_PTR or INST.AS = IA_PTR or INST.AS = IA_INDPTR then
+				if INST.AD = IA_PTR or INST.AS = IA_PTR then
 					if INST.RAM(0) = '1' then
 						case NA is
 							when x"0" => PREG(0) <= PREG(0);
@@ -702,7 +727,7 @@ begin
 			 '0';
 	R_NW <= '0' when INST.AD = IA_REGX and INST.X(3) = '1' else '1';
 	
-	BLIND_RD <= '1' when INST.AD = IA_REGX and INST.X = REG_0 else '0';																--I don't know how SVP defines blind access,
+	BLIND_RD <= '1' when INST.AD = IA_REGX and INST.X = REG_0 else '0';	--I don't know how SVP defines blind access,
 	BLIND_WR <= '1' when (INST.AS = IA_REGX and INST.X = REG_0) or (INST.AS = IA_REGY and INST.Y = REG_0) else '0';	--therefore added extern signals 
 	
 	ST56 <= ST6 & ST5;

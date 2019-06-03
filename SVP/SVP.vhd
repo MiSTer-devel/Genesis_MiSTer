@@ -38,6 +38,7 @@ architecture rtl of SVP is
 
 	signal EN				: std_logic;
 	
+	--SSP ports
 	signal SSP_PA 			: std_logic_vector(15 downto 0);
 	signal SSP_PDI 		: std_logic_vector(15 downto 0);
 	signal SSP_SS 			: std_logic;
@@ -51,21 +52,28 @@ architecture rtl of SVP is
 	signal SSP_BL_WR 		: std_logic;
 	signal SSP_BL_RD 		: std_logic;
 	
+	--PMARs
 	type PMAR_r is record
 		MA		: std_logic_vector(31 downto 0);		--Mode/Address
 		DATA	: std_logic_vector(15 downto 0);		--Read/Write data
 		CD		: std_logic_vector(15 downto 0);		--Custom displacement
 	end record;
-	
 	type PMARs_t is array (0 to 15) of PMAR_r;
 	signal PMARS 			: PMARs_t;
+	signal PMAR_SET 		: std_logic;
+	signal PMAR_NUM 		: unsigned(3 downto 0);
 	signal PMC 				: std_logic_vector(31 downto 0);
 	signal PMC_SEL 		: std_logic;
+	
+	--I/O
+	signal DTACK_N 		: std_logic;
 	signal XCM 				: std_logic_vector(15 downto 0);
 	signal XST 				: std_logic_vector(15 downto 0);
 	signal CA 				: std_logic;
 	signal SA 				: std_logic;
+	signal HALT 			: std_logic;
 	
+	--Memory controller
 	type MemAccessState_t is (
 		MAS_IDLE,
 		MAS_PROM_RD,
@@ -76,19 +84,16 @@ architecture rtl of SVP is
 		MAS_IRAM_WR
 	);
 	signal MAS 				: MemAccessState_t;
-	signal PMAR_NUM 		: unsigned(3 downto 0);
 	signal MEM_ADDR 		: std_logic_vector(20 downto 0);
 	signal SSP_WAIT 		: std_logic;
-	signal IRAM_SEL 		: std_logic;
-	
-	signal ROM_DATA 		: std_logic_vector(15 downto 0);
-	signal DTACK_N 		: std_logic;
-	signal MA_ROM_REQ 	: std_logic;
+	signal SSP_ACTIVE 	: std_logic;
 	signal PMAR_ACTIVE	: std_logic; 
-	signal SSP_ACTIVE 	: std_logic; 
+	signal IRAM_SEL 		: std_logic;
+	signal ROM_DATA 		: std_logic_vector(15 downto 0);
+	signal MA_ROM_REQ 	: std_logic;
 	signal MEM_WAIT 		: std_logic; 
-	signal HALT 			: std_logic;
 	
+	--IRAM
 	signal IRAM_ADDR 		: std_logic_vector(9 downto 0);
 	signal IRAM_D 			: std_logic_vector(15 downto 0);
 	signal IRAM_WE 		: std_logic;
@@ -180,6 +185,7 @@ begin
 		BLIND_WR	=> SSP_BL_WR
 	);
 	
+	--I/O
 	process(CLK, RST_N)
 	begin
 		if RST_N = '0' then
@@ -259,154 +265,6 @@ begin
 	BUS_DTACK_N <= DTACK_N;
 	HALTED <= HALT;
 	
-	
-	process(CLK, RST_N)
-	variable NEW_MA : std_logic_vector(31 downto 0); 
-	begin
-		if RST_N = '0' then
-			PMC <= (others => '0');
-			PMARS <= (others => ((others => '0'),(others => '0'),(others => '0')));
-			MAS <= MAS_IDLE;
-			PMAR_NUM <= (others => '0');
-			MA_ROM_REQ <= '0';
-			ROM_DATA <= (others => '0');
-			SSP_ACTIVE <= '1';
-			PMAR_ACTIVE <= '0';
-			MEM_WAIT <= '0';
-		elsif rising_edge(CLK) then
-			PMAR_ACTIVE <= '0';
-			if EN = '1' then
-				SSP_ACTIVE <= '1';
-				if SSP_ESB = '1' then
-					if (SSP_ST56(0) = '1' and SSP_EA(2 downto 1) = "00") or 
-						(SSP_ST56(1) = '1' and SSP_EA(2 downto 1) = "01") or 
-						SSP_EA = "100" then			--set PMAR
-						if (SSP_BL_WR = '1' and SSP_R_NW = '0') or (SSP_BL_RD = '1' and SSP_R_NW = '1') then
-							PMARS(to_integer(unsigned(SSP_R_NW & SSP_EA))).MA <= PMC;
-							if SSP_R_NW = '1' then
-								PMAR_ACTIVE <= '1';
-							end if;
-							MEM_ADDR <= PMC(20 downto 0);
-							PMAR_NUM <= unsigned(SSP_R_NW & SSP_EA);
-						else
-							NEW_MA := GetNextMA(PMARS(to_integer(unsigned(SSP_R_NW & SSP_EA))));
-							if SSP_R_NW = '1' then
-								MEM_ADDR <= NEW_MA(20 downto 0);
-							else
-								PMARS(to_integer(unsigned(SSP_R_NW & SSP_EA))).DATA <= SSP_EXTO;
-								MEM_ADDR <= PMARS(to_integer(unsigned(SSP_R_NW & SSP_EA))).MA(20 downto 0);
-							end if;
-							PMARS(to_integer(unsigned(SSP_R_NW & SSP_EA))).MA <= NEW_MA;
-							PMC <= NEW_MA;
-							
-							PMAR_NUM <= unsigned(SSP_R_NW & SSP_EA);
-							PMAR_ACTIVE <= '1';
-						end if;
-					elsif SSP_EA = "110" then		--set PMC
-						if SSP_R_NW = '0' then
-							if PMC_SEL = '0' then
-								PMC(15 downto 0) <= SSP_EXTO;
-							else
-								PMC(31 downto 16) <= SSP_EXTO;
-							end if;
-						end if;
-					elsif SSP_EA = "111" then		--set custom displacement
-						if SSP_R_NW = '1' and SSP_BL_RD = '1' then
-							PMARS(to_integer(PMAR_NUM)).CD <= PMC(15 downto 0);
-						end if;
-					end if;
-				end if;
-			end if;
-			
-			case MAS is
-				when MAS_IDLE =>
-					if PMAR_ACTIVE = '1' then
-						if MEM_ADDR(20) = '0' then								--ROM 000000-1FFFFF (000000-0FFFFF)
-							if PMAR_NUM(3) = '1' then
-								MA_ROM_REQ <= not ROM_ACK;
-								MAS <= MAS_ROM_RD;
-							end if;
-						elsif MEM_ADDR(20 downto 16) = "11000" then		--DRAM 300000-37FFFF (180000-1BFFFF)
-							if PMAR_NUM(3) = '1' then
-								MAS <= MAS_DRAM_RD;
-								MEM_WAIT <= '1';
-							else
-								MAS <= MAS_DRAM_WR;
-							end if;
-							MEM_WAIT <= '1';
-						elsif MEM_ADDR(20 downto 15) = "111001" then		--IRAM 390000-3907FF (1C8000-1C83FF)
-							if PMAR_NUM(3) = '1' then
-								MAS <= MAS_IRAM_RD;
-								MEM_WAIT <= '1';
-							else
-								MAS <= MAS_IRAM_WR;
-							end if;
-						end if;
-					end if;
-					
-				when MAS_PROM_RD =>
-					if MA_ROM_REQ = ROM_ACK and HALT = '0' then
-						ROM_DATA <= ROM_DI;
-						MAS <= MAS_IDLE;
-						SSP_ACTIVE <= '0';
-					end if;
-					
-				when MAS_ROM_RD =>
-					if MA_ROM_REQ = ROM_ACK and HALT = '0' then
-						PMARS(to_integer(PMAR_NUM)).DATA <= ROM_DI;
-						MAS <= MAS_IDLE;
-					end if;
-				
-				when MAS_DRAM_RD =>
-					MEM_WAIT <= '0';
-					if MEM_WAIT = '0' and HALT = '0' then
-						PMARS(to_integer(PMAR_NUM)).DATA <= DRAM_DI;
-						MAS <= MAS_IDLE;
-					end if;
-					
-				when MAS_IRAM_RD =>
-					MEM_WAIT <= '0';
-					if MEM_WAIT = '0' then
-						PMARS(to_integer(PMAR_NUM)).DATA <= IRAM_Q;
-						MAS <= MAS_IDLE;
-					end if;
-					
-				when MAS_DRAM_WR =>
-					MEM_WAIT <= '0';
-					if HALT = '0' then
-						MAS <= MAS_IDLE;
-					end if;
-					
-				when MAS_IRAM_WR =>
-					MEM_WAIT <= '0';
-					MAS <= MAS_IDLE;
-					
-				when others => null;
-			end case; 
-			
-			if MAS = MAS_IDLE or 
-				(MAS = MAS_ROM_RD and MA_ROM_REQ = ROM_ACK) or 
-				(MAS = MAS_DRAM_RD and MEM_WAIT = '0') or 
-				(MAS = MAS_IRAM_RD and MEM_WAIT = '0') or 
-				(MAS = MAS_DRAM_WR) or (MAS = MAS_IRAM_WR) then
-				if PMAR_ACTIVE = '0' and SSP_ACTIVE = '1' then
-					if IRAM_SEL = '0' then
-						MA_ROM_REQ <= not ROM_ACK;
-						MAS <= MAS_PROM_RD;
-					else
-						SSP_ACTIVE <= '0';
-					end if;
-				end if;
-			end if;
-		end if;
-	end process;
-	
-	ROM_A <= MEM_ADDR(19 downto 0) when MAS = MAS_ROM_RD or IRAM_SEL = '1' else "0000" & SSP_PA;
-	ROM_REQ <= MA_ROM_REQ;
-	
-	SSP_WAIT <= '1' when MAS /= MAS_IDLE else '0';
-		
-	
 	process(SSP_EA, SSP_ST56, PMARS, PMC_SEL, PMC, XST, CA, SA)
 	begin
 		case SSP_EA is
@@ -449,6 +307,166 @@ begin
 		end case; 
 	end process;
 	
+	
+	--PMARs
+	process(CLK, RST_N)
+	variable NEW_MA : std_logic_vector(31 downto 0); 
+	variable PMAR_ACCESS_END : std_logic; 
+	begin
+		if RST_N = '0' then
+			PMC <= (others => '0');
+			PMARS <= (others => ((others => '0'),(others => '0'),(others => '0')));
+			PMAR_SET <= '0';
+			MAS <= MAS_IDLE;
+			PMAR_NUM <= (others => '0');
+			MA_ROM_REQ <= '0';
+			ROM_DATA <= (others => '0');
+			SSP_ACTIVE <= '1';
+			PMAR_ACTIVE <= '0';
+			MEM_WAIT <= '0';
+		elsif rising_edge(CLK) then
+			PMAR_ACTIVE <= '0';
+			if EN = '1' then
+				SSP_ACTIVE <= '1';
+				if SSP_ESB = '1' then
+					if (SSP_ST56(0) = '1' and SSP_EA(2 downto 1) = "00") or 
+						(SSP_ST56(1) = '1' and SSP_EA(2 downto 1) = "01") or 
+						SSP_EA = "100" then			--set PMAR
+						if ((SSP_BL_WR = '1' and SSP_R_NW = '0') or (SSP_BL_RD = '1' and SSP_R_NW = '1')) and PMAR_SET = '0' then
+							PMARS(to_integer(unsigned(SSP_R_NW & SSP_EA))).MA <= PMC;
+							if SSP_R_NW = '1' then
+								PMAR_ACTIVE <= '1';
+							end if;
+							MEM_ADDR <= PMC(20 downto 0);
+							PMAR_NUM <= unsigned(SSP_R_NW & SSP_EA);
+							PMAR_SET <= '1';
+						else
+							NEW_MA := GetNextMA(PMARS(to_integer(unsigned(SSP_R_NW & SSP_EA))));
+							if SSP_R_NW = '1' then
+								MEM_ADDR <= NEW_MA(20 downto 0);
+							else
+								PMARS(to_integer(unsigned(SSP_R_NW & SSP_EA))).DATA <= SSP_EXTO;
+								MEM_ADDR <= PMARS(to_integer(unsigned(SSP_R_NW & SSP_EA))).MA(20 downto 0);
+							end if;
+							PMARS(to_integer(unsigned(SSP_R_NW & SSP_EA))).MA <= NEW_MA;
+							PMC <= NEW_MA;
+							
+							PMAR_NUM <= unsigned(SSP_R_NW & SSP_EA);
+							PMAR_ACTIVE <= '1';
+						end if;
+					elsif SSP_EA = "110" then		--set PMC
+						if SSP_R_NW = '0' then
+							if PMC_SEL = '0' then
+								PMC(15 downto 0) <= SSP_EXTO;
+							else
+								PMC(31 downto 16) <= SSP_EXTO;
+							end if;
+							PMAR_SET <= '0';
+						end if;
+					elsif SSP_EA = "111" then		--set custom displacement
+						if SSP_R_NW = '1' and SSP_BL_RD = '1' then
+							PMARS(to_integer(PMAR_NUM)).CD <= PMC(15 downto 0);
+						end if;
+					end if;
+				end if;
+			end if;
+			
+			PMAR_ACCESS_END := '0';
+			case MAS is
+				when MAS_IDLE =>
+					if PMAR_ACTIVE = '1' then
+						if MEM_ADDR(20) = '0' then								--ROM 000000-1FFFFF (000000-0FFFFF)
+							if PMAR_NUM(3) = '1' then
+								MA_ROM_REQ <= not ROM_ACK;
+								MAS <= MAS_ROM_RD;
+							end if;
+						elsif MEM_ADDR(20 downto 16) = "11000" then		--DRAM 300000-37FFFF (180000-1BFFFF)
+							if PMAR_NUM(3) = '1' then
+								MAS <= MAS_DRAM_RD;
+								MEM_WAIT <= '1';
+							else
+								MAS <= MAS_DRAM_WR;
+							end if;
+							MEM_WAIT <= '1';
+						elsif MEM_ADDR(20 downto 15) = "111001" then		--IRAM 390000-3907FF (1C8000-1C83FF)
+							if PMAR_NUM(3) = '1' then
+								MAS <= MAS_IRAM_RD;
+								MEM_WAIT <= '1';
+							else
+								MAS <= MAS_IRAM_WR;
+							end if;
+						end if;
+					end if;
+					
+				when MAS_PROM_RD =>
+					if MA_ROM_REQ = ROM_ACK and HALT = '0' then
+						ROM_DATA <= ROM_DI;
+						MAS <= MAS_IDLE;
+						SSP_ACTIVE <= '0';
+					end if;
+					
+				when MAS_ROM_RD =>
+					if MA_ROM_REQ = ROM_ACK and HALT = '0' then
+						PMARS(to_integer(PMAR_NUM)).DATA <= ROM_DI;
+						MAS <= MAS_IDLE;
+						PMAR_ACCESS_END := '1';
+					end if;
+				
+				when MAS_DRAM_RD =>
+					MEM_WAIT <= '0';
+					if MEM_WAIT = '0' and HALT = '0' then
+						PMARS(to_integer(PMAR_NUM)).DATA <= DRAM_DI;
+						MAS <= MAS_IDLE;
+						PMAR_ACCESS_END := '1';
+					end if;
+					
+				when MAS_IRAM_RD =>
+					MEM_WAIT <= '0';
+					if MEM_WAIT = '0' then
+						PMARS(to_integer(PMAR_NUM)).DATA <= IRAM_Q;
+						MAS <= MAS_IDLE;
+						PMAR_ACCESS_END := '1';
+					end if;
+					
+				when MAS_DRAM_WR =>
+					MEM_WAIT <= '0';
+					if HALT = '0' then
+						MAS <= MAS_IDLE;
+						PMAR_ACCESS_END := '1';
+					end if;
+					
+				when MAS_IRAM_WR =>
+					MEM_WAIT <= '0';
+					MAS <= MAS_IDLE;
+					PMAR_ACCESS_END := '1';
+					
+				when others => null;
+			end case; 
+			
+			if MAS = MAS_IDLE or 
+				(MAS = MAS_ROM_RD and MA_ROM_REQ = ROM_ACK and HALT = '0') or 
+				(MAS = MAS_DRAM_RD and MEM_WAIT = '0' and HALT = '0') or 
+				(MAS = MAS_IRAM_RD and MEM_WAIT = '0') or 
+				(MAS = MAS_DRAM_WR and HALT = '0') or (MAS = MAS_IRAM_WR) then
+				if PMAR_ACTIVE = '0' and SSP_ACTIVE = '1' then
+					if IRAM_SEL = '0' then
+						MA_ROM_REQ <= not ROM_ACK;
+						MAS <= MAS_PROM_RD;
+					else
+						SSP_ACTIVE <= '0';
+					end if;
+				end if;
+			end if;
+		end if;
+	end process;
+	
+	ROM_A <= "0000" & SSP_PA when MAS = MAS_PROM_RD else MEM_ADDR(19 downto 0);
+	ROM_REQ <= MA_ROM_REQ;
+	
+	SSP_WAIT <= '1' when MAS /= MAS_IDLE else '0';
+	
+	
+	--IRAM
 	IRAM_ADDR <= MEM_ADDR(9 downto 0) when MAS = MAS_IRAM_RD or MAS = MAS_IRAM_WR else SSP_PA(9 downto 0);
 	IRAM_D <= PMARS(to_integer(PMAR_NUM)).DATA;
 	IRAM_WE <= EN when MAS = MAS_IRAM_WR else '0';
@@ -461,6 +479,7 @@ begin
 		q			=> IRAM_Q
 	);
 	
+	--DRAM
 	DRAM_A <= MEM_ADDR(15 downto 0);
 	DRAM_DO <= OverWrite(PMARS(to_integer(PMAR_NUM)), DRAM_DI);
 	DRAM_WE <= EN when MAS = MAS_DRAM_WR and HALT = '0' else '0';
