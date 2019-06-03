@@ -287,7 +287,7 @@ always@(posedge clk_sys) begin
 			if(cmd == 'h2F) begin
 				cnt <= cnt + 1'd1;
 				case(cnt[3:0])
-					0: {FB_FLT,FB_FMT,FB_EN} <= io_din[4:0];
+					0: {FB_EN,FB_FLT,FB_FMT} <= {io_din[15], io_din[14], io_din[5:0]};
 					1: FB_BASE[15:0]  <= io_din[15:0];
 					2: FB_BASE[31:16] <= io_din[15:0];
 					3: FB_WIDTH       <= io_din[11:0];
@@ -376,6 +376,7 @@ end
 wire clk_100m;
 wire clk_hdmi  = ~HDMI_TX_CLK;  // Internal HDMI clock, inverted in relation to external clock
 wire clk_audio = FPGA_CLK3_50;
+wire clk_pal   = FPGA_CLK3_50;
 
 ////////////////////  SYSTEM MEMORY & SCALER  /////////////////////////
 
@@ -404,12 +405,12 @@ sysmem_lite sysmem
 
 	//64-bit DDR3 RAM access
 	.ram2_clk(clk_audio),
-	.ram2_address(aram_address),
-	.ram2_burstcount(aram_burstcount),
+	.ram2_address((ap_en1 == ap_en2) ? aram_address : pram_address),
+	.ram2_burstcount((ap_en1 == ap_en2) ? aram_burstcount : pram_burstcount),
 	.ram2_waitrequest(aram_waitrequest),
 	.ram2_readdata(aram_readdata),
 	.ram2_readdatavalid(aram_readdatavalid),
-	.ram2_read(aram_read),
+	.ram2_read((ap_en1 == ap_en2) ? aram_read : pram_read),
 	.ram2_writedata(0),
 	.ram2_byteenable(8'hFF),
 	.ram2_write(0),
@@ -493,6 +494,11 @@ ascal
 	.poly_dw  (coef_data),
 	.poly_wr  (coef_wr),
 
+	.pal_clk  (clk_pal),
+	.pal_dw   (pal_d),
+	.pal_a    (pal_a),
+	.pal_wr   (pal_wr),
+
 	.o_fb_ena         (FB_EN),
 	.o_fb_hsize       (FB_WIDTH),
 	.o_fb_vsize       (FB_HEIGHT),
@@ -513,7 +519,7 @@ ascal
 
 reg        FB_EN     = 0;
 reg        FB_FLT    = 0;
-reg  [2:0] FB_FMT    = 0;
+reg  [5:0] FB_FMT    = 0;
 reg [11:0] FB_WIDTH  = 0;
 reg [11:0] FB_HEIGHT = 0;
 reg [11:0] FB_HMIN   = 0;
@@ -587,6 +593,38 @@ pll_hdmi_adj pll_hdmi_adj
 	.o_write(cfg_write),
 	.o_address(cfg_address),
 	.o_writedata(cfg_data)
+);
+
+wire [23:0] pal_d;
+wire  [7:0] pal_a;
+wire        pal_wr;
+
+wire ap_en1, ap_en2;
+
+wire [28:0] pram_address;
+wire  [7:0] pram_burstcount;
+wire        pram_read;
+
+fbpal fbpal
+(
+	.reset(reset),
+	.en_in(ap_en2),
+	.en_out(ap_en1),
+
+	.ram_clk(clk_pal),
+	.ram_address(pram_address),
+	.ram_burstcount(pram_burstcount),
+	.ram_waitrequest(aram_waitrequest),
+	.ram_readdata(aram_readdata),
+	.ram_readdatavalid(aram_readdatavalid),
+	.ram_read(pram_read),
+
+	.fb_address(FB_BASE),
+
+	.pal_en(~FB_FMT[2] & FB_FMT[1] & FB_FMT[0] & FB_EN),
+	.pal_a(pal_a),
+	.pal_d(pal_d),
+	.pal_wr(pal_wr)
 );
 
 
@@ -830,6 +868,8 @@ wire [15:0] alsa_l, alsa_r;
 alsa alsa
 (
 	.reset(reset),
+	.en_in(ap_en1),
+	.en_out(ap_en2),
 
 	.ram_clk(clk_audio),
 	.ram_address(aram_address),
