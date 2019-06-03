@@ -530,7 +530,7 @@ always_comb begin
 	case(BANK_MODE)
 		2'h2: ROM_ADDR = {BANK_REG[MBUS_A[21:19]], MBUS_A[18:1]};
 		2'h3: ROM_ADDR = {BANK_REG[pier_bank[20:18]], MBUS_A[18:1]};
-		default: ROM_ADDR = (msrc == MSRC_VDP && SVP_QUIRK) ? MBUS_A - 1'd1 : MBUS_A;
+		default: ROM_ADDR = MBUS_A;
 	endcase
 end
 
@@ -550,7 +550,7 @@ always_comb begin
 	end else begin
 		sram_addr = MBUS_A[16:1];
 		sram_di = MBUS_DO[7:0];
-		sram_wren = SRAM_SEL & ~MBUS_RNW & ~SVP_QUIRK;
+		sram_wren = SRAM_SEL & ~MBUS_RNW;
 	end
 end
 
@@ -598,51 +598,35 @@ STM95XXX pier_eeprom
 //-----------------------------------------------------------------------
 // SVP
 //-----------------------------------------------------------------------
-reg          SVP_CLKEN;
+reg         SVP_SEL;
+wire [15:0] SVP_DO;
+wire        SVP_DTACK_N;
 
-reg          SVP_SEL;
-wire  [15:0] SVP_DO;
-wire         SVP_DTACK_N;
+wire [15:0] SVP_DRAM_A;
+wire [15:0] SVP_DRAM_DO;
+wire        SVP_DRAM_WE;
+wire [15:0] SVP_DRAM_DI;
 
-wire  [20:1] SVP_ROM_A;
-reg   [15:0] SVP_ROM_D;
+reg         SVP_RAM_SEL;
+reg  [15:0] SVP_RAM_A;
+wire [15:0] SVP_RAM_D;
 
-wire  [16:1] SVP_DRAM_A;
-wire  [15:0] SVP_DRAM_DO;
-wire         SVP_DRAM_WE;
-
-always @(posedge MCLK) begin
-	if(reset) begin
-		SVP_CLKEN <= 0;
-	end
-	else begin
-		SVP_CLKEN <= ~SVP_CLKEN;
-	end
-end
-
-
-wire [15:0] svp_sram_addr;
-wire [16:1] temp;
-wire [15:0] svp_dram_q_a, svp_dram_q_b;
-
-assign temp = (msrc != MSRC_VDP) ? MBUS_A[16:1] : (MBUS_A[16:1] - 1'd1);
-assign svp_sram_addr = MBUS_A[23:16] == 8'h39 ? {1'b0,temp[15:13],temp[6:2],temp[12:7],temp[1]} :	//cell arrange 1
-							  MBUS_A[23:16] == 8'h3A ? {1'b0,temp[15:12],temp[5:2],temp[11:6],temp[1]} :	//cell arrange 2
-							  temp;
-							  
-dpram_dif #(16,16,16,16) svp_dram
+dpram #(16,16) svp_dram
 (
 	.clock(MCLK),
-	.address_a(svp_sram_addr),
+	.address_a(SVP_RAM_A),
 	.data_a(MBUS_DO),
-	.wren_a(SRAM_SEL & ~MBUS_RNW),
-	.q_a(svp_dram_q_a),
+	.wren_a(SVP_RAM_SEL & ~MBUS_RNW),
+	.q_a(SVP_RAM_D),
 
 	.address_b(SVP_DRAM_A),
 	.data_b(SVP_DRAM_DO),
 	.wren_b(SVP_DRAM_WE),
-	.q_b(svp_dram_q_b)
+	.q_b(SVP_DRAM_DI)
 );
+
+reg SVP_CLKEN;
+always @(posedge MCLK) SVP_CLKEN <= ~reset & ~SVP_CLKEN;
 
 SVP svp
 (
@@ -658,18 +642,16 @@ SVP svp
 	.BUS_RNW(MBUS_RNW),
 	.BUS_DTACK_N(SVP_DTACK_N),
 
-	.ROM_A(SVP_ROM_A),
+	.ROM_A(ROM_ADDR2),
 	.ROM_DI(ROM_DATA2),
 	.ROM_REQ(ROM_REQ2),
 	.ROM_ACK(ROM_ACK2),
 
 	.DRAM_A(SVP_DRAM_A),
-	.DRAM_DI(svp_dram_q_b),
+	.DRAM_DI(SVP_DRAM_DI),
 	.DRAM_DO(SVP_DRAM_DO),
 	.DRAM_WE(SVP_DRAM_WE)
 );
-
-assign ROM_ADDR2 = {4'b0000,SVP_ROM_A}; 
 
 //-----------------------------------------------------------------------
 // 68K RAM
@@ -730,22 +712,24 @@ localparam	MSRC_NONE = 0,
 				MSRC_Z80  = 2,
 				MSRC_VDP  = 3;
 
-localparam 	MBUS_IDLE     = 0,
-				MBUS_SELECT   = 1,
-				MBUS_RAM_READ = 2,
-				MBUS_ROM_READ = 3,
-				MBUS_VDP_READ = 4,
-				MBUS_IO_READ  = 5,
-				MBUS_JCRT_READ= 6,
-				MBUS_SRAM_READ= 7,
-				MBUS_ZBUS_PRE = 8,
-				MBUS_ZBUS_READ= 9,
-				MBUS_SVP_READ = 10,
-				MBUS_FINISH   = 11; 
+localparam 	MBUS_IDLE         = 0,
+				MBUS_SELECT       = 1,
+				MBUS_RAM_READ     = 2,
+				MBUS_ROM_READ     = 3,
+				MBUS_VDP_READ     = 4,
+				MBUS_IO_READ      = 5,
+				MBUS_JCRT_READ    = 6,
+				MBUS_SRAM_READ    = 7,
+				MBUS_ZBUS_PRE     = 8,
+				MBUS_ZBUS_READ    = 9,
+				MBUS_SVP_READ     = 10,
+				MBUS_SVP_RAM_READ = 11,
+				MBUS_FINISH       = 12; 
 				
 always @(posedge MCLK) begin
 	reg [15:0] data;
 	reg  [3:0] pier_count;
+	reg [23:1] svp_fix;
 
 	if (reset) begin
 		M68K_MBUS_DTACK_N <= 1;
@@ -754,6 +738,7 @@ always @(posedge MCLK) begin
 		VDP_SEL <= 0;
 		IO_SEL <= 0;
 		SVP_SEL <= 0; 
+		SVP_RAM_SEL <= 0;
 		ZBUS_SEL <= 0;
 		BANK_MODE <= 0;
 		mstate <= MBUS_IDLE;
@@ -780,6 +765,7 @@ always @(posedge MCLK) begin
 				if(~M68K_AS_N & M68K_MBUS_DTACK_N & M68K_CLKENn) begin
 					msrc <= MSRC_M68K;
 					MBUS_A <= M68K_A[23:1];
+					svp_fix <= M68K_A[23:1];
 					data <= NO_DATA;
 					MBUS_DO <= M68K_DO;
 					MBUS_RNW <= M68K_RNW;
@@ -796,6 +782,7 @@ always @(posedge MCLK) begin
 				else if(VBUS_SEL & VDP_MBUS_DTACK_N) begin
 					msrc <= MSRC_VDP;
 					MBUS_A <= VBUS_A[23:1];
+					svp_fix <= VBUS_A[23:1] - 1'd1;
 					data <= NO_DATA;
 					MBUS_DO <= 0;
 					mstate <= MBUS_SELECT;
@@ -832,16 +819,22 @@ always @(posedge MCLK) begin
 					end
 					else if(SVP_QUIRK && MBUS_A[23:19] == 'b00110) begin
 						// 300000-37FFFF (+mirrors) SVP DRAM
-						SRAM_SEL <= 1;
-						mstate <= MBUS_SRAM_READ;
+						SVP_RAM_A <= svp_fix[16:1];
+						mstate <= MBUS_SVP_RAM_READ;
 					end
-					else if(SVP_QUIRK && (MBUS_A[23:16] == 8'h39 || MBUS_A[23:16] == 8'h3A)) begin
-						// 390000-3AFFFF SVP DRAM cell arrange 1/2
-						SRAM_SEL <= 1;
-						mstate <= MBUS_SRAM_READ;
+					else if(SVP_QUIRK && MBUS_A[23:16] == 8'h39) begin
+						// 390000-39FFFF SVP DRAM cell arrange 1
+						SVP_RAM_A <= {svp_fix[15:13],svp_fix[6:2],svp_fix[12:7],svp_fix[1]};
+						mstate <= MBUS_SVP_RAM_READ;
+					end 
+					else if(SVP_QUIRK && MBUS_A[23:16] == 8'h3A) begin
+						// 3A0000-3AFFFF SVP DRAM cell arrange 2
+						SVP_RAM_A <= {svp_fix[15:12],svp_fix[5:2],svp_fix[11:6],svp_fix[1]};
+						mstate <= MBUS_SVP_RAM_READ;
 					end 
 					else if (MBUS_A < ROMSZ) begin
 						if (PIER_QUIRK) BANK_MODE <= (MBUS_A >= 23'h140000) ? 3'h3 : 3'h0;
+						if (SVP_QUIRK) MBUS_A <= svp_fix;
 						ROM_REQ <= ~ROM_ACK;
 						mstate <= MBUS_ROM_READ;
 					end
@@ -859,62 +852,60 @@ always @(posedge MCLK) begin
 						mstate <= MBUS_FINISH;
 					end
 				end
-				else begin
-					//ZBUS: A00000-A07FFF (A08000-A0FFFF)
-					if(MBUS_A[23:16] == 'hA0) mstate <= MBUS_ZBUS_PRE;
 
-					//I/O: A10000-A1001F (+mirrors)
-					if(MBUS_A[23:5] == {16'hA100, 3'b000}) begin
-						IO_SEL <= 1;
-						mstate <= MBUS_IO_READ;
-					end
+				//ZBUS: A00000-A07FFF (A08000-A0FFFF)
+				else if(MBUS_A[23:16] == 'hA0) mstate <= MBUS_ZBUS_PRE;
 
-					//CTL: A11100, A11200
-					if(MBUS_A[23:12] == 12'hA11 && !MBUS_A[7:1]) begin
-						CTRL_SEL <= 1;
-						data <= CTRL_DO;
-						mstate <= MBUS_FINISH;
-					end
-
-					// BANK Register A13XXX
-					if (MBUS_A[23:8] == 'hA130) begin
-						if (~MBUS_RNW) begin
-							if (ROMSZ > 'h200000) begin // SSF2/Pier Solar ROM banking
-								if (MBUS_A[3:1]) begin
-									if (~PIER_QUIRK) begin // SSF2
-										BANK_REG[MBUS_A[3:1]] <= MBUS_DO[4:0];
-										BANK_MODE <= 2'h2;
-									end else if (MBUS_A[3:1] == 'h4) begin // Pier EEPROM
-										{ep_cs, ep_hold , ep_sck, ep_si} <= MBUS_DO[3:0];
-									end else if (~MBUS_A[3]) begin // Pier Banks
-										BANK_REG[MBUS_A[3:1] - 1'b1] <= {1'b0, MBUS_DO[3:0]};
-									end
-								end
-							end else begin // SRAM Banking
-								BANK_MODE <= {1'b0, MBUS_DO[0]};
-							end
-						end else if (PIER_QUIRK && MBUS_A[3:1] == 'h5) begin
-							data <= {15'h7FFF, m95_so};
-						end
-						mstate <= MBUS_FINISH;
-					end
-					
-					//SVP: A15000-A5000F 
-					if(MBUS_A[23:4] == 20'hA1500) begin
-						SVP_SEL <= 1;
-						mstate <= MBUS_SVP_READ;
-					end 
-
-					//VDP: C00000-C0001F (+mirrors)
-					if(MBUS_A[23:21] == 3'b110 && !MBUS_A[18:16] && !MBUS_A[7:5]) begin
-						VDP_SEL <= 1;
-						mstate <= MBUS_VDP_READ;
-					end
+				//I/O: A10000-A1001F (+mirrors)
+				else if(MBUS_A[23:5] == {16'hA100, 3'b000}) begin
+					IO_SEL <= 1;
+					mstate <= MBUS_IO_READ;
 				end
 
+				//CTL: A11100, A11200
+				else if(MBUS_A[23:12] == 12'hA11 && !MBUS_A[7:1]) begin
+					CTRL_SEL <= 1;
+					data <= CTRL_DO;
+					mstate <= MBUS_FINISH;
+				end
+
+				// BANK Register A13XXX
+				else if (MBUS_A[23:8] == 'hA130) begin
+					if (~MBUS_RNW) begin
+						if (ROMSZ > 'h200000) begin // SSF2/Pier Solar ROM banking
+							if (MBUS_A[3:1]) begin
+								if (~PIER_QUIRK) begin // SSF2
+									BANK_REG[MBUS_A[3:1]] <= MBUS_DO[4:0];
+									BANK_MODE <= 2'h2;
+								end else if (MBUS_A[3:1] == 'h4) begin // Pier EEPROM
+									{ep_cs, ep_hold , ep_sck, ep_si} <= MBUS_DO[3:0];
+								end else if (~MBUS_A[3]) begin // Pier Banks
+									BANK_REG[MBUS_A[3:1] - 1'b1] <= {1'b0, MBUS_DO[3:0]};
+								end
+							end
+						end else begin // SRAM Banking
+							BANK_MODE <= {1'b0, MBUS_DO[0]};
+						end
+					end else if (PIER_QUIRK && MBUS_A[3:1] == 'h5) begin
+						data <= {15'h7FFF, m95_so};
+					end
+					mstate <= MBUS_FINISH;
+				end
+				
+				//SVP: A15000-A5000F 
+				else if(MBUS_A[23:4] == 20'hA1500) begin
+					SVP_SEL <= 1;
+					mstate <= MBUS_SVP_READ;
+				end 
+
+				//VDP: C00000-C0001F (+mirrors)
+				else if(MBUS_A[23:21] == 3'b110 && !MBUS_A[18:16] && !MBUS_A[7:5]) begin
+					VDP_SEL <= 1;
+					mstate <= MBUS_VDP_READ;
+				end
 
 				//RAM: E00000-FFFFFF
-				if(&MBUS_A[23:21]) begin
+				else if(&MBUS_A[23:21]) begin
 					RAM_SEL <= 1;
 					mstate <= MBUS_RAM_READ;
 				end
@@ -966,13 +957,16 @@ always @(posedge MCLK) begin
 				mstate <= MBUS_FINISH;
 			end
 
+		MBUS_SVP_RAM_READ:
+			begin
+				SVP_RAM_SEL <= 1;
+				mstate <= MBUS_SRAM_READ;
+			end
+
 		MBUS_SRAM_READ:
 			begin
-				if (SVP_QUIRK) begin
-					data <= svp_dram_q_a;
-				end else begin
-					data <= {sram_q,sram_q};
-				end 
+				data <= SVP_RAM_SEL ? SVP_RAM_D : {sram_q,sram_q};
+				SVP_RAM_SEL <= 0;
 				mstate <= MBUS_FINISH;
 			end
 
