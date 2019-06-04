@@ -53,6 +53,7 @@ module system
 	input         NORAM_QUIRK,
 	input         PIER_QUIRK,
 	input         TTN2_QUIRK,
+	input         SVP_QUIRK, 
 
 	input   [1:0] TURBO,
 
@@ -94,6 +95,12 @@ module system
 	input  [15:0] ROM_DATA,
 	output reg    ROM_REQ,
 	input         ROM_ACK,
+	
+	output [24:1] ROM_ADDR2,
+	input  [15:0] ROM_DATA2,
+	output        ROM_REQ2,
+	input         ROM_ACK2, 
+	
 	input         EN_HIFI_PCM
 );
 
@@ -543,7 +550,7 @@ always_comb begin
 	end else begin
 		sram_addr = MBUS_A[16:1];
 		sram_di = MBUS_DO[7:0];
-		sram_wren = (SRAM_SEL & ~MBUS_RNW);
+		sram_wren = SRAM_SEL & ~MBUS_RNW;
 	end
 end
 
@@ -553,7 +560,7 @@ dpram_dif #(16,8,15,16) sram
 	.address_a(sram_addr),
 	.data_a(sram_di),
 	.wren_a(sram_wren),
-	.q_a(sram_q[7:0]),
+	.q_a(sram_q),
 
 	.address_b(LOADING ? ram_rst_a : BRAM_A),
 	.data_b(LOADING ? 16'h0000 : BRAM_DI),
@@ -583,9 +590,67 @@ STM95XXX pier_eeprom
 	.cs_n(ep_cs),
 	.wp_n(1'b1),
 	.ram_addr(m95_addr),
-	.ram_q(sram_q[7:0]),
+	.ram_q(sram_q),
 	.ram_di(m95_di),
 	.ram_RnW(m95_rnw)
+);
+
+//-----------------------------------------------------------------------
+// SVP
+//-----------------------------------------------------------------------
+reg         SVP_SEL;
+wire [15:0] SVP_DO;
+wire        SVP_DTACK_N;
+
+wire [15:0] SVP_DRAM_A;
+wire [15:0] SVP_DRAM_DO;
+wire        SVP_DRAM_WE;
+wire [15:0] SVP_DRAM_DI;
+
+reg         SVP_RAM_SEL;
+reg  [15:0] SVP_RAM_A;
+wire [15:0] SVP_RAM_D;
+
+dpram #(16,16) svp_dram
+(
+	.clock(MCLK),
+	.address_a(SVP_RAM_A),
+	.data_a(MBUS_DO),
+	.wren_a(SVP_RAM_SEL & ~MBUS_RNW),
+	.q_a(SVP_RAM_D),
+
+	.address_b(SVP_DRAM_A),
+	.data_b(SVP_DRAM_DO),
+	.wren_b(SVP_DRAM_WE),
+	.q_b(SVP_DRAM_DI)
+);
+
+reg SVP_CLKEN;
+always @(posedge MCLK) SVP_CLKEN <= ~reset & ~SVP_CLKEN;
+
+SVP svp
+(
+	.CLK(MCLK),
+	.CE(SVP_CLKEN),
+	.RST_N(~reset),
+	.ENABLE(SVP_QUIRK),
+
+	.BUS_A(MBUS_A[3:1]),
+	.BUS_DO(SVP_DO),
+	.BUS_DI(MBUS_DO),
+	.BUS_SEL(SVP_SEL),
+	.BUS_RNW(MBUS_RNW),
+	.BUS_DTACK_N(SVP_DTACK_N),
+
+	.ROM_A(ROM_ADDR2),
+	.ROM_DI(ROM_DATA2),
+	.ROM_REQ(ROM_REQ2),
+	.ROM_ACK(ROM_ACK2),
+
+	.DRAM_A(SVP_DRAM_A),
+	.DRAM_DI(SVP_DRAM_DI),
+	.DRAM_DO(SVP_DRAM_DO),
+	.DRAM_WE(SVP_DRAM_WE)
 );
 
 //-----------------------------------------------------------------------
@@ -639,30 +704,32 @@ reg        MBUS_LDS_N;
 reg [4:0]  BANK_REG[0:7];
 reg [2:0]  BANK_MODE; //0 = none, 1 = BANK SRAM, 2 = BANK ROM
 
+reg  [3:0] mstate;
+reg  [1:0] msrc;
+	
+localparam	MSRC_NONE = 0,
+				MSRC_M68K = 1,
+				MSRC_Z80  = 2,
+				MSRC_VDP  = 3;
 
-
+localparam 	MBUS_IDLE         = 0,
+				MBUS_SELECT       = 1,
+				MBUS_RAM_READ     = 2,
+				MBUS_ROM_READ     = 3,
+				MBUS_VDP_READ     = 4,
+				MBUS_IO_READ      = 5,
+				MBUS_JCRT_READ    = 6,
+				MBUS_SRAM_READ    = 7,
+				MBUS_ZBUS_PRE     = 8,
+				MBUS_ZBUS_READ    = 9,
+				MBUS_SVP_READ     = 10,
+				MBUS_SVP_RAM_READ = 11,
+				MBUS_FINISH       = 12; 
+				
 always @(posedge MCLK) begin
-	reg  [3:0] mstate;
-	reg  [1:0] msrc;
 	reg [15:0] data;
 	reg  [3:0] pier_count;
-	
-	localparam	MSRC_NONE = 0,
-					MSRC_M68K = 1,
-					MSRC_Z80  = 2,
-					MSRC_VDP  = 3;
-
-	localparam 	MBUS_IDLE     = 0,
-					MBUS_SELECT   = 1,
-					MBUS_RAM_READ = 2,
-					MBUS_ROM_READ = 3,
-					MBUS_VDP_READ = 4,
-					MBUS_IO_READ  = 5,
-					MBUS_JCRT_READ= 6,
-					MBUS_SRAM_READ= 7,
-					MBUS_ZBUS_PRE = 8,
-					MBUS_ZBUS_READ= 9,
-					MBUS_FINISH   = 10;
+	reg [23:1] svp_fix;
 
 	if (reset) begin
 		M68K_MBUS_DTACK_N <= 1;
@@ -670,6 +737,8 @@ always @(posedge MCLK) begin
 		VDP_MBUS_DTACK_N  <= 1;
 		VDP_SEL <= 0;
 		IO_SEL <= 0;
+		SVP_SEL <= 0; 
+		SVP_RAM_SEL <= 0;
 		ZBUS_SEL <= 0;
 		BANK_MODE <= 0;
 		mstate <= MBUS_IDLE;
@@ -696,6 +765,7 @@ always @(posedge MCLK) begin
 				if(~M68K_AS_N & M68K_MBUS_DTACK_N & M68K_CLKENn) begin
 					msrc <= MSRC_M68K;
 					MBUS_A <= M68K_A[23:1];
+					svp_fix <= M68K_A[23:1];
 					data <= NO_DATA;
 					MBUS_DO <= M68K_DO;
 					MBUS_RNW <= M68K_RNW;
@@ -712,6 +782,7 @@ always @(posedge MCLK) begin
 				else if(VBUS_SEL & VDP_MBUS_DTACK_N) begin
 					msrc <= MSRC_VDP;
 					MBUS_A <= VBUS_A[23:1];
+					svp_fix <= VBUS_A[23:1] - 1'd1;
 					data <= NO_DATA;
 					MBUS_DO <= 0;
 					mstate <= MBUS_SELECT;
@@ -746,8 +817,24 @@ always @(posedge MCLK) begin
 						SRAM_SEL <= 1;
 						mstate <= MBUS_SRAM_READ;
 					end
+					else if(SVP_QUIRK && MBUS_A[23:19] == 'b00110) begin
+						// 300000-37FFFF (+mirrors) SVP DRAM
+						SVP_RAM_A <= svp_fix[16:1];
+						mstate <= MBUS_SVP_RAM_READ;
+					end
+					else if(SVP_QUIRK && MBUS_A[23:16] == 8'h39) begin
+						// 390000-39FFFF SVP DRAM cell arrange 1
+						SVP_RAM_A <= {svp_fix[15:13],svp_fix[6:2],svp_fix[12:7],svp_fix[1]};
+						mstate <= MBUS_SVP_RAM_READ;
+					end 
+					else if(SVP_QUIRK && MBUS_A[23:16] == 8'h3A) begin
+						// 3A0000-3AFFFF SVP DRAM cell arrange 2
+						SVP_RAM_A <= {svp_fix[15:12],svp_fix[5:2],svp_fix[11:6],svp_fix[1]};
+						mstate <= MBUS_SVP_RAM_READ;
+					end 
 					else if (MBUS_A < ROMSZ) begin
 						if (PIER_QUIRK) BANK_MODE <= (MBUS_A >= 23'h140000) ? 3'h3 : 3'h0;
+						if (SVP_QUIRK) MBUS_A <= svp_fix;
 						ROM_REQ <= ~ROM_ACK;
 						mstate <= MBUS_ROM_READ;
 					end
@@ -765,56 +852,60 @@ always @(posedge MCLK) begin
 						mstate <= MBUS_FINISH;
 					end
 				end
-				else begin
-					//ZBUS: A00000-A07FFF (A08000-A0FFFF)
-					if(MBUS_A[23:16] == 'hA0) mstate <= MBUS_ZBUS_PRE;
 
-					//I/O: A10000-A1001F (+mirrors)
-					if(MBUS_A[23:5] == {16'hA100, 3'b000}) begin
-						IO_SEL <= 1;
-						mstate <= MBUS_IO_READ;
-					end
+				//ZBUS: A00000-A07FFF (A08000-A0FFFF)
+				else if(MBUS_A[23:16] == 'hA0) mstate <= MBUS_ZBUS_PRE;
 
-					//CTL: A11100, A11200
-					if(MBUS_A[23:12] == 12'hA11 && !MBUS_A[7:1]) begin
-						CTRL_SEL <= 1;
-						data <= CTRL_DO;
-						mstate <= MBUS_FINISH;
-					end
-
-					// BANK Register A13XXX
-					if (MBUS_A[23:8] == 'hA130) begin
-						if (~MBUS_RNW) begin
-							if (ROMSZ > 'h200000) begin // SSF2/Pier Solar ROM banking
-								if (MBUS_A[3:1]) begin
-									if (~PIER_QUIRK) begin // SSF2
-										BANK_REG[MBUS_A[3:1]] <= MBUS_DO[4:0];
-										BANK_MODE <= 2'h2;
-									end else if (MBUS_A[3:1] == 'h4) begin // Pier EEPROM
-										{ep_cs, ep_hold , ep_sck, ep_si} <= MBUS_DO[3:0];
-									end else if (~MBUS_A[3]) begin // Pier Banks
-										BANK_REG[MBUS_A[3:1] - 1'b1] <= {1'b0, MBUS_DO[3:0]};
-									end
-								end
-							end else begin // SRAM Banking
-								BANK_MODE <= {1'b0, MBUS_DO[0]};
-							end
-						end else if (PIER_QUIRK && MBUS_A[3:1] == 'h5) begin
-							data <= {15'h7FFF, m95_so};
-						end
-						mstate <= MBUS_FINISH;
-					end
-
-					//VDP: C00000-C0001F (+mirrors)
-					if(MBUS_A[23:21] == 3'b110 && !MBUS_A[18:16] && !MBUS_A[7:5]) begin
-						VDP_SEL <= 1;
-						mstate <= MBUS_VDP_READ;
-					end
+				//I/O: A10000-A1001F (+mirrors)
+				else if(MBUS_A[23:5] == {16'hA100, 3'b000}) begin
+					IO_SEL <= 1;
+					mstate <= MBUS_IO_READ;
 				end
 
+				//CTL: A11100, A11200
+				else if(MBUS_A[23:12] == 12'hA11 && !MBUS_A[7:1]) begin
+					CTRL_SEL <= 1;
+					data <= CTRL_DO;
+					mstate <= MBUS_FINISH;
+				end
+
+				// BANK Register A13XXX
+				else if (MBUS_A[23:8] == 'hA130) begin
+					if (~MBUS_RNW) begin
+						if (ROMSZ > 'h200000) begin // SSF2/Pier Solar ROM banking
+							if (MBUS_A[3:1]) begin
+								if (~PIER_QUIRK) begin // SSF2
+									BANK_REG[MBUS_A[3:1]] <= MBUS_DO[4:0];
+									BANK_MODE <= 2'h2;
+								end else if (MBUS_A[3:1] == 'h4) begin // Pier EEPROM
+									{ep_cs, ep_hold , ep_sck, ep_si} <= MBUS_DO[3:0];
+								end else if (~MBUS_A[3]) begin // Pier Banks
+									BANK_REG[MBUS_A[3:1] - 1'b1] <= {1'b0, MBUS_DO[3:0]};
+								end
+							end
+						end else begin // SRAM Banking
+							BANK_MODE <= {1'b0, MBUS_DO[0]};
+						end
+					end else if (PIER_QUIRK && MBUS_A[3:1] == 'h5) begin
+						data <= {15'h7FFF, m95_so};
+					end
+					mstate <= MBUS_FINISH;
+				end
+				
+				//SVP: A15000-A5000F 
+				else if(MBUS_A[23:4] == 20'hA1500) begin
+					SVP_SEL <= 1;
+					mstate <= MBUS_SVP_READ;
+				end 
+
+				//VDP: C00000-C0001F (+mirrors)
+				else if(MBUS_A[23:21] == 3'b110 && !MBUS_A[18:16] && !MBUS_A[7:5]) begin
+					VDP_SEL <= 1;
+					mstate <= MBUS_VDP_READ;
+				end
 
 				//RAM: E00000-FFFFFF
-				if(&MBUS_A[23:21]) begin
+				else if(&MBUS_A[23:21]) begin
 					RAM_SEL <= 1;
 					mstate <= MBUS_RAM_READ;
 				end
@@ -866,9 +957,16 @@ always @(posedge MCLK) begin
 				mstate <= MBUS_FINISH;
 			end
 
+		MBUS_SVP_RAM_READ:
+			begin
+				SVP_RAM_SEL <= 1;
+				mstate <= MBUS_SRAM_READ;
+			end
+
 		MBUS_SRAM_READ:
 			begin
-				data <= {sram_q,sram_q};
+				data <= SVP_RAM_SEL ? SVP_RAM_D : {sram_q,sram_q};
+				SVP_RAM_SEL <= 0;
 				mstate <= MBUS_FINISH;
 			end
 
@@ -892,6 +990,13 @@ always @(posedge MCLK) begin
 				data <= JCART_DO & 16'h3F7F;
 				mstate <= MBUS_FINISH;
 			end
+
+		MBUS_SVP_READ:
+			if(~SVP_DTACK_N) begin
+				SVP_SEL <= 0;
+				data <= SVP_DO;
+				mstate <= MBUS_FINISH;
+			end 
 
 		MBUS_FINISH:
 			begin
@@ -1052,12 +1157,10 @@ wire        FM_SEL = ZBUS_A[14:13] == 2'b10;
 wire  [7:0] FM_DO;
 wire [15:0] FM_right;
 wire [15:0] FM_left;
-wire signed [15:0] FM_LPF_right;
-wire signed [15:0] FM_LPF_left;
-wire signed [15:0] FM_PREMIX_L;
-wire signed [15:0] FM_PREMIX_R;
-wire signed [15:0] PRE_LPF_L;
-wire signed [15:0] PRE_LPF_R;
+wire [15:0] FM_LPF_right;
+wire [15:0] FM_LPF_left;
+wire [15:0] PRE_LPF_L;
+wire [15:0] PRE_LPF_R;
 
 jt12 fm
 (
@@ -1070,32 +1173,15 @@ jt12 fm
 	.wr_n(~(FM_SEL & ZBUS_WE)),
 	.din(ZBUS_DO),
 	.dout(FM_DO),
-    .en_hifi_pcm( EN_HIFI_PCM ),
+	.en_hifi_pcm( EN_HIFI_PCM ),
 	.snd_left(FM_left),
 	.snd_right(FM_right)
 );
 
-jt12_genmix genmix
-(
-	.rst(~Z80_RESET_N),
-	.clk(MCLK),
-	.fm_left(FM_PREMIX_L),
-	.fm_right(FM_PREMIX_R),
-	.psg_snd(PSG_SND),
-	.fm_en(ENABLE_FM),
-	.psg_en(ENABLE_PSG),
-	.snd_left(PRE_LPF_L),
-	.snd_right(PRE_LPF_R)
-);
-
-//Low-pass FM separately for Model 2 Genesis filter
-assign FM_PREMIX_L = (LPF_MODE == 2'b01) ? FM_LPF_left : FM_left; 
-assign FM_PREMIX_R = (LPF_MODE == 2'b01) ? FM_LPF_right : FM_right;
-
 genesis_fm_lpf fm_lpf_l
 (
 	.clk(MCLK),
-	.reset(~Z80_RESET_N),
+	.reset(reset),
 	.in(FM_left),
 	.out(FM_LPF_left)
 );
@@ -1103,22 +1189,37 @@ genesis_fm_lpf fm_lpf_l
 genesis_fm_lpf fm_lpf_r
 (
 	.clk(MCLK),
-	.reset(~Z80_RESET_N),
+	.reset(reset),
 	.in(FM_right),
 	.out(FM_LPF_right)
 );
 
-genesis_lpf lpf_right(
+jt12_genmix genmix
+(
+	.rst(reset),
 	.clk(MCLK),
-	.reset(~Z80_RESET_N),
+	.fm_left((LPF_MODE == 2'b01) ? FM_LPF_left : FM_left),
+	.fm_right((LPF_MODE == 2'b01) ? FM_LPF_right : FM_right),
+	.psg_snd(PSG_SND),
+	.fm_en(ENABLE_FM),
+	.psg_en(ENABLE_PSG),
+	.snd_left(PRE_LPF_L),
+	.snd_right(PRE_LPF_R)
+);
+
+genesis_lpf lpf_right
+(
+	.clk(MCLK),
+	.reset(reset),
 	.lpf_mode(LPF_MODE[1:0]),
 	.in(PRE_LPF_R),
 	.out(DAC_RDATA)
 );
 
-genesis_lpf lpf_left(
+genesis_lpf lpf_left
+(
 	.clk(MCLK),
-	.reset(~Z80_RESET_N),
+	.reset(reset),
 	.lpf_mode(LPF_MODE[1:0]),
 	.in(PRE_LPF_L),
 	.out(DAC_LDATA)

@@ -2,9 +2,11 @@ set_global_assignment -name QIP_FILE FX68K/fx68k.qip
 set_global_assignment -name QIP_FILE T80/T80.qip
 set_global_assignment -name QIP_FILE jt12/jt12.qip
 set_global_assignment -name QIP_FILE jt89/jt89.qip
+set_global_assignment -name QIP_FILE SVP/SVP.qip
 set_global_assignment -name SYSTEMVERILOG_FILE cheatcodes.sv
 set_global_assignment -name SYSTEMVERILOG_FILE EEPROM_STM95.sv
 set_global_assignment -name VHDL_FILE bram.vhd
+set_global_assignment -name VHDL_FILE mlab.vhd
 set_global_assignment -name SYSTEMVERILOG_FILE ddram.sv
 set_global_assignment -name VERILOG_FILE audio_iir_filter.v
 set_global_assignment -name VERILOG_FILE genesis_lpf.v
