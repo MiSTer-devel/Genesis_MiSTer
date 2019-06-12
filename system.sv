@@ -76,6 +76,7 @@ module system
 	output        HBL,
 	output        VBL,
 	output        CE_PIX,
+	input         BORDER,
 
 	output        INTERLACE,
 	output        FIELD,
@@ -312,7 +313,7 @@ reg         VDP_SEL;
 wire [15:0] VDP_DO;
 wire        VDP_DTACK_N;
 
-wire [23:0] VBUS_A;
+wire [23:1] VBUS_A;
 wire        VBUS_SEL;
 
 wire        M68K_HINT;
@@ -327,34 +328,69 @@ wire        vram_u_n;
 wire        vram_l_n;
 wire [15:1] vram_a;
 wire [15:0] vram_d;
-wire [15:0] vram_q;
+wire [15:0] vram_q1, vram_q2;
 
-dpram #(15) vram_l
+wire        vram32_req;
+wire [15:1] vram32_a;
+wire [31:0] vram32_q;
+
+dpram #(14) vram_l1
 (
 	.clock(MCLK),
-	.address_a(vram_a),
+	.address_a(vram_a[15:2]),
 	.data_a(vram_d[7:0]),
-	.wren_a(vram_we_l & (vram_ack ^ vram_req)),
-	.q_a(vram_q[7:0]),
+	.wren_a(vram_we_l & (vram_ack ^ vram_req) & ~vram_a[1]),
+	.q_a(vram_q1[7:0]),
 
-	.address_b(ram_rst_a),
-	.wren_b(LOADING)
+	.address_b(LOADING ? ram_rst_a[14:1] : vram32_a[15:2]),
+	.wren_b(LOADING),
+	.q_b(vram32_q[7:0])
 );
 
-dpram #(15) vram_u
+dpram #(14) vram_u1
 (
 	.clock(MCLK),
-	.address_a(vram_a),
+	.address_a(vram_a[15:2]),
 	.data_a(vram_d[15:8]),
-	.wren_a(vram_we_u & (vram_ack ^ vram_req)),
-	.q_a(vram_q[15:8]),
+	.wren_a(vram_we_u & (vram_ack ^ vram_req) & ~vram_a[1]),
+	.q_a(vram_q1[15:8]),
 
-	.address_b(ram_rst_a),
-	.wren_b(LOADING)
+	.address_b(LOADING ? ram_rst_a[14:1] : vram32_a[15:2]),
+	.wren_b(LOADING),
+	.q_b(vram32_q[15:8])
+);
+
+dpram #(14) vram_l2
+(
+	.clock(MCLK),
+	.address_a(vram_a[15:2]),
+	.data_a(vram_d[7:0]),
+	.wren_a(vram_we_l & (vram_ack ^ vram_req) & vram_a[1]),
+	.q_a(vram_q2[7:0]),
+
+	.address_b(LOADING ? ram_rst_a[14:1] : vram32_a[15:2]),
+	.wren_b(LOADING),
+	.q_b(vram32_q[23:16])
+);
+
+dpram #(14) vram_u2
+(
+	.clock(MCLK),
+	.address_a(vram_a[15:2]),
+	.data_a(vram_d[15:8]),
+	.wren_a(vram_we_u & (vram_ack ^ vram_req) & vram_a[1]),
+	.q_a(vram_q2[15:8]),
+
+	.address_b(LOADING ? ram_rst_a[14:1] : vram32_a[15:2]),
+	.wren_b(LOADING),
+	.q_b(vram32_q[31:24])
 );
 
 reg vram_ack;
 always @(posedge MCLK) vram_ack <= vram_req;
+
+reg vram32_ack;
+always @(posedge MCLK) vram32_ack <= vram32_req;
 
 wire VDP_hs, VDP_vs;
 assign HS = ~VDP_hs;
@@ -379,8 +415,13 @@ vdp vdp
 	.VRAM_l_n(vram_l_n),
 	.VRAM_a(vram_a),
 	.VRAM_d(vram_d),
-	.VRAM_q(vram_q),
+	.VRAM_q(vram_a[1] ? vram_q2 : vram_q1),
 
+	.VRAM32_req(vram32_req),
+	.VRAM32_ack(vram32_ack),
+	.VRAM32_a(vram32_a),
+	.VRAM32_q(vram32_q),
+	
 	.HINT(M68K_HINT),
 	.VINT_TG68(M68K_VINT),
 	.INTACK(M68K_INTACK),
@@ -398,6 +439,7 @@ vdp vdp
 
 	.VRAM_SPEED(~(FAST_FIFO|TURBO)),
 	.VSCROLL_BUG(0),
+	.BORDER_EN(BORDER),
 
 	.FIELD_OUT(FIELD),
 	.INTERLACE(INTERLACE),
@@ -781,8 +823,8 @@ always @(posedge MCLK) begin
 				end
 				else if(VBUS_SEL & VDP_MBUS_DTACK_N) begin
 					msrc <= MSRC_VDP;
-					MBUS_A <= VBUS_A[23:1];
-					svp_fix <= VBUS_A[23:1] - 1'd1;
+					MBUS_A <= VBUS_A;
+					svp_fix <= VBUS_A - 1'd1;
 					data <= NO_DATA;
 					MBUS_DO <= 0;
 					mstate <= MBUS_SELECT;
