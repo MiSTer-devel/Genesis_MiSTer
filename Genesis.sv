@@ -125,8 +125,37 @@ assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 assign {SDRAM_DQ, SDRAM_A, SDRAM_BA, SDRAM_CLK, SDRAM_CKE, SDRAM_DQML, SDRAM_DQMH, SDRAM_nWE, SDRAM_nCAS, SDRAM_nRAS, SDRAM_nCS} = 'Z;
 
-assign VIDEO_ARX = status[10] ? 8'd16 : 8'd4;
-assign VIDEO_ARY = status[10] ? 8'd9  : 8'd3;
+always_comb begin
+	if (status[10]) begin
+		VIDEO_ARX = 8'd16;
+		VIDEO_ARY = 8'd9;
+	end else begin
+		case(ar_flags) // {V30, H40}
+			2'b00: begin // 256 x 224
+				VIDEO_ARX = 8'd64;
+				VIDEO_ARY = 8'd49;
+			end
+
+			2'b01: begin // 320 x 224
+				VIDEO_ARX = status[30] ? 8'd10: 8'd64;
+				VIDEO_ARY = status[30] ? 8'd7 : 8'd49;
+			end
+
+			2'b10: begin // 256 x 240
+				VIDEO_ARX = 8'd128;
+				VIDEO_ARY = 8'd105;
+			end
+
+			2'b11: begin // 320 x 240
+				VIDEO_ARX = status[30] ? 8'd4 : 8'd128;
+				VIDEO_ARY = status[30] ? 8'd3 : 8'd105;
+			end
+		endcase
+	end
+end
+
+//assign VIDEO_ARX = status[10] ? 8'd16 : ((status[30] && wide_ar) ? 8'd10 : 8'd64);
+//assign VIDEO_ARY = status[10] ? 8'd9  : ((status[30] && wide_ar) ? 8'd7  : 8'd49);
 
 assign AUDIO_S = 1;
 assign AUDIO_MIX = 0;
@@ -155,6 +184,7 @@ localparam CONF_STR = {
 	"D0OD,Autosave,No,Yes;",
 	"-;",
 	"OA,Aspect ratio,4:3,16:9;",
+	"OU,320x224 Aspect,Original,Corrected;",
 	"O13,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
 	"OT,Border,No,Yes;",
 	"-;",
@@ -167,7 +197,7 @@ localparam CONF_STR = {
 	"OIJ,Mouse,None,Port1,Port2;",
 	"OK,Mouse Flip Y,No,Yes;",
 	"-;",
-   "OPQ,CPU Turbo,None,Medium,High;",
+	"OPQ,CPU Turbo,None,Medium,High;",
 	"-;",
 `ifdef SOUND_DBG
 	"OB,Enable FM,Yes,No;",
@@ -302,6 +332,7 @@ wire vs,hs;
 wire ce_pix;
 wire hblank, vblank;
 wire interlace;
+wire [1:0] ar_flags;
 
 assign DDRAM_CLK = clk_ram;
 wire reset = RESET | status[0] | buttons[1] | region_set | bk_loading;
@@ -336,6 +367,7 @@ system system
 	.CE_PIX(ce_pix),
 	.FIELD(VGA_F1),
 	.INTERLACE(interlace),
+	.AR_FLAGS(ar_flags),
 	.FAST_FIFO(fifo_quirk),
 	.SVP_QUIRK(svp_quirk), 
 	
