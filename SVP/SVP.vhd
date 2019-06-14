@@ -85,6 +85,7 @@ architecture rtl of SVP is
 	);
 	signal MAS 				: MemAccessState_t;
 	signal MEM_ADDR 		: std_logic_vector(20 downto 0);
+	signal ROM_ADDR 		: std_logic_vector(19 downto 0);
 	signal SSP_WAIT 		: std_logic;
 	signal SSP_ACTIVE 	: std_logic;
 	signal PMAR_ACTIVE	: std_logic; 
@@ -311,7 +312,6 @@ begin
 	--PMARs
 	process(CLK, RST_N)
 	variable NEW_MA : std_logic_vector(31 downto 0); 
-	--variable PMAR_ACCESS_END : std_logic; 
 	begin
 		if RST_N = '0' then
 			PMC <= (others => '0');
@@ -371,13 +371,13 @@ begin
 				end if;
 			end if;
 			
-			--PMAR_ACCESS_END := '0';
 			case MAS is
 				when MAS_IDLE =>
 					if PMAR_ACTIVE = '1' then
 						if MEM_ADDR(20) = '0' then								--ROM 000000-1FFFFF (000000-0FFFFF)
 							if PMAR_NUM(3) = '1' then
 								MA_ROM_REQ <= not ROM_ACK;
+								ROM_ADDR <= MEM_ADDR(19 downto 0);
 								MAS <= MAS_ROM_RD;
 							end if;
 						elsif MEM_ADDR(20 downto 16) = "11000" then		--DRAM 300000-37FFFF (180000-1BFFFF)
@@ -409,7 +409,6 @@ begin
 					if MA_ROM_REQ = ROM_ACK and HALT = '0' then
 						PMARS(to_integer(PMAR_NUM)).DATA <= ROM_DI;
 						MAS <= MAS_IDLE;
-						--PMAR_ACCESS_END := '1';
 					end if;
 				
 				when MAS_DRAM_RD =>
@@ -417,7 +416,6 @@ begin
 					if MEM_WAIT = '0' and HALT = '0' then
 						PMARS(to_integer(PMAR_NUM)).DATA <= DRAM_DI;
 						MAS <= MAS_IDLE;
-						--PMAR_ACCESS_END := '1';
 					end if;
 					
 				when MAS_IRAM_RD =>
@@ -425,20 +423,17 @@ begin
 					if MEM_WAIT = '0' then
 						PMARS(to_integer(PMAR_NUM)).DATA <= IRAM_Q;
 						MAS <= MAS_IDLE;
-						--PMAR_ACCESS_END := '1';
 					end if;
 					
 				when MAS_DRAM_WR =>
 					MEM_WAIT <= '0';
-					if HALT = '0' then
+					if MEM_WAIT = '0' and HALT = '0' then
 						MAS <= MAS_IDLE;
-						--PMAR_ACCESS_END := '1';
 					end if;
 					
 				when MAS_IRAM_WR =>
 					MEM_WAIT <= '0';
 					MAS <= MAS_IDLE;
-					--PMAR_ACCESS_END := '1';
 					
 				when others => null;
 			end case; 
@@ -447,10 +442,12 @@ begin
 				(MAS = MAS_ROM_RD and MA_ROM_REQ = ROM_ACK and HALT = '0') or 
 				(MAS = MAS_DRAM_RD and MEM_WAIT = '0' and HALT = '0') or 
 				(MAS = MAS_IRAM_RD and MEM_WAIT = '0') or 
-				(MAS = MAS_DRAM_WR and HALT = '0') or (MAS = MAS_IRAM_WR) then
+				(MAS = MAS_DRAM_WR and MEM_WAIT = '0' and HALT = '0') or 
+				(MAS = MAS_IRAM_WR) then
 				if PMAR_ACTIVE = '0' and SSP_ACTIVE = '1' then
 					if IRAM_SEL = '0' then
 						MA_ROM_REQ <= not ROM_ACK;
+						ROM_ADDR <= "0000" & SSP_PA;
 						MAS <= MAS_PROM_RD;
 					else
 						SSP_ACTIVE <= '0';
@@ -460,7 +457,7 @@ begin
 		end if;
 	end process;
 	
-	ROM_A <= "0000" & SSP_PA when MAS = MAS_PROM_RD else MEM_ADDR(19 downto 0);
+	ROM_A <= ROM_ADDR;
 	ROM_REQ <= MA_ROM_REQ;
 	
 	SSP_WAIT <= '1' when MAS /= MAS_IDLE else '0';
@@ -469,7 +466,7 @@ begin
 	--IRAM
 	IRAM_ADDR <= MEM_ADDR(9 downto 0) when MAS = MAS_IRAM_RD or MAS = MAS_IRAM_WR else SSP_PA(9 downto 0);
 	IRAM_D <= PMARS(to_integer(PMAR_NUM)).DATA;
-	IRAM_WE <= EN when MAS = MAS_IRAM_WR else '0';
+	IRAM_WE <= '1' when MAS = MAS_IRAM_WR else '0';
 	IRAM : entity work.spram generic map(10, 16)
 	port map(
 		clock		=> CLK,
@@ -482,7 +479,6 @@ begin
 	--DRAM
 	DRAM_A <= MEM_ADDR(15 downto 0);
 	DRAM_DO <= OverWrite(PMARS(to_integer(PMAR_NUM)), DRAM_DI);
-	DRAM_WE <= EN when MAS = MAS_DRAM_WR and HALT = '0' else '0';
+	DRAM_WE <= '1' when MAS = MAS_DRAM_WR and MEM_WAIT = '0' and HALT = '0' else '0';
 	
 end rtl;
-

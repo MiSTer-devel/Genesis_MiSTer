@@ -137,6 +137,60 @@ BEGIN
 END SYN;
 
 --------------------------------------------------------------
+-- Dual port Block RAM with byte enable (for VDP)
+--------------------------------------------------------------
+
+LIBRARY ieee;
+USE ieee.std_logic_1164.all;
+
+LIBRARY altera_mf;
+USE altera_mf.altera_mf_components.all;
+
+ENTITY obj_cache IS
+	PORT
+	(
+		byteena_a	: IN STD_LOGIC_VECTOR (3 DOWNTO 0) :=  (OTHERS => '1');
+		clock		: IN STD_LOGIC  := '1';
+		data		: IN STD_LOGIC_VECTOR (31 DOWNTO 0);
+		rdaddress	: IN STD_LOGIC_VECTOR (6 DOWNTO 0);
+		wraddress	: IN STD_LOGIC_VECTOR (6 DOWNTO 0);
+		wren		: IN STD_LOGIC  := '0';
+		q			: OUT STD_LOGIC_VECTOR (31 DOWNTO 0)
+	);
+END obj_cache;
+
+
+ARCHITECTURE SYN OF obj_cache IS
+BEGIN
+
+	ram0: work.dpram_dif generic map(7,8,7,8)
+	port map
+	(
+		clock, rdaddress, (others => '0'), '1', '0', q(7 downto 0), '1', wraddress, data(7 downto 0), '1', wren and byteena_a(0)
+	);
+
+	ram1: work.dpram_dif generic map(7,8,7,8)
+	port map
+	(
+		clock, rdaddress, (others => '0'), '1', '0', q(15 downto 8), '1', wraddress, data(15 downto 8), '1', wren and byteena_a(1)
+	);
+
+	ram2: work.dpram_dif generic map(7,8,7,8)
+	port map
+	(
+		clock, rdaddress, (others => '0'), '1', '0', q(23 downto 16), '1', wraddress, data(23 downto 16), '1', wren and byteena_a(2)
+	);
+	
+	ram3: work.dpram_dif generic map(7,8,7,8)
+	port map
+	(
+		clock, rdaddress, (others => '0'), '1', '0', q(31 downto 24), '1', wraddress, data(31 downto 24), '1', wren and byteena_a(3)
+	);
+
+END SYN;
+ 
+
+--------------------------------------------------------------
 -- Dual port Block RAM same parameters on both ports
 --------------------------------------------------------------
 LIBRARY ieee;
