@@ -92,6 +92,7 @@ entity vdp is
 		CE_PIX      : buffer std_logic;
 		FIELD_OUT   : out std_logic;
 		INTERLACE   : out std_logic;
+		AR_FLAGS    : out std_logic_vector(1 downto 0);
 		HBL         : out std_logic;
 		VBL         : out std_logic;
 
@@ -2736,6 +2737,8 @@ G <= FF_G;
 B <= FF_B;
 
 INTERLACE <= LSM(1) and LSM(0);
+AR_FLAGS(0) <= H40;
+AR_FLAGS(1) <= V30;
 
 V_DISP_HEIGHT_R <= conv_std_logic_vector(V_DISP_HEIGHT_V30, 9) when V30_R ='1'
               else conv_std_logic_vector(V_DISP_HEIGHT_V28, 9);

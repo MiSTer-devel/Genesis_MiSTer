@@ -80,6 +80,7 @@ module system
 
 	output        INTERLACE,
 	output        FIELD,
+	output  [1:0] AR_FLAGS,
 
 	input         J3BUT,
 	input  [11:0] JOY_1,
@@ -393,6 +394,7 @@ reg vram32_ack;
 always @(posedge MCLK) vram32_ack <= vram32_req;
 
 wire VDP_hs, VDP_vs;
+//wire [1:0] ar_flags;
 assign HS = ~VDP_hs;
 assign VS = ~VDP_vs;
 
@@ -443,6 +445,7 @@ vdp vdp
 
 	.FIELD_OUT(FIELD),
 	.INTERLACE(INTERLACE),
+	.AR_FLAGS(AR_FLAGS),
 
 	.PAL(PAL),
 	.R(RED),
