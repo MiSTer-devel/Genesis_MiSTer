@@ -54,6 +54,7 @@ module system
 	input         PIER_QUIRK,
 	input         TTN2_QUIRK,
 	input         SVP_QUIRK, 
+	input         FMBUSY_QUIRK,
 
 	input   [1:0] TURBO,
 
@@ -1086,11 +1087,13 @@ end
 
 wire       Z80_ZBUS  = ~Z80_A[15] && ~&Z80_A[14:8];
 
+wire       ZBUS_NO_BUSY = ZBUS_A[14] && ~|ZBUS_A[13:2] && |ZBUS_A[1:0] && FMBUSY_QUIRK;
+
 reg        ZBUS_SEL;
 reg [14:0] ZBUS_A;
 reg        ZBUS_WE;
 reg  [7:0] ZBUS_DO;
-wire [7:0] ZBUS_DI = ZRAM_SEL ? ZRAM_DO : FM_SEL ? FM_DO : 8'hFF;
+wire [7:0] ZBUS_DI = ZRAM_SEL ? ZRAM_DO : (FM_SEL ? (ZBUS_NO_BUSY ? {1'b0, FM_DO[6:0]} : FM_DO) : 8'hFF);
 
 reg  [7:0] MBUS_ZBUS_D;
 reg  [7:0] Z80_ZBUS_D;
