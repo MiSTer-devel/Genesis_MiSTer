@@ -130,7 +130,7 @@ always_comb begin
 		VIDEO_ARX = 8'd16;
 		VIDEO_ARY = 8'd9;
 	end else begin
-		case(ar_flags) // {V30, H40}
+		case(resolution) // {V30, H40}
 			2'b00: begin // 256 x 224
 				VIDEO_ARX = 8'd64;
 				VIDEO_ARY = 8'd49;
@@ -207,7 +207,7 @@ localparam CONF_STR = {
 	"J1,A,B,C,Start,Mode,X,Y,Z;",
 	"V,v",`BUILD_DATE
 };
-
+// free: V [B C]
 
 wire [15:0] status_menumask = {~status[8],~gg_available,~bk_ena};
 wire [31:0] status;
@@ -332,7 +332,7 @@ wire vs,hs;
 wire ce_pix;
 wire hblank, vblank;
 wire interlace;
-wire [1:0] ar_flags;
+wire [1:0] resolution;
 
 assign DDRAM_CLK = clk_ram;
 wire reset = RESET | status[0] | buttons[1] | region_set | bk_loading;
@@ -367,7 +367,7 @@ system system
 	.CE_PIX(ce_pix),
 	.FIELD(VGA_F1),
 	.INTERLACE(interlace),
-	.AR_FLAGS(ar_flags),
+	.RESOLUTION(resolution),
 	.FAST_FIFO(fifo_quirk),
 	.SVP_QUIRK(svp_quirk), 
 	
