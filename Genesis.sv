@@ -350,6 +350,7 @@ system system
 	.NORAM_QUIRK(noram_quirk),
 	.PIER_QUIRK(pier_quirk),
 	.TTN2_QUIRK(ttn2_quirk),
+	.FMBUSY_QUIRK(fmbusy_quirk),
 
 	.DAC_LDATA(AUDIO_L),
 	.DAC_RDATA(AUDIO_R),
@@ -603,12 +604,13 @@ reg noram_quirk = 0;
 reg pier_quirk = 0;
 reg ttn2_quirk = 0;
 reg svp_quirk = 0;
+reg fmbusy_quirk = 0;
 always @(posedge clk_sys) begin
 	reg [63:0] cart_id;
 	reg old_download;
 	old_download <= cart_download;
 
-	if(~old_download && cart_download) {fifo_quirk,eeprom_quirk,sram_quirk,noram_quirk,pier_quirk,ttn2_quirk,svp_quirk} <= 0;
+	if(~old_download && cart_download) {fifo_quirk,eeprom_quirk,sram_quirk,noram_quirk,pier_quirk,ttn2_quirk,svp_quirk,fmbusy_quirk} <= 0;
 
 	if(ioctl_wr & cart_download) begin
 		if(ioctl_addr == 'h182) cart_id[63:56] <= ioctl_data[15:8];
@@ -638,6 +640,9 @@ always @(posedge clk_sys) begin
 			else if(cart_id == "TITAN002") ttn2_quirk   <= 1; // Titan Overdrive 2
 			else if(cart_id == "MK-1229 ") svp_quirk    <= 1; // Virtua Racing EU/US
 			else if(cart_id == "G-7001  ") svp_quirk    <= 1; // Virtua Racing JP
+			else if(cart_id == "T-35036 ") fmbusy_quirk <= 1; // Hellfire US
+			else if(cart_id == "T-25073 ") fmbusy_quirk <= 1; // Hellfire JP
+			else if(cart_id == "MK-1137-") fmbusy_quirk <= 1; // Hellfire EU
 		end
 	end
 end
