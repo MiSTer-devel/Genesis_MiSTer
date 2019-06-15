@@ -130,7 +130,7 @@ always_comb begin
 		VIDEO_ARX = 8'd16;
 		VIDEO_ARY = 8'd9;
 	end else begin
-		case(resolution) // {V30, H40}
+		case(res) // {V30, H40}
 			2'b00: begin // 256 x 224
 				VIDEO_ARX = 8'd64;
 				VIDEO_ARY = 8'd49;
@@ -431,6 +431,15 @@ always @(posedge clk_sys) begin
 		to <= to - 1;
 		if(to == 1) new_vmode <= ~new_vmode;
 	end
+end
+
+//lock resolution for the whole frame.
+reg [1:0] res;
+always @(posedge clk_sys) begin
+	reg old_vbl;
+	
+	old_vbl <= vblank;
+	if(old_vbl & ~vblank) res <= resolution;
 end
 
 wire [2:0] scale = status[3:1];
