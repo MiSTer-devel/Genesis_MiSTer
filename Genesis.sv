@@ -130,7 +130,7 @@ always_comb begin
 		VIDEO_ARX = 8'd16;
 		VIDEO_ARY = 8'd9;
 	end else begin
-		case(ar_flags) // {V30, H40}
+		case(res) // {V30, H40}
 			2'b00: begin // 256 x 224
 				VIDEO_ARX = 8'd64;
 				VIDEO_ARY = 8'd49;
@@ -207,7 +207,7 @@ localparam CONF_STR = {
 	"J1,A,B,C,Start,Mode,X,Y,Z;",
 	"V,v",`BUILD_DATE
 };
-
+// free: V [B C]
 
 wire [15:0] status_menumask = {~status[8],~gg_available,~bk_ena};
 wire [31:0] status;
@@ -332,7 +332,7 @@ wire vs,hs;
 wire ce_pix;
 wire hblank, vblank;
 wire interlace;
-wire [1:0] ar_flags;
+wire [1:0] resolution;
 
 assign DDRAM_CLK = clk_ram;
 wire reset = RESET | status[0] | buttons[1] | region_set | bk_loading;
@@ -350,6 +350,7 @@ system system
 	.NORAM_QUIRK(noram_quirk),
 	.PIER_QUIRK(pier_quirk),
 	.TTN2_QUIRK(ttn2_quirk),
+	.FMBUSY_QUIRK(fmbusy_quirk),
 
 	.DAC_LDATA(AUDIO_L),
 	.DAC_RDATA(AUDIO_R),
@@ -367,7 +368,7 @@ system system
 	.CE_PIX(ce_pix),
 	.FIELD(VGA_F1),
 	.INTERLACE(interlace),
-	.AR_FLAGS(ar_flags),
+	.RESOLUTION(resolution),
 	.FAST_FIFO(fifo_quirk),
 	.SVP_QUIRK(svp_quirk), 
 	
@@ -431,6 +432,15 @@ always @(posedge clk_sys) begin
 		to <= to - 1;
 		if(to == 1) new_vmode <= ~new_vmode;
 	end
+end
+
+//lock resolution for the whole frame.
+reg [1:0] res;
+always @(posedge clk_sys) begin
+	reg old_vbl;
+	
+	old_vbl <= vblank;
+	if(old_vbl & ~vblank) res <= resolution;
 end
 
 wire [2:0] scale = status[3:1];
@@ -603,12 +613,13 @@ reg noram_quirk = 0;
 reg pier_quirk = 0;
 reg ttn2_quirk = 0;
 reg svp_quirk = 0;
+reg fmbusy_quirk = 0;
 always @(posedge clk_sys) begin
 	reg [63:0] cart_id;
 	reg old_download;
 	old_download <= cart_download;
 
-	if(~old_download && cart_download) {fifo_quirk,eeprom_quirk,sram_quirk,noram_quirk,pier_quirk,ttn2_quirk,svp_quirk} <= 0;
+	if(~old_download && cart_download) {fifo_quirk,eeprom_quirk,sram_quirk,noram_quirk,pier_quirk,ttn2_quirk,svp_quirk,fmbusy_quirk} <= 0;
 
 	if(ioctl_wr & cart_download) begin
 		if(ioctl_addr == 'h182) cart_id[63:56] <= ioctl_data[15:8];
@@ -638,6 +649,9 @@ always @(posedge clk_sys) begin
 			else if(cart_id == "TITAN002") ttn2_quirk   <= 1; // Titan Overdrive 2
 			else if(cart_id == "MK-1229 ") svp_quirk    <= 1; // Virtua Racing EU/US
 			else if(cart_id == "G-7001  ") svp_quirk    <= 1; // Virtua Racing JP
+			else if(cart_id == "T-35036 ") fmbusy_quirk <= 1; // Hellfire US
+			else if(cart_id == "T-25073 ") fmbusy_quirk <= 1; // Hellfire JP
+			else if(cart_id == "MK-1137-") fmbusy_quirk <= 1; // Hellfire EU
 		end
 	end
 end

@@ -92,7 +92,7 @@ entity vdp is
 		CE_PIX      : buffer std_logic;
 		FIELD_OUT   : out std_logic;
 		INTERLACE   : out std_logic;
-		AR_FLAGS    : out std_logic_vector(1 downto 0);
+		RESOLUTION  : out std_logic_vector(1 downto 0);
 		HBL         : out std_logic;
 		VBL         : out std_logic;
 
@@ -170,6 +170,7 @@ signal FIFO_SKIP_PRE	: std_logic;
 
 signal IN_DMA		: std_logic;
 signal IN_HBL		: std_logic;
+signal M_HBL		: std_logic;
 signal IN_VBL		: std_logic; -- VBL flag to the CPU
 signal VBL_AREA		: std_logic; -- outside of borders
 
@@ -362,6 +363,9 @@ signal HV_HCNT		: std_logic_vector(8 downto 0);
 signal HV_VCNT		: std_logic_vector(8 downto 0);
 signal HV_VCNT_EXT	: std_logic_vector(8 downto 0);
 signal HV8			: std_logic;
+
+signal M_PIXDIV	: std_logic_vector(3 downto 0);
+signal PIXOUT		: std_logic;
 
 -- TIMING VALUES
 signal H_DISP_START    : std_logic_vector(8 downto 0);
@@ -2341,6 +2345,7 @@ begin
 		FIELD <= '0';
 
 		HV_PIXDIV <= (others => '0');
+		M_PIXDIV <= (others => '0');
 		HV_HCNT <= (others => '0');
 		-- Start the VCounter after VSYNC,
 		-- thus various latches can be activated in VDPsim for the 1st frame
@@ -2356,6 +2361,7 @@ begin
 		VINT_T80_SET <= '0';
 		VINT_T80_CLR <= '0';
 
+		M_HBL <= '0';
 		IN_HBL <= '0';
 		IN_VBL <= '1';
 		VBL_AREA <= '1';
@@ -2380,6 +2386,11 @@ begin
 		SP1_EN <= '0';
 		SP2_EN <= '0';
 
+		M_PIXDIV <= M_PIXDIV + 1;
+		if H40 = '1' and M_PIXDIV = 8-1 then
+			M_PIXDIV <= (others => '0');
+		end if;
+
 		HV_PIXDIV <= HV_PIXDIV + 1;
 		if (RS0 = '1' and H40 = '1' and 
 			((HV_PIXDIV = 8-1 and (HV_HCNT < 336 or HV_HCNT >= H_DISP_START)) or --336-365 - 30
@@ -2393,6 +2404,10 @@ begin
 				HV_HCNT <= H_DISP_START;
 			else
 				HV_HCNT <= HV_HCNT + 1;
+			end if;
+			
+			if H40 = '0' or HV_HCNT >= H_DISP_START or HV_PIXDIV = 8-1 then
+				M_PIXDIV <= (others => '0');
 			end if;
 
 			if HV_HCNT = H_INT_POS then
@@ -2462,10 +2477,21 @@ begin
 
 			if HV_HCNT = HBLANK_END then --active display
 				IN_HBL <= '0';
+				M_HBL <= '0';
 			end if;
 
 			if HV_HCNT = HBLANK_START then -- blanking
 				IN_HBL <= '1';
+			end if;
+
+			if H40 ='1' and HV_PIXDIV = 10-1 then
+				if HV_HCNT = HBLANK_START-5 then
+					M_HBL <= '1';
+				end if;
+			else
+				if HV_HCNT = HBLANK_START-3 then
+					M_HBL <= '1';
+				end if;
 			end if;
 
 			if HV_HCNT = 0 then
@@ -2737,8 +2763,7 @@ G <= FF_G;
 B <= FF_B;
 
 INTERLACE <= LSM(1) and LSM(0);
-AR_FLAGS(0) <= H40;
-AR_FLAGS(1) <= V30;
+RESOLUTION <= V30&H40;
 
 V_DISP_HEIGHT_R <= conv_std_logic_vector(V_DISP_HEIGHT_V30, 9) when V30_R ='1'
               else conv_std_logic_vector(V_DISP_HEIGHT_V28, 9);
@@ -2748,7 +2773,7 @@ process( CLK )
 begin
 	if rising_edge(CLK) then
 		CE_PIX <= '0';
-		if HV_PIXDIV = "0101" then
+		if M_PIXDIV = "0101" then
 			if HV_HCNT = VSYNC_HSTART and HV_VCNT = VSYNC_START then
 				FIELD_OUT <= LSM(1) and LSM(0) and not FIELD_LATCH;
 			end if;
@@ -2773,7 +2798,7 @@ begin
 					VBL <= '1';
 				end if;
 			else
-				HBL <= IN_HBL;
+				HBL <= M_HBL;
 				VBL <= VBL_AREA;
 			end if;
 		end if;
@@ -2784,11 +2809,22 @@ end process;
 -- VIDEO DEBUG
 ----------------------------------------------------------------
 -- synthesis translate_off
-process( CE_PIX )
+
+process( CLK )
+begin
+	if rising_edge(CLK) then
+		PIXOUT <= '0';
+		if HV_PIXDIV = "0101" then
+			PIXOUT <= '1';
+		end if;
+	end if;
+end process;
+
+process( PIXOUT )
 	file F		: text open write_mode is "vdp.out";
 	variable L	: line;
 begin
-	if rising_edge( CE_PIX ) then
+	if rising_edge( PIXOUT ) then
 		hwrite(L, FF_R & '0' & FF_G & '0' & FF_B & '0');
 		writeline(F,L);
 	end if;
