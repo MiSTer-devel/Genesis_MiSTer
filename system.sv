@@ -177,7 +177,7 @@ always @(negedge MCLK) begin
 	end
 end
 
-reg [15:1] ram_rst_a;
+reg [16:1] ram_rst_a;
 always @(posedge MCLK) ram_rst_a <= ram_rst_a + LOADING;
 
 
@@ -580,7 +580,7 @@ always_comb begin
 end
 
 //-----------------------------------------------------------------------
-// 64KB SRAM
+// 128KB SRAM and SVP DRAM
 //-----------------------------------------------------------------------
 reg SRAM_SEL;
 wire [15:0] sram_addr;
@@ -599,7 +599,7 @@ always_comb begin
 	end
 end
 
-dpram_dif #(16,8,15,16) sram
+dpram_dif #(17,8,16,16) sram
 (
 	.clock(MCLK),
 	.address_a(sram_addr),
@@ -607,9 +607,9 @@ dpram_dif #(16,8,15,16) sram
 	.wren_a(sram_wren),
 	.q_a(sram_q),
 
-	.address_b(LOADING ? ram_rst_a : BRAM_A),
-	.data_b(LOADING ? 16'h0000 : BRAM_DI),
-	.wren_b(LOADING | BRAM_WE),
+	.address_b(LOADING ? ram_rst_a : SVP_QUIRK ? SVP_DRAM_A : BRAM_A),
+	.data_b(LOADING ? 16'h0000 : SVP_QUIRK ? SVP_DRAM_DO : BRAM_DI),
+	.wren_b(LOADING | (SVP_QUIRK ? SVP_DRAM_WE : BRAM_WE)),
 	.q_b(BRAM_DO)
 );
 
@@ -650,8 +650,9 @@ wire        SVP_DTACK_N;
 wire [15:0] SVP_DRAM_A;
 wire [15:0] SVP_DRAM_DO;
 wire        SVP_DRAM_WE;
-wire [15:0] SVP_DRAM_DI;
+wire [15:0] SVP_DRAM_DI = BRAM_DO;
 
+/*
 spram #(16,16) svp_dram
 (
 	.clock(MCLK),
@@ -660,6 +661,7 @@ spram #(16,16) svp_dram
 	.wren(SVP_DRAM_WE),
 	.q(SVP_DRAM_DI)
 );
+*/
 
 reg SVP_CLKEN;
 always @(posedge MCLK) SVP_CLKEN <= ~reset & ~SVP_CLKEN;
@@ -704,7 +706,7 @@ dpram #(15) ram68k_u
 	.wren_a(RAM_SEL & ~MBUS_RNW & ~MBUS_UDS_N),
 	.q_a(ram68k_q[15:8]),
 
-	.address_b(ram_rst_a),
+	.address_b(ram_rst_a[15:1]),
 	.wren_b(LOADING)
 );
 
@@ -716,7 +718,7 @@ dpram #(15) ram68k_l
 	.wren_a(RAM_SEL & ~MBUS_RNW & ~MBUS_LDS_N),
 	.q_a(ram68k_q[7:0]),
 
-	.address_b(ram_rst_a),
+	.address_b(ram_rst_a[15:1]),
 	.wren_b(LOADING)
 );
 wire [15:0] ram68k_q;
