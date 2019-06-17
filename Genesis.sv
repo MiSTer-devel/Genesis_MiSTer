@@ -181,7 +181,7 @@ localparam CONF_STR = {
 	"-;",
 	"D0RG,Load Backup RAM;",
 	"D0RH,Save Backup RAM;",
-	"D0OD,Autosave,No,Yes;",
+	"D0OD,Autosave,OFF,ON;",
 	"-;",
 	"OA,Aspect Ratio,4:3,16:9;",
 	"OU,320x224 Aspect,Original,Corrected;",
