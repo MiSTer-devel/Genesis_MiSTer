@@ -177,7 +177,7 @@ always @(negedge MCLK) begin
 	end
 end
 
-reg [15:1] ram_rst_a;
+reg [16:1] ram_rst_a;
 always @(posedge MCLK) ram_rst_a <= ram_rst_a + LOADING;
 
 
@@ -580,7 +580,7 @@ always_comb begin
 end
 
 //-----------------------------------------------------------------------
-// 64KB SRAM
+// 128KB SRAM and SVP DRAM
 //-----------------------------------------------------------------------
 reg SRAM_SEL;
 wire [15:0] sram_addr;
@@ -599,7 +599,7 @@ always_comb begin
 	end
 end
 
-dpram_dif #(16,8,15,16) sram
+dpram_dif #(17,8,16,16) sram
 (
 	.clock(MCLK),
 	.address_a(sram_addr),
@@ -607,9 +607,9 @@ dpram_dif #(16,8,15,16) sram
 	.wren_a(sram_wren),
 	.q_a(sram_q),
 
-	.address_b(LOADING ? ram_rst_a : BRAM_A),
-	.data_b(LOADING ? 16'h0000 : BRAM_DI),
-	.wren_b(LOADING | BRAM_WE),
+	.address_b(LOADING ? ram_rst_a : SVP_QUIRK ? SVP_DRAM_A : BRAM_A),
+	.data_b(LOADING ? 16'h0000 : SVP_QUIRK ? SVP_DRAM_DO : BRAM_DI),
+	.wren_b(LOADING | (SVP_QUIRK ? SVP_DRAM_WE : BRAM_WE)),
 	.q_b(BRAM_DO)
 );
 
@@ -650,25 +650,18 @@ wire        SVP_DTACK_N;
 wire [15:0] SVP_DRAM_A;
 wire [15:0] SVP_DRAM_DO;
 wire        SVP_DRAM_WE;
-wire [15:0] SVP_DRAM_DI;
+wire [15:0] SVP_DRAM_DI = BRAM_DO;
 
-reg         SVP_RAM_SEL;
-reg  [15:0] SVP_RAM_A;
-wire [15:0] SVP_RAM_D;
-
-dpram #(16,16) svp_dram
+/*
+spram #(16,16) svp_dram
 (
 	.clock(MCLK),
-	.address_a(SVP_RAM_A),
-	.data_a(MBUS_DO),
-	.wren_a(SVP_RAM_SEL & ~MBUS_RNW),
-	.q_a(SVP_RAM_D),
-
-	.address_b(SVP_DRAM_A),
-	.data_b(SVP_DRAM_DO),
-	.wren_b(SVP_DRAM_WE),
-	.q_b(SVP_DRAM_DI)
+	.address(SVP_DRAM_A),
+	.data(SVP_DRAM_DO),
+	.wren(SVP_DRAM_WE),
+	.q(SVP_DRAM_DI)
 );
+*/
 
 reg SVP_CLKEN;
 always @(posedge MCLK) SVP_CLKEN <= ~reset & ~SVP_CLKEN;
@@ -680,12 +673,13 @@ SVP svp
 	.RST_N(~reset),
 	.ENABLE(SVP_QUIRK),
 
-	.BUS_A(MBUS_A[3:1]),
+	.BUS_A(MBUS_A[23:1]),
 	.BUS_DO(SVP_DO),
 	.BUS_DI(MBUS_DO),
 	.BUS_SEL(SVP_SEL),
 	.BUS_RNW(MBUS_RNW),
 	.BUS_DTACK_N(SVP_DTACK_N),
+	.DMA_ACTIVE(VBUS_SEL),
 
 	.ROM_A(ROM_ADDR2),
 	.ROM_DI(ROM_DATA2),
@@ -697,6 +691,7 @@ SVP svp
 	.DRAM_DO(SVP_DRAM_DO),
 	.DRAM_WE(SVP_DRAM_WE)
 );
+
 
 //-----------------------------------------------------------------------
 // 68K RAM
@@ -711,7 +706,7 @@ dpram #(15) ram68k_u
 	.wren_a(RAM_SEL & ~MBUS_RNW & ~MBUS_UDS_N),
 	.q_a(ram68k_q[15:8]),
 
-	.address_b(ram_rst_a),
+	.address_b(ram_rst_a[15:1]),
 	.wren_b(LOADING)
 );
 
@@ -723,7 +718,7 @@ dpram #(15) ram68k_l
 	.wren_a(RAM_SEL & ~MBUS_RNW & ~MBUS_LDS_N),
 	.q_a(ram68k_q[7:0]),
 
-	.address_b(ram_rst_a),
+	.address_b(ram_rst_a[15:1]),
 	.wren_b(LOADING)
 );
 wire [15:0] ram68k_q;
@@ -768,8 +763,8 @@ localparam 	MBUS_IDLE         = 0,
 				MBUS_ZBUS_PRE     = 8,
 				MBUS_ZBUS_READ    = 9,
 				MBUS_SVP_READ     = 10,
-				MBUS_SVP_RAM_READ = 11,
-				MBUS_FINISH       = 12; 
+				MBUS_FINISH       = 11; 
+
 				
 always @(posedge MCLK) begin
 	reg [15:0] data;
@@ -783,7 +778,6 @@ always @(posedge MCLK) begin
 		VDP_SEL <= 0;
 		IO_SEL <= 0;
 		SVP_SEL <= 0; 
-		SVP_RAM_SEL <= 0;
 		ZBUS_SEL <= 0;
 		BANK_MODE <= 0;
 		mstate <= MBUS_IDLE;
@@ -862,20 +856,12 @@ always @(posedge MCLK) begin
 						SRAM_SEL <= 1;
 						mstate <= MBUS_SRAM_READ;
 					end
-					else if(SVP_QUIRK && MBUS_A[23:19] == 'b00110) begin
+					else if(SVP_QUIRK && (MBUS_A[23:19] == 'b00110 || MBUS_A[23:16] == 8'h39 || MBUS_A[23:16] == 8'h3A)) begin
 						// 300000-37FFFF (+mirrors) SVP DRAM
-						SVP_RAM_A <= svp_fix[16:1];
-						mstate <= MBUS_SVP_RAM_READ;
-					end
-					else if(SVP_QUIRK && MBUS_A[23:16] == 8'h39) begin
 						// 390000-39FFFF SVP DRAM cell arrange 1
-						SVP_RAM_A <= {svp_fix[15:13],svp_fix[6:2],svp_fix[12:7],svp_fix[1]};
-						mstate <= MBUS_SVP_RAM_READ;
-					end 
-					else if(SVP_QUIRK && MBUS_A[23:16] == 8'h3A) begin
 						// 3A0000-3AFFFF SVP DRAM cell arrange 2
-						SVP_RAM_A <= {svp_fix[15:12],svp_fix[5:2],svp_fix[11:6],svp_fix[1]};
-						mstate <= MBUS_SVP_RAM_READ;
+						SVP_SEL <= 1;
+						mstate <= MBUS_SVP_READ;
 					end 
 					else if (MBUS_A < ROMSZ) begin
 						if (PIER_QUIRK) BANK_MODE <= (MBUS_A >= 23'h140000) ? 3'h3 : 3'h0;
@@ -1002,16 +988,10 @@ always @(posedge MCLK) begin
 				mstate <= MBUS_FINISH;
 			end
 
-		MBUS_SVP_RAM_READ:
-			begin
-				SVP_RAM_SEL <= 1;
-				mstate <= MBUS_SRAM_READ;
-			end
-
 		MBUS_SRAM_READ:
 			begin
-				data <= SVP_RAM_SEL ? SVP_RAM_D : {sram_q,sram_q};
-				SVP_RAM_SEL <= 0;
+				data <= {sram_q,sram_q};
+				SRAM_SEL <= 0;
 				mstate <= MBUS_FINISH;
 			end
 

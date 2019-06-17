@@ -13,12 +13,13 @@ entity SVP is
 		RST_N			: in std_logic;
 		ENABLE		: in std_logic;
 		
-		BUS_A			: in std_logic_vector(3 downto 1);
+		BUS_A			: in std_logic_vector(23 downto 1);
 		BUS_DO		: out std_logic_vector(15 downto 0);
 		BUS_DI		: in std_logic_vector(15 downto 0);
 		BUS_SEL		: in std_logic;
 		BUS_RNW		: in std_logic;
 		BUS_DTACK_N	: out std_logic;
+		DMA_ACTIVE	: in std_logic;
 		
 		ROM_A			: out std_logic_vector(20 downto 1);		
 		ROM_DI		: in std_logic_vector(15 downto 0);
@@ -28,9 +29,7 @@ entity SVP is
 		DRAM_A		: out std_logic_vector(16 downto 1);		
 		DRAM_DI		: in std_logic_vector(15 downto 0);
 		DRAM_DO		: out std_logic_vector(15 downto 0);
-		DRAM_WE		: out std_logic;
-		
-		HALTED		: out std_logic
+		DRAM_WE		: out std_logic
 	);
 end SVP;
 
@@ -86,13 +85,19 @@ architecture rtl of SVP is
 	signal MAS 				: MemAccessState_t;
 	signal MEM_ADDR 		: std_logic_vector(20 downto 0);
 	signal ROM_ADDR 		: std_logic_vector(19 downto 0);
+	signal ROM_DATA 		: std_logic_vector(15 downto 0);
+	signal DRAM_ADDR 		: std_logic_vector(15 downto 0);
 	signal SSP_WAIT 		: std_logic;
 	signal SSP_ACTIVE 	: std_logic;
 	signal PMAR_ACTIVE	: std_logic; 
 	signal IRAM_SEL 		: std_logic;
-	signal ROM_DATA 		: std_logic_vector(15 downto 0);
 	signal MA_ROM_REQ 	: std_logic;
 	signal MEM_WAIT 		: std_logic; 
+	signal DRAM_GEN_REQ 	: std_logic; 
+	signal DRAM_GEN_ADDR : std_logic_vector(15 downto 0);
+	signal DRAM_GEN_DAT 	: std_logic_vector(15 downto 0);
+	signal DRAM_GEN_WAIT : std_logic; 
+	signal DRAM_GEN_WE 	: std_logic; 
 	
 	--IRAM
 	signal IRAM_ADDR 		: std_logic_vector(9 downto 0);
@@ -159,8 +164,10 @@ begin
 	
 	IRAM_SEL <= '1' when SSP_PA(15 downto 10) = "000000" else '0';
 	
+	SSP_WAIT <= '1' when MAS /= MAS_IDLE else '0';
+	
 	SSP_PDI <= IRAM_Q when IRAM_SEL = '1' else ROM_DATA;
-	SSP_SS <= EN and not SSP_WAIT;
+	SSP_SS <= EN and not SSP_WAIT and not HALT;
 	SSP_USR01 <= "00";
 	
 	SSP160x : entity work.SSP160x
@@ -188,6 +195,7 @@ begin
 	
 	--I/O
 	process(CLK, RST_N)
+	variable ADDR_TEMP : std_logic_vector(16 downto 1);
 	begin
 		if RST_N = '0' then
 			PMC_SEL <= '0';
@@ -196,10 +204,11 @@ begin
 			CA <= '0';
 			DTACK_N <= '1';
 			BUS_DO <= (others => '0');
-			HALT <= '1';
+			HALT <= '0';
+			DRAM_GEN_REQ <= '0';
 		elsif rising_edge(CLK) then
-			if EN = '1' then
-				if SSP_ESB = '1' then
+			if ENABLE = '1' then
+				if SSP_ESB = '1' and EN = '1' then
 					if SSP_R_NW = '0' then
 						case SSP_EA is
 							when "011" => 
@@ -231,40 +240,71 @@ begin
 				if BUS_SEL = '0' then
 					DTACK_N <= '1';
 				elsif BUS_SEL = '1' and DTACK_N = '1' then
-					if BUS_RNW = '0' then
-						case BUS_A is
-							when "000" | "001" =>
-								XST <= BUS_DI;
-								if BUS_DI /= x"0000" then
-									CA <= '1';
+					if BUS_A(23 downto 4) = x"A1500" then
+						if BUS_RNW = '0' then
+							case BUS_A(3 downto 1) is
+								when "000" | "001" =>
+									XST <= BUS_DI;
+									if BUS_DI /= x"0000" then
+										CA <= '1';
+									end if;
+								when "011" => 
+									if BUS_DI(3 downto 0) = x"A" then
+										HALT <= '1';
+									else
+										HALT <= '0';
+									end if;
+								when others =>
+							end case; 
+						else
+							case BUS_A(3 downto 1) is
+								when "000" | "001" =>
+									BUS_DO <= XST;
+								when "010" =>
+									BUS_DO <= "00000000000000" & CA & SA;
+									SA <= '0';
+								when others =>
+									BUS_DO <= (others => '0');
+							end case; 
+						end if;
+						DTACK_N <= '0';
+					elsif BUS_A(23 downto 19) = "00110" or 	--300000-37FFFF SVP DRAM (+mirrors)
+							BUS_A(23 downto 16) = x"39" or 		--390000-39FFFF SVP DRAM cell arrange 1
+							BUS_A(23 downto 16) = x"3A" then 	--3A0000-3AFFFF SVP DRAM cell arrange 2
+						if DRAM_GEN_REQ = '0' and MAS /= MAS_DRAM_RD and MAS /= MAS_DRAM_WR then
+							DRAM_GEN_REQ <= '1';
+							if DMA_ACTIVE = '0' then
+								ADDR_TEMP := BUS_A(16 downto 1);
+							else
+								ADDR_TEMP := std_logic_vector( unsigned(BUS_A(16 downto 1)) - 1 );
+							end if;
+							if BUS_A(23 downto 16) = x"39" then
+								DRAM_GEN_ADDR <= "0" & ADDR_TEMP(15 downto 13) & ADDR_TEMP(6 downto 2) & ADDR_TEMP(12 downto 7) & ADDR_TEMP(1);
+							elsif BUS_A(23 downto 16) = x"3A" then
+								DRAM_GEN_ADDR <= "0" & ADDR_TEMP(15 downto 12) & ADDR_TEMP(5 downto 2) & ADDR_TEMP(11 downto 6) & ADDR_TEMP(1);
+							else
+								DRAM_GEN_ADDR <= ADDR_TEMP;
+							end if;
+							DRAM_GEN_WE <= not BUS_RNW;
+							DRAM_GEN_DAT <= BUS_DI;
+							DRAM_GEN_WAIT <= '1';
+						elsif DRAM_GEN_REQ = '1' then
+							DRAM_GEN_WAIT <= '0';
+							if DRAM_GEN_WAIT = '0' then
+								if BUS_RNW = '1' then
+									BUS_DO <= DRAM_DI;
 								end if;
-							when "011" => 
-								if BUS_DI(3 downto 0) = x"A" then
-									HALT <= '1';
-								else
-									HALT <= '0';
-								end if;
-							when others => null;
-						end case; 
-					else
-						case BUS_A is
-							when "000" | "001" =>
-								BUS_DO <= XST;
-							when "010" =>
-								BUS_DO <= "00000000000000" & CA & SA;
-								SA <= '0';
-							when others =>
-								BUS_DO <= (others => '0');
-						end case; 
+								DTACK_N <= '0';
+								DRAM_GEN_REQ <= '0';
+							end if;
+						end if;
 					end if;
-					DTACK_N <= '0';
 				end if;
 			end if;
 		end if;
 	end process;
 	
 	BUS_DTACK_N <= DTACK_N;
-	HALTED <= HALT;
 	
 	process(SSP_EA, SSP_ST56, PMARS, PMC_SEL, PMC, XST, CA, SA)
 	begin
@@ -325,7 +365,6 @@ begin
 			PMAR_ACTIVE <= '0';
 			MEM_WAIT <= '0';
 		elsif rising_edge(CLK) then
-			PMAR_ACTIVE <= '0';
 			if EN = '1' then
 				SSP_ACTIVE <= '1';
 				if SSP_ESB = '1' then
@@ -380,10 +419,11 @@ begin
 								ROM_ADDR <= MEM_ADDR(19 downto 0);
 								MAS <= MAS_ROM_RD;
 							end if;
+							PMAR_ACTIVE <= '0';
 						elsif MEM_ADDR(20 downto 16) = "11000" then		--DRAM 300000-37FFFF (180000-1BFFFF)
+							DRAM_ADDR <= MEM_ADDR(15 downto 0);
 							if PMAR_NUM(3) = '1' then
 								MAS <= MAS_DRAM_RD;
-								MEM_WAIT <= '1';
 							else
 								MAS <= MAS_DRAM_WR;
 							end if;
@@ -396,26 +436,37 @@ begin
 								MAS <= MAS_IRAM_WR;
 							end if;
 						end if;
+						PMAR_ACTIVE <= '0';
 					end if;
 					
 				when MAS_PROM_RD =>
-					if MA_ROM_REQ = ROM_ACK and HALT = '0' then
+					if MA_ROM_REQ = ROM_ACK then
 						ROM_DATA <= ROM_DI;
 						MAS <= MAS_IDLE;
 						SSP_ACTIVE <= '0';
 					end if;
 					
 				when MAS_ROM_RD =>
-					if MA_ROM_REQ = ROM_ACK and HALT = '0' then
+					if MA_ROM_REQ = ROM_ACK then
 						PMARS(to_integer(PMAR_NUM)).DATA <= ROM_DI;
 						MAS <= MAS_IDLE;
 					end if;
 				
 				when MAS_DRAM_RD =>
-					MEM_WAIT <= '0';
-					if MEM_WAIT = '0' and HALT = '0' then
-						PMARS(to_integer(PMAR_NUM)).DATA <= DRAM_DI;
-						MAS <= MAS_IDLE;
+					if DRAM_GEN_REQ = '0' then
+						MEM_WAIT <= '0';
+						if MEM_WAIT = '0' then
+							PMARS(to_integer(PMAR_NUM)).DATA <= DRAM_DI;
+							MAS <= MAS_IDLE;
+						end if;
+					end if;
+										
+				when MAS_DRAM_WR =>
+					if DRAM_GEN_REQ = '0' then
+						MEM_WAIT <= '0';
+						if MEM_WAIT = '0' then
+							MAS <= MAS_IDLE;
+						end if;
 					end if;
 					
 				when MAS_IRAM_RD =>
@@ -423,27 +474,23 @@ begin
 					if MEM_WAIT = '0' then
 						PMARS(to_integer(PMAR_NUM)).DATA <= IRAM_Q;
 						MAS <= MAS_IDLE;
-					end if;
-					
-				when MAS_DRAM_WR =>
-					MEM_WAIT <= '0';
-					if MEM_WAIT = '0' and HALT = '0' then
-						MAS <= MAS_IDLE;
-					end if;
+					end if;	
 					
 				when MAS_IRAM_WR =>
 					MEM_WAIT <= '0';
-					MAS <= MAS_IDLE;
+--					if MEM_WAIT = '0' then
+						MAS <= MAS_IDLE;
+--					end if;
 					
 				when others => null;
 			end case; 
 			
-			if MAS = MAS_IDLE or 
-				(MAS = MAS_ROM_RD and MA_ROM_REQ = ROM_ACK and HALT = '0') or 
-				(MAS = MAS_DRAM_RD and MEM_WAIT = '0' and HALT = '0') or 
+			if (MAS = MAS_IDLE) or 
+				(MAS = MAS_ROM_RD and MA_ROM_REQ = ROM_ACK) or
+				(MAS = MAS_DRAM_RD and MEM_WAIT = '0' and DRAM_GEN_REQ = '0') or
+				(MAS = MAS_DRAM_WR and MEM_WAIT = '0' and DRAM_GEN_REQ = '0') or
 				(MAS = MAS_IRAM_RD and MEM_WAIT = '0') or 
-				(MAS = MAS_DRAM_WR and MEM_WAIT = '0' and HALT = '0') or 
-				(MAS = MAS_IRAM_WR) then
+				(MAS = MAS_IRAM_WR) then-- and MEM_WAIT = '0'
 				if PMAR_ACTIVE = '0' and SSP_ACTIVE = '1' then
 					if IRAM_SEL = '0' then
 						MA_ROM_REQ <= not ROM_ACK;
@@ -460,8 +507,6 @@ begin
 	ROM_A <= ROM_ADDR;
 	ROM_REQ <= MA_ROM_REQ;
 	
-	SSP_WAIT <= '1' when MAS /= MAS_IDLE else '0';
-	
 	
 	--IRAM
 	IRAM_ADDR <= MEM_ADDR(9 downto 0) when MAS = MAS_IRAM_RD or MAS = MAS_IRAM_WR else SSP_PA(9 downto 0);
@@ -477,8 +522,10 @@ begin
 	);
 	
 	--DRAM
-	DRAM_A <= MEM_ADDR(15 downto 0);
-	DRAM_DO <= OverWrite(PMARS(to_integer(PMAR_NUM)), DRAM_DI);
-	DRAM_WE <= '1' when MAS = MAS_DRAM_WR and MEM_WAIT = '0' and HALT = '0' else '0';
+	DRAM_A <= DRAM_GEN_ADDR when DRAM_GEN_REQ = '1' else DRAM_ADDR;
+	DRAM_DO <= DRAM_GEN_DAT when DRAM_GEN_REQ = '1' else OverWrite(PMARS(to_integer(PMAR_NUM)), DRAM_DI);
+	DRAM_WE <= '1' when DRAM_GEN_REQ = '0' and MAS = MAS_DRAM_WR and MEM_WAIT = '0' else
+				  '1' when DRAM_GEN_REQ = '1' and DRAM_GEN_WAIT = '0' and DRAM_GEN_WE = '1' else 
+				  '0';
 	
 end rtl;
