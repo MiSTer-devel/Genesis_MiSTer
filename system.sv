@@ -474,7 +474,7 @@ jt89 psg
 
 
 //--------------------------------------------------------------
-// I/O
+// Gamepads
 //--------------------------------------------------------------
 reg         IO_SEL;
 wire  [7:0] IO_DO;
@@ -580,7 +580,7 @@ always_comb begin
 end
 
 //-----------------------------------------------------------------------
-// 128KB SRAM and SVP DRAM
+// 64KB SRAM / 128KB SVP DRAM
 //-----------------------------------------------------------------------
 reg SRAM_SEL;
 wire [15:0] sram_addr;
@@ -604,12 +604,12 @@ dpram_dif #(17,8,16,16) sram
 	.clock(MCLK),
 	.address_a(sram_addr),
 	.data_a(sram_di),
-	.wren_a(sram_wren),
+	.wren_a(sram_wren & ~SVP_QUIRK),
 	.q_a(sram_q),
 
 	.address_b(LOADING ? ram_rst_a : SVP_QUIRK ? SVP_DRAM_A : BRAM_A),
 	.data_b(LOADING ? 16'h0000 : SVP_QUIRK ? SVP_DRAM_DO : BRAM_DI),
-	.wren_b(LOADING | (SVP_QUIRK ? SVP_DRAM_WE : BRAM_WE)),
+	.wren_b(LOADING | SVP_DRAM_WE | BRAM_WE),
 	.q_b(BRAM_DO)
 );
 
@@ -670,8 +670,8 @@ SVP svp
 (
 	.CLK(MCLK),
 	.CE(SVP_CLKEN),
-	.RST_N(~reset),
-	.ENABLE(SVP_QUIRK),
+	.RST_N(~reset & SVP_QUIRK),
+	.ENABLE(1),
 
 	.BUS_A(MBUS_A[23:1]),
 	.BUS_DO(SVP_DO),
@@ -769,7 +769,6 @@ localparam 	MBUS_IDLE         = 0,
 always @(posedge MCLK) begin
 	reg [15:0] data;
 	reg  [3:0] pier_count;
-	reg [23:1] svp_fix;
 
 	if (reset) begin
 		M68K_MBUS_DTACK_N <= 1;
@@ -804,7 +803,6 @@ always @(posedge MCLK) begin
 				if(~M68K_AS_N & M68K_MBUS_DTACK_N & M68K_CLKENn) begin
 					msrc <= MSRC_M68K;
 					MBUS_A <= M68K_A[23:1];
-					svp_fix <= M68K_A[23:1];
 					data <= NO_DATA;
 					MBUS_DO <= M68K_DO;
 					MBUS_RNW <= M68K_RNW;
@@ -821,7 +819,6 @@ always @(posedge MCLK) begin
 				else if(VBUS_SEL & VDP_MBUS_DTACK_N) begin
 					msrc <= MSRC_VDP;
 					MBUS_A <= VBUS_A;
-					svp_fix <= VBUS_A - 1'd1;
 					data <= NO_DATA;
 					MBUS_DO <= 0;
 					mstate <= MBUS_SELECT;
@@ -856,7 +853,7 @@ always @(posedge MCLK) begin
 						SRAM_SEL <= 1;
 						mstate <= MBUS_SRAM_READ;
 					end
-					else if(SVP_QUIRK && (MBUS_A[23:19] == 'b00110 || MBUS_A[23:16] == 8'h39 || MBUS_A[23:16] == 8'h3A)) begin
+					else if(SVP_QUIRK && MBUS_A[23:20] == 3) begin
 						// 300000-37FFFF (+mirrors) SVP DRAM
 						// 390000-39FFFF SVP DRAM cell arrange 1
 						// 3A0000-3AFFFF SVP DRAM cell arrange 2
@@ -865,7 +862,7 @@ always @(posedge MCLK) begin
 					end 
 					else if (MBUS_A < ROMSZ) begin
 						if (PIER_QUIRK) BANK_MODE <= (MBUS_A >= 23'h140000) ? 3'h3 : 3'h0;
-						if (SVP_QUIRK) MBUS_A <= svp_fix;
+						if (SVP_QUIRK && msrc == MSRC_VDP) MBUS_A <= MBUS_A - 1'd1;
 						ROM_REQ <= ~ROM_ACK;
 						mstate <= MBUS_ROM_READ;
 					end
