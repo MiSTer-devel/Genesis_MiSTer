@@ -673,7 +673,7 @@ always @(posedge clk_sys) begin
 	if(~old_downloading & downloading) bk_ena <= 0;
 
 	//Save file always mounted in the end of downloading state.
-	if(downloading && img_mounted && !img_readonly) bk_ena <= 1;
+	if(downloading && img_mounted && !img_readonly && ~svp_quirk) bk_ena <= 1;
 
 	old_change <= bk_change;
 	if (~old_change & bk_change & ~OSD_STATUS) sav_pending <= status[13];
