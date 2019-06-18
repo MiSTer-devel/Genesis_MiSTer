@@ -107,13 +107,14 @@ reg [16:0] JTMR2;
 wire [7:0] TDATA = CTLA & DATA;
 wire [7:0] TDATB = CTLB & DATB;
 
-wire THA = DATA[6] & CTLA[6];
-wire TRA = DATA[5] & CTLA[5];
-wire THB = DATB[6] & CTLB[6];
-wire TRB = DATB[5] & CTLB[5];
+reg THA, THB;
 
 always @(posedge RESET or posedge CLK) begin
 	reg THAd,THBd;
+
+	//floating pin slow rise
+	reg  [7:0] FLTMR1;
+	reg  [7:0] FLTMR2;
 
 	if(RESET) begin
 		DTACK_N <= 1;
@@ -143,12 +144,31 @@ always @(posedge RESET or posedge CLK) begin
 		JCNT2 <= 0;
 	end
 	else if(CE) begin
+		
+		if(~&FLTMR1) FLTMR1 <= FLTMR1 + 1'd1;
+		if(CTLA[6]) begin
+			THA <= DATA[6];
+			FLTMR1 <= 0;
+		end
+		else if(FLTMR1 == 210) begin
+			THA <= 1;
+		end
+
 		THAd <= THA;
 		if(JTMR1 > 11600 || J3BUT) JCNT1 <= 0;
 		if(~THAd & THA) JCNT1 <= JCNT1 + 1'd1;
 
 		if(~&JTMR1) JTMR1 <= JTMR1 + 1'd1;
 		if(THAd & ~THA) JTMR1 <= 0;
+
+		if(~&FLTMR2) FLTMR2 <= FLTMR2 + 1'd1;
+		if(CTLB[6]) begin
+			THB <= DATB[6];
+			FLTMR2 <= 0;
+		end
+		else if(FLTMR2 == 210) begin
+			THB <= 1;
+		end
 
 		THBd <= THB;
 		if(JTMR2 > 11600 || J3BUT) JCNT2 <= 0;
@@ -223,6 +243,9 @@ reg   [4:0] mdata;
 reg  [10:0] curdx,curdy;
 wire [10:0] newdx = curdx + {{3{MOUSE[4]}},MOUSE[15:8]};
 wire [10:0] newdy = MOUSE_OPT[2] ? (curdy - {{3{MOUSE[5]}},MOUSE[23:16]}) : (curdy + {{3{MOUSE[5]}},MOUSE[23:16]});
+
+wire TRA = DATA[5] & CTLA[5];
+wire TRB = DATB[5] & CTLB[5];
 
 wire MTH = (MOUSE_OPT[0] & THA) | (MOUSE_OPT[1] & THB);
 wire MTR = (MOUSE_OPT[0] & TRA) | (MOUSE_OPT[1] & TRB);
