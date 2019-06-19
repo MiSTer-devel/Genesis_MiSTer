@@ -111,6 +111,7 @@ pad_io jcart_u
 	.P_Z(P4_Z),
 
 	.SEL(JCART_SEL),
+	.DIR(0),
 	.DI(DI[0]),
 	.DO(JCART_DO[15:8]),
 	.DTACK_N(JCART_DTACK_N)
@@ -134,6 +135,7 @@ pad_io jcart_l
 	.P_Z(P3_Z),
 
 	.SEL(JCART_SEL),
+	.DIR(0),
 	.DI(DI[0]),
 	.DO(JCART_DO[7:0]),
 	.DTACK_N()
