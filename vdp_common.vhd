@@ -51,8 +51,8 @@ constant HBORDER_RIGHT          : integer := 14;
 constant H_DISP_WIDTH_H32       : integer := 256;
 constant H_DISP_WIDTH_H40       : integer := 320;
 
-constant HBLANK_END_H32         : integer := 0;
-constant HBLANK_END_H40         : integer := 0;
+constant HBLANK_END_H32         : integer := 4;
+constant HBLANK_END_H40         : integer := 4;
 
 constant HBLANK_START_H32       : integer := HBLANK_END_H32 + HBORDER_LEFT + H_DISP_WIDTH_H32 + HBORDER_RIGHT;
 constant HBLANK_START_H40       : integer := HBLANK_END_H40 + HBORDER_LEFT + H_DISP_WIDTH_H40 + HBORDER_RIGHT;
