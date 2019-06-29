@@ -102,6 +102,7 @@ entity vdp is
 		HS          : out std_logic;
 		VS          : out std_logic;
 
+		SVP_QUIRK   : in  std_logic := '0';
 		VRAM_SPEED  : in  std_logic := '1'; -- 0 - full speed, 1 - FIFO throttle emulation
 		VSCROLL_BUG : in  std_logic := '1'; -- 0 - use nicer effect, 1 - HW original
 		BORDER_EN   : in  std_logic := '1'  -- Enable border
@@ -1654,7 +1655,10 @@ begin
 				if BGA_VRAM32_ACK = '1' or BGA_SEL = '0' or BGA_ENABLE = '0' then
 					BGA_SEL <= '0';
 
-					BGA_COLINFO_WE_A <= '1';
+					if SVP_QUIRK = '0' or BG_Y /= 223 then
+						BGA_COLINFO_WE_A <= '1';
+					end if;
+
 					BGA_COLINFO_ADDR_A <= BGA_POS(8 downto 0);
 					if WIN_H = '1' or WIN_V = '1' then
 						tile_pos := BGA_POS(3 downto 0);
