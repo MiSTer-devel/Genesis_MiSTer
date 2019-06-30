@@ -82,141 +82,95 @@ module gen_io
    input            EXPORT
 );
 
-reg [7:0]  DATA;
-reg [7:0]  DATB;
-reg [7:0]  DATC;
-reg [7:0]  CTLA;
-reg [7:0]  CTLB;
-reg [7:0]  CTLC;
-reg [7:0]  TXDA;
-reg [7:0]  TXDB;
-reg [7:0]  TXDC;
-reg [7:0]  RXDA;
-reg [7:0]  RXDB;
-reg [7:0]  RXDC;
-reg [7:0]  SCTA;
-reg [7:0]  SCTB;
-reg [7:0]  SCTC;
-
-reg [1:0]  JCNT1;
-reg [1:0]  JCNT2;
-
-reg [16:0] JTMR1;
-reg [16:0] JTMR2;
-
-wire [7:0] TDATA = CTLA & DATA;
-wire [7:0] TDATB = CTLB & DATB;
-
-wire THA = DATA[6] & CTLA[6];
-wire TRA = DATA[5] & CTLA[5];
-wire THB = DATB[6] & CTLB[6];
-wire TRB = DATB[5] & CTLB[5];
+reg  [7:0] R[16];
+wire [7:0] DATA = R[1];
+wire [7:0] DATB = R[2];
+wire [7:0] CTLA = R[4];
+wire [7:0] CTLB = R[5];
 
 always @(posedge RESET or posedge CLK) begin
-	reg THAd,THBd;
-
 	if(RESET) begin
 		DTACK_N <= 1;
-		DO   <= 8'hFF;
-
-		DATA <= 8'h7F;
-		DATB <= 8'h7F;
-		DATC <= 8'h7F;
-
-		CTLA <= 8'h00;
-		CTLB <= 8'h00;
-		CTLC <= 8'h00;
-
-		TXDA <= 8'hFF;
-		RXDA <= 8'h00;
-		SCTA <= 8'h00;
-
-		TXDB <= 8'hFF;
-		RXDB <= 8'h00;
-		SCTB <= 8'h00;
-
-		TXDC <= 8'hFF;
-		RXDC <= 8'h00;
-		SCTC <= 8'h00;
-
-		JCNT1 <= 0;
-		JCNT2 <= 0;
+		DO <= 'hFF;
+		R  <= '{0, 'h7F,'h7F,'h7F, 0,0,0, 'hFF,0,0, 'hFF,0,0, 'hFF,0,0};
 	end
 	else if(CE) begin
-		THAd <= THA;
-		if(JTMR1 > 11600 || J3BUT) JCNT1 <= 0;
-		if(~THAd & THA) JCNT1 <= JCNT1 + 1'd1;
-
-		if(~&JTMR1) JTMR1 <= JTMR1 + 1'd1;
-		if(THAd & ~THA) JTMR1 <= 0;
-
-		THBd <= THB;
-		if(JTMR2 > 11600 || J3BUT) JCNT2 <= 0;
-		if(~THBd & THB) JCNT2 <= JCNT2 + 1'd1;
-
-		if(~&JTMR2) JTMR2 <= JTMR2 + 1'd1;
-		if(THBd & ~THB) JTMR2 <= 0;
-
 		if(~SEL) DTACK_N <= 1;
 		else if(SEL & DTACK_N) begin
-			if(~RNW) begin
-				// Write
-				case(A)
-					4'h1: DATA <= DI;
-					4'h2: DATB <= DI;
-					4'h3: DATC <= DI;
-					4'h4: CTLA <= DI;
-					4'h5: CTLB <= DI;
-					4'h6: CTLC <= DI;
-					4'h7: TXDA <= DI;
-					4'h8: RXDA <= DI;
-					4'h9: SCTA <= DI;
-					4'hA: TXDB <= DI;
-					4'hB: RXDB <= DI;
-					4'hC: SCTB <= DI;
-					4'hD: TXDC <= DI;
-					4'hE: RXDC <= DI;
-					4'hF: SCTC <= DI;
-				endcase
-			end
+			if(~RNW) R[A] <= DI;
 			else begin
 				// Read
 				case(A)
-					4'h0: DO <= {EXPORT, PAL, 6'h20};
-					4'h1: if(MOUSE_OPT[0])     DO <= TDATA | (~CTLA[4:0] & mdata);
-							else if(THA)
-								if (JCNT1 != 3)   DO <= TDATA | (~CTLA[5:0] & {P1_C,P1_B,P1_RIGHT,P1_LEFT,P1_DOWN,P1_UP});
-								else              DO <= TDATA | (~CTLA[5:0] & {P1_C,P1_B,P1_MODE,P1_X,P1_Y,P1_Z});
-							else if (JCNT1 < 2)  DO <= TDATA | (~CTLA[5:0] & {P1_START,P1_A,2'b00,P1_DOWN,P1_UP});
-							else if (JCNT1 == 2) DO <= TDATA | (~CTLA[5:0] & {P1_START,P1_A,4'b0000});
-							else                 DO <= TDATA | (~CTLA[5:0] & {P1_START,P1_A,4'b1111});
-
-					4'h2: if(MOUSE_OPT[1])     DO <= TDATB | (~CTLB[4:0] & mdata);
-							else if(THB)
-								if (JCNT2 != 3)   DO <= TDATB | (~CTLB[5:0] & {P2_C,P2_B,P2_RIGHT,P2_LEFT,P2_DOWN,P2_UP});
-								else              DO <= TDATB | (~CTLB[5:0] & {P2_C,P2_B,P2_MODE,P2_X,P2_Y,P2_Z});
-							else if (JCNT2 < 2)  DO <= TDATB | (~CTLB[5:0] & {P2_START,P2_A,2'b00,P2_DOWN,P2_UP});
-							else if (JCNT2 == 2) DO <= TDATB | (~CTLB[5:0] & {P2_START,P2_A,4'b0000});
-							else                 DO <= TDATB | (~CTLB[5:0] & {P2_START,P2_A,4'b1111});
-					4'h3: DO <= DATC & CTLC; // Unconnected port
-					4'h4: DO <= CTLA;
-					4'h5: DO <= CTLB;
-					4'h6: DO <= CTLC;
-					4'h7: DO <= TXDA;
-					4'h8: DO <= RXDA;
-					4'h9: DO <= SCTA;
-					4'hA: DO <= TXDB;
-					4'hB: DO <= RXDB;
-					4'hC: DO <= SCTB;
-					4'hD: DO <= TXDC;
-					4'hE: DO <= RXDC;
-					4'hF: DO <= SCTC;
+						0: DO <= {EXPORT, PAL, 6'h20};
+						1: DO <= (CTLA & DATA) | (~CTLA & (MOUSE_OPT[0] ? mdata : PAD1_DO));
+						2: DO <= (CTLB & DATB) | (~CTLB & (MOUSE_OPT[1] ? mdata : PAD2_DO));
+						3: DO <= R[3] & R[6]; // Unconnected port
+				default: DO <= R[A];
 				endcase
 			end
 			DTACK_N <= 0;
-		end 
+		end
 	end
 end
+
+wire [7:0] PAD1_DO;
+pad_io pad1
+(
+	.RESET(RESET),
+	.CLK(CLK),
+	.CE(CE),
+
+	.J3BUT(J3BUT),
+
+	.P_UP(P1_UP),
+	.P_DOWN(P1_DOWN),
+	.P_LEFT(P1_LEFT),
+	.P_RIGHT(P1_RIGHT),
+	.P_A(P1_A),
+	.P_B(P1_B),
+	.P_C(P1_C),
+	.P_START(P1_START),
+	.P_MODE(P1_MODE),
+	.P_X(P1_X),
+	.P_Y(P1_Y),
+	.P_Z(P1_Z),
+
+	.SEL(SEL && A == 1),
+	.RNW(RNW),
+	.DIR(~CTLA[6]),
+	.DI(DI[6]),
+	.DO(PAD1_DO)
+);
+
+wire [7:0] PAD2_DO;
+pad_io pad2
+(
+	.RESET(RESET),
+	.CLK(CLK),
+	.CE(CE),
+
+	.J3BUT(J3BUT),
+
+	.P_UP(P2_UP),
+	.P_DOWN(P2_DOWN),
+	.P_LEFT(P2_LEFT),
+	.P_RIGHT(P2_RIGHT),
+	.P_A(P2_A),
+	.P_B(P2_B),
+	.P_C(P2_C),
+	.P_START(P2_START),
+	.P_MODE(P2_MODE),
+	.P_X(P2_X),
+	.P_Y(P2_Y),
+	.P_Z(P2_Z),
+
+	.SEL(SEL && A == 2),
+	.RNW(RNW),
+	.DIR(~CTLB[6]),
+	.DI(DI[6]),
+	.DO(PAD2_DO)
+);
+
 
 reg   [8:0] dx,dy;
 reg   [4:0] mdata;
@@ -224,7 +178,10 @@ reg  [10:0] curdx,curdy;
 wire [10:0] newdx = curdx + {{3{MOUSE[4]}},MOUSE[15:8]};
 wire [10:0] newdy = MOUSE_OPT[2] ? (curdy - {{3{MOUSE[5]}},MOUSE[23:16]}) : (curdy + {{3{MOUSE[5]}},MOUSE[23:16]});
 
-wire MTH = (MOUSE_OPT[0] & THA) | (MOUSE_OPT[1] & THB);
+wire TRA = DATA[5] & CTLA[5];
+wire TRB = DATB[5] & CTLB[5];
+
+wire MTH = (MOUSE_OPT[0] & PAD1_DO[6]) | (MOUSE_OPT[1] & PAD2_DO[6]);
 wire MTR = (MOUSE_OPT[0] & TRA) | (MOUSE_OPT[1] & TRB);
 wire [3:0] BTN = MOUSE_OPT[0] ? ~{P1_START,P1_C,P1_B,P1_A} : ~{P2_START,P2_C,P2_B,P2_A};
 
@@ -283,6 +240,89 @@ always @(posedge CLK) begin
 	end
 
 	mdata[4] <= mtrd2;
+end
+
+endmodule
+
+
+module pad_io
+(
+   input RESET,
+   input CLK,
+   input CE,
+   
+   input J3BUT,
+   
+   input P_UP,
+   input P_DOWN,
+   input P_LEFT,
+   input P_RIGHT,
+   input P_A,
+   input P_B,
+   input P_C,
+   input P_START,
+   input P_MODE,
+   input P_X,
+   input P_Y,
+   input P_Z,
+
+   input SEL,
+   input RNW,
+
+   input DIR,
+   input DI,
+
+   output reg [7:0] DO,
+   output reg       DTACK_N
+);
+
+reg TH;
+reg [1:0] JCNT;
+
+always @(*) begin
+	DO[7:6] = {1'b0,TH};
+	if(TH)
+		if (JCNT != 3)   DO[5:0] = {P_C,P_B,P_RIGHT,P_LEFT,P_DOWN,P_UP};
+		else             DO[5:0] = {P_C,P_B,P_MODE,P_X,P_Y,P_Z};
+	else if (JCNT < 2)  DO[5:0] = {P_START,P_A,2'b00,P_DOWN,P_UP};
+	else if (JCNT == 2) DO[5:0] = {P_START,P_A,4'b0000};
+	else                DO[5:0] = {P_START,P_A,4'b1111};
+end
+
+always @(posedge RESET or posedge CLK) begin
+	reg [16:0] JTMR;
+	reg  [7:0] FLTMR;
+
+	reg THd;
+	reg di;
+
+	if(RESET) begin
+		DTACK_N <= 1;
+		TH   <= 0;
+		JCNT <= 0;
+	end
+	else if(CE) begin
+	
+		if(~&FLTMR) FLTMR <= FLTMR + 1'd1;
+		if(~DIR) begin
+			TH <= di;
+			FLTMR <= 0;
+		end
+		else if(FLTMR == 210) TH <= 1;
+	
+		THd <= TH;
+		if(JTMR > 11600 || J3BUT) JCNT <= 0;
+		if(~THd & TH) JCNT <= JCNT + 1'd1;
+
+		if(~&JTMR) JTMR <= JTMR + 1'd1;
+		if(THd & ~TH) JTMR <= 0;
+
+		if(~SEL) DTACK_N <= 1;
+		else if(SEL & DTACK_N) begin
+			if(~RNW) di <= DI;
+			DTACK_N <= 0;
+		end 
+	end
 end
 
 endmodule
