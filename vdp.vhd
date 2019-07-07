@@ -338,6 +338,8 @@ signal DMA_LENGTH	: std_logic_vector(15 downto 0);
 signal DMA_SOURCE	: std_logic_vector(15 downto 0);
 
 signal DMA_VBUS_TIMER : std_logic_vector(1 downto 0);
+signal BGACK_N_REG  : std_logic;
+
 ----------------------------------------------------------------
 -- VIDEO COUNTING
 ----------------------------------------------------------------
@@ -881,6 +883,8 @@ STATUS <= "111111" & FIFO_EMPTY & FIFO_FULL & VINT_TG68_PENDING & SOVR & SCOL & 
 ----------------------------------------------------------------
 -- CPU INTERFACE
 ----------------------------------------------------------------
+
+BGACK_N <= BGACK_N_REG;
 
 ----------------------------------------------------------------
 -- VRAM CONTROLLER
@@ -2290,14 +2294,15 @@ begin
 		BGB_MAPPING_EN <= '0';
 		BGB_PATTERN_EN <= '0';
 
-		-- H40 slow slots during HSYNC in BlastEm: {19, 20, 20, 20, 18, 20, 20, 20, 18, 20, 20, 20, 18, 20, 20, 20, 19};
-		-- 10, 10, 10, 10, 10, 10, 10, 10, 10, 8, 10, 10, 10, 10, 10, 10, 10, 8, 10, 10, 10, 10, 10, 10, 10, 8, 10, 10, 10, 10, 10, 10, 10, 8
-		-- 460                               469                            477                            485                            493
+		-- H40 slow slots: 8aaaaaaa99aaaaaaa8aaaaaaa99aaaaaaa
+		-- 8, 10, 10, 10, 10, 10, 10, 10, 9, 9, 10, 10, 10, 10, 10, 10, 10, 8, 10, 10, 10, 10, 10, 10, 10, 9, 9, 10, 10, 10, 10, 10, 10, 10
+		-- 460                           468                               477                            485                            493
 
 		HV_PIXDIV <= HV_PIXDIV + 1;
 		if (RS0 = '1' and H40 = '1' and 
-			((HV_PIXDIV = 8-1 and (HV_HCNT < 460 or HV_HCNT >= 493 or HV_HCNT = 469 or HV_HCNT = 477 or HV_HCNT = 485)) or
-			(HV_PIXDIV = 10-1))) or --normal H40 - 30*10+390*8=3420 cycles
+			((HV_PIXDIV = 8-1 and (HV_HCNT <= 460 or HV_HCNT > 493 or HV_HCNT = 477)) or
+			((HV_PIXDIV = 9-1 and (HV_HCNT = 468 or HV_HCNT = 469 or HV_HCNT = 485 or HV_HCNT = 486))) or
+			(HV_PIXDIV = 10-1))) or --normal H40 - 28*10+4*9+388*8=3420 cycles
 		   (RS0 = '0' and H40 = '1' and HV_PIXDIV = 8-1) or --fast H40
 		   (RS0 = '0' and H40 = '0' and HV_PIXDIV = 10-1) or --normal H32
 		   (RS0 = '1' and H40 = '0' and HV_PIXDIV = 8-1) then --fast H32
@@ -2459,7 +2464,6 @@ process( RST_N, CLK )
 	variable col : std_logic_vector(5 downto 0);
 	variable cold: std_logic_vector(5 downto 0);
 	variable x   : std_logic_vector(8 downto 0);
-	variable brd_fix : std_logic;
 begin
 	OBJ_COLINFO_D_REND <= (others => '0');
 	if rising_edge(CLK) then
@@ -2544,10 +2548,8 @@ begin
 					col := col and cold;
 				end if;
 
-				brd_fix := '0';
 				if x >= H_DISP_WIDTH or V_ACTIVE_DISP = '0' then
 					-- border area
-					brd_fix := DBG(8) or DBG(7) or DBG(6);
 					col := BGCOL;
 					PIX_MODE <= PIX_NORMAL;
 				end if;
@@ -2555,7 +2557,7 @@ begin
 				CRAM_ADDR_B <= col;
 
 			when "0101" =>
-				if ((x >= H_DISP_WIDTH or V_ACTIVE_DISP = '0') and BORDER_EN = '0') or brd_fix = '1' then
+				if (x >= H_DISP_WIDTH or V_ACTIVE_DISP = '0') and (BORDER_EN = '0' or DBG(8 downto 7) /= "00") then
 					-- disabled border
 					FF_B <= (others => '0');
 					FF_G <= (others => '0');
@@ -2788,7 +2790,7 @@ begin
 		DMAC <= DMA_IDLE;
 
 		BR_N <= '1';
-		BGACK_N <= '1';
+		BGACK_N_REG <= '1';
 
 	elsif rising_edge(CLK) then
 
@@ -3362,33 +3364,36 @@ begin
 ----------------------------------------------------------------
 
 			when DMA_VBUS_INIT =>
-				if BG_N = '0' then
-					BGACK_N <= '0';
-					BR_N <= '1';
 -- synthesis translate_off
-					write(L, string'("VDP DMA VBUS SRC=["));
-					hwrite(L, REG(23)(6 downto 0) & REG(22) & REG(21) & '0');
-					write(L, string'("] DST=["));
-					hwrite(L, x"00" & ADDR);
-					write(L, string'("] LEN=["));
-					hwrite(L, x"00" & REG(20) & REG(19));
-					write(L, string'("]"));
-					writeline(F,L);
+				write(L, string'("VDP DMA VBUS SRC=["));
+				hwrite(L, REG(23)(6 downto 0) & REG(22) & REG(21) & '0');
+				write(L, string'("] DST=["));
+				hwrite(L, x"00" & ADDR);
+				write(L, string'("] LEN=["));
+				hwrite(L, x"00" & REG(20) & REG(19));
+				write(L, string'("]"));
+				writeline(F,L);
 -- synthesis translate_on
-					DMA_LENGTH <= REG(20) & REG(19);
-					DMA_SOURCE <= REG(22) & REG(21);
-					DMA_VBUS_TIMER <= "10";
-					DMAC <= DMA_VBUS_WAIT;
-				end if;
+				DMA_LENGTH <= REG(20) & REG(19);
+				DMA_SOURCE <= REG(22) & REG(21);
+				DMA_VBUS_TIMER <= "10";
+				DMAC <= DMA_VBUS_WAIT;
 
 			when DMA_VBUS_WAIT =>
+				if BG_N = '0' then
+					BGACK_N_REG <= '0';
+					BR_N <= '1';
+				end if;
 				if SLOT_EN = '1' then
 					if DMA_VBUS_TIMER = 0 then
-						FF_VBUS_SEL <= '1';
-						FF_VBUS_ADDR <= REG(23)(6 downto 0) & DMA_SOURCE;
-						DMAC <= DMA_VBUS_RD;
+						if BGACK_N_REG = '0' then
+							DMAC <= DMA_VBUS_RD;
+							FF_VBUS_SEL <= '1';
+							FF_VBUS_ADDR <= REG(23)(6 downto 0) & DMA_SOURCE;
+						end if;
+					else
+						DMA_VBUS_TIMER <= DMA_VBUS_TIMER - 1;
 					end if;
-					DMA_VBUS_TIMER <= DMA_VBUS_TIMER - 1;
 				end if;
 
 			when DMA_VBUS_RD =>
@@ -3439,7 +3444,7 @@ begin
 					DMA_VBUS_TIMER <= DMA_VBUS_TIMER - 1;
 					if DMA_VBUS_TIMER = 0 then
 						DMA_VBUS <= '0';
-						BGACK_N <= '1';
+						BGACK_N_REG <= '1';
 						DMAC <= DMA_IDLE;
 					end if;
 				end if;
