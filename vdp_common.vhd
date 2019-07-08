@@ -52,7 +52,7 @@ constant H_DISP_WIDTH_H32       : integer := 256;
 constant H_DISP_WIDTH_H40       : integer := 320;
 
 constant HBLANK_END_H32         : integer := 4;
-constant HBLANK_END_H40         : integer := 4;
+constant HBLANK_END_H40         : integer := 8;
 
 constant HBLANK_START_H32       : integer := HBLANK_END_H32 + HBORDER_LEFT + H_DISP_WIDTH_H32 + HBORDER_RIGHT;
 constant HBLANK_START_H40       : integer := HBLANK_END_H40 + HBORDER_LEFT + H_DISP_WIDTH_H40 + HBORDER_RIGHT;
@@ -63,10 +63,10 @@ constant H_TOTAL_WIDTH_H40      : integer := 420;
 -- HSYNC moved a bit before the active area from the reference
 -- to provide enough back porch
 constant HSYNC_START_H32        : integer := H_DISP_START_H32 + 0;
-constant HSYNC_START_H40        : integer := H_DISP_START_H40 + 1;
+constant HSYNC_START_H40        : integer := H_DISP_START_H40 + 0;
 
 constant HSYNC_END_H32          : integer := H_DISP_START_H32 + 24;
-constant HSYNC_END_H40          : integer := H_DISP_START_H40 + 24;
+constant HSYNC_END_H40          : integer := H_DISP_START_H40 + 32;
 
 constant VSYNC_HSTART_H32       : integer := HSYNC_START_H32;
 constant VSYNC_HSTART_H40       : integer := HSYNC_START_H40;
