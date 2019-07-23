@@ -111,4 +111,7 @@ constant OBJ_MAX_FRAME_H40      : integer := 80;
 constant OBJ_MAX_LINE_H32       : integer := 16;
 constant OBJ_MAX_LINE_H40       : integer := 20;
 
+constant OBJ_MAX_LINE_H32_HIGH  : integer := 32;
+constant OBJ_MAX_LINE_H40_HIGH  : integer := 40;
+
 end vdp_common;
