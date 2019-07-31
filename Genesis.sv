@@ -198,6 +198,7 @@ localparam CONF_STR = {
 	"OK,Mouse Flip Y,No,Yes;",
 	"-;",
 	"OPQ,CPU Turbo,None,Medium,High;",
+	"OR,Sprite Limit,Normal,High;",
 	"-;",
 `ifdef SOUND_DBG
 	"OB,Enable FM,Yes,No;",
@@ -396,6 +397,8 @@ system system
 `endif
 	.EN_HIFI_PCM(status[23]), // Option "N"
 	.LPF_MODE(status[15:14]),
+
+	.OBJ_LIMIT_HIGH(status[27]),
 
 	.BRAM_A({sd_lba[6:0],sd_buff_addr}),
 	.BRAM_DI(sd_buff_dout),

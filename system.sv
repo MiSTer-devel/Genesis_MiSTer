@@ -104,7 +104,8 @@ module system
 	output        ROM_REQ2,
 	input         ROM_ACK2, 
 	
-	input         EN_HIFI_PCM
+	input         EN_HIFI_PCM,
+	input         OBJ_LIMIT_HIGH
 );
 
 reg reset;
@@ -443,6 +444,7 @@ vdp vdp
 	.VSCROLL_BUG(0),
 	.BORDER_EN(BORDER),
 	.SVP_QUIRK(SVP_QUIRK),
+	.OBJ_LIMIT_HIGH_EN(OBJ_LIMIT_HIGH),
 
 	.FIELD_OUT(FIELD),
 	.INTERLACE(INTERLACE),

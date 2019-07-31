@@ -105,7 +105,8 @@ entity vdp is
 		SVP_QUIRK   : in  std_logic := '0';
 		VRAM_SPEED  : in  std_logic := '1'; -- 0 - full speed, 1 - FIFO throttle emulation
 		VSCROLL_BUG : in  std_logic := '1'; -- 0 - use nicer effect, 1 - HW original
-		BORDER_EN   : in  std_logic := '1'  -- Enable border
+		BORDER_EN   : in  std_logic := '1';  -- Enable border
+		OBJ_LIMIT_HIGH_EN : in std_logic := '0' -- Enable more sprites and pixels per line
 	);
 end vdp;
 
@@ -520,7 +521,7 @@ signal BGA_ENABLE           : std_logic;
 -- SPRITE ENGINE
 ----------------------------------------------------------------
 signal OBJ_MAX_FRAME			: std_logic_vector(6 downto 0);
-signal OBJ_MAX_LINE         : std_logic_vector(4 downto 0);
+signal OBJ_MAX_LINE         : std_logic_vector(5 downto 0);
 
 signal OBJ_CACHE_ADDR_RD    : std_logic_vector(6 downto 0);
 signal OBJ_CACHE_ADDR_WR    : std_logic_vector(6 downto 0);
@@ -529,14 +530,14 @@ signal OBJ_CACHE_Q          : std_logic_vector(31 downto 0);
 signal OBJ_CACHE_BE         : std_logic_vector(3 downto 0);
 signal OBJ_CACHE_WE         : std_logic_vector(1 downto 0);
 
-signal OBJ_VISINFO_ADDR_RD	: std_logic_vector(4 downto 0);
-signal OBJ_VISINFO_ADDR_WR	: std_logic_vector(4 downto 0);
+signal OBJ_VISINFO_ADDR_RD	: std_logic_vector(5 downto 0);
+signal OBJ_VISINFO_ADDR_WR	: std_logic_vector(5 downto 0);
 signal OBJ_VISINFO_D		: std_logic_vector(6 downto 0);
 signal OBJ_VISINFO_WE		: std_logic;
 signal OBJ_VISINFO_Q		: std_logic_vector(6 downto 0);
 
-signal OBJ_SPINFO_ADDR_RD	: std_logic_vector(4 downto 0);
-signal OBJ_SPINFO_ADDR_WR	: std_logic_vector(4 downto 0);
+signal OBJ_SPINFO_ADDR_RD	: std_logic_vector(5 downto 0);
+signal OBJ_SPINFO_ADDR_WR	: std_logic_vector(5 downto 0);
 signal OBJ_SPINFO_D			: std_logic_vector(34 downto 0);
 signal OBJ_SPINFO_WE		: std_logic;
 signal OBJ_SPINFO_Q			: std_logic_vector(34 downto 0);
@@ -577,7 +578,7 @@ signal SP1_STEPS        : std_logic_vector(6 downto 0);
 
 signal OBJ_TOT			: std_logic_vector(6 downto 0);
 signal OBJ_NEXT			: std_logic_vector(6 downto 0);
-signal OBJ_NB			: std_logic_vector(4 downto 0);
+signal OBJ_NB			: std_logic_vector(5 downto 0);
 signal OBJ_Y_OFS		: std_logic_vector(8 downto 0);
 
 signal OBJ_VS1			: std_logic_vector(1 downto 0);
@@ -606,7 +607,7 @@ signal SP2_VRAM32_DO_REG : std_logic_vector(31 downto 0);
 signal SP2_VRAM32_ACK    : std_logic;
 signal SP2_SEL			: std_logic;
 
-signal OBJ_IDX			: std_logic_vector(4 downto 0);
+signal OBJ_IDX			: std_logic_vector(5 downto 0);
 
 signal OBJ_CACHE_ADDR_RD_SP2	: std_logic_vector(6 downto 0);
 
@@ -631,7 +632,7 @@ signal SP3_VRAM32_ACK_REG: std_logic;
 signal SP3_SEL          : std_logic;
 
 signal OBJ_PIX          : std_logic_vector(8 downto 0);
-signal OBJ_NO			: std_logic_vector(4 downto 0);
+signal OBJ_NO			: std_logic_vector(5 downto 0);
 
 signal OBJ_LINK			: std_logic_vector(6 downto 0);
 
@@ -740,7 +741,7 @@ OBJ_CACHE_ADDR_RD <= OBJ_CACHE_ADDR_RD_SP1 when SP1C /= SP1C_DONE else OBJ_CACHE
 
 obj_visinfo : entity work.DualPortRAM
 generic map (
-	addrbits	=> 5,
+	addrbits	=> 6,
 	databits	=> 7
 )
 port map(
@@ -757,7 +758,7 @@ port map(
 
 obj_spinfo : entity work.DualPortRAM
 generic map (
-	addrbits	=> 5,
+	addrbits	=> 6,
 	databits	=> 35
 )
 port map(
@@ -1634,8 +1635,11 @@ end process;
 ----------------------------------------------------------------
 OBJ_MAX_FRAME <= conv_std_logic_vector(OBJ_MAX_FRAME_H40, 7) when H40 = '1' else
                  conv_std_logic_vector(OBJ_MAX_FRAME_H32, 7);
-OBJ_MAX_LINE  <= conv_std_logic_vector(OBJ_MAX_LINE_H40, 5) when H40 = '1' else
-                 conv_std_logic_vector(OBJ_MAX_LINE_H32, 5);
+
+OBJ_MAX_LINE  <= conv_std_logic_vector(OBJ_MAX_LINE_H40, 6) when H40 = '1' and OBJ_LIMIT_HIGH_EN = '0' else
+				 conv_std_logic_vector(OBJ_MAX_LINE_H40_HIGH, 6) when H40 = '1' and OBJ_LIMIT_HIGH_EN = '1' else
+				 conv_std_logic_vector(OBJ_MAX_LINE_H32, 6) when H40 = '0' and OBJ_LIMIT_HIGH_EN = '0' else
+				 conv_std_logic_vector(OBJ_MAX_LINE_H32_HIGH, 6) when H40 = '0' and OBJ_LIMIT_HIGH_EN = '1';
 
 -- Write-through cache for Y, Link and size fields
 process( RST_N, CLK )
@@ -2155,7 +2159,7 @@ begin
 				end if;
 
 				-- limit total sprite pixels per line
-				if OBJ_PIX = H_DISP_WIDTH then
+				if (OBJ_PIX = H_DISP_WIDTH AND OBJ_LIMIT_HIGH_EN = '0') OR (OBJ_PIX = H_TOTAL_WIDTH AND OBJ_LIMIT_HIGH_EN = '1') then
 					OBJ_DOT_OVERFLOW <= '1';
 					SP3C <= SP3C_DONE;
 					SP3_SOVR_SET <= '1';
@@ -2431,7 +2435,11 @@ begin
 				when "1010" => BGB_MAPPING_EN <= '1';
 				when "1100" => SP2_EN <= '1';
 				when "1110" => BGB_PATTERN_EN <= '1';
-				when "0000" => BGB_PATTERN_EN <= '1';
+				when "0000" =>
+					BGB_PATTERN_EN <= '1';
+					if OBJ_LIMIT_HIGH_EN = '1' then
+						SP2_EN <= '1'; -- Update SP2 twice as often when sprite limit is increased
+					end if;
 				when others => null;
 			end case;
 
