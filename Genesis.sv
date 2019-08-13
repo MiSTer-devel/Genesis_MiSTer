@@ -338,6 +338,13 @@ wire [1:0] resolution;
 assign DDRAM_CLK = clk_ram;
 wire reset = RESET | status[0] | buttons[1] | region_set | bk_loading;
 
+wire [7:0] color_lut[16] = '{
+	8'd0,   8'd27,  8'd49,  8'd71,
+	8'd87,  8'd103, 8'd119, 8'd130,
+	8'd146, 8'd157, 8'd174, 8'd190,
+	8'd206, 8'd228, 8'd255, 8'd255
+};
+
 system system
 (
 	.RESET_N(~reset),
@@ -455,8 +462,7 @@ assign VGA_SL = {~interlace,~interlace}&sl[1:0];
 reg old_ce_pix;
 always @(posedge CLK_VIDEO) old_ce_pix <= ce_pix;
 
-
-video_mixer #(.LINE_LENGTH(320), .HALF_DEPTH(1)) video_mixer
+video_mixer #(.LINE_LENGTH(320), .HALF_DEPTH(0)) video_mixer
 (
 	.*,
 
@@ -470,9 +476,9 @@ video_mixer #(.LINE_LENGTH(320), .HALF_DEPTH(1)) video_mixer
 
 	.mono(0),
 
-	.R(r),
-	.G(g),
-	.B(b),
+	.R(color_lut[r]),
+	.G(color_lut[g]),
+	.B(color_lut[b]),
 
 	// Positive pulses.
 	.HSync(hs),
