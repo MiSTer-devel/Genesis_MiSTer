@@ -99,9 +99,11 @@ jt12_single_acc #(.win(9),.wout(12)) u_right(
 
 // Output can be amplied by 8/6=1.33 to use full range
 // an easy alternative is to add 1/4th and get 1.25 amplification
+ //////This is unsafe to do.  The accumulator is adding operators, not channels (up to 24, not 6).
+ //////Also, if this was safe, I believe this should be adding pre_left and pre_right, not left and right.
 always @(posedge clk) if(clk_en) begin
-    left  <= pre_left  + { {2{left [11]}}, left [11:2] };
-    right <= pre_right + { {2{right[11]}}, right[11:2] };
+    left  <= pre_left;//  + { {2{left [11]}}, left [11:2] };
+    right <= pre_right;// + { {2{right[11]}}, right[11:2] };
 end
 
 endmodule
