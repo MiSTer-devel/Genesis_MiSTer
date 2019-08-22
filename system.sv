@@ -744,6 +744,8 @@ reg        MBUS_RNW;
 reg        MBUS_UDS_N;
 reg        MBUS_LDS_N;
 
+reg [15:0] NO_DATA;
+
 reg [4:0]  BANK_REG[0:7];
 reg [2:0]  BANK_MODE; //0 = none, 1 = BANK SRAM, 2 = BANK ROM
 
@@ -785,6 +787,7 @@ always @(posedge MCLK) begin
 		mstate <= MBUS_IDLE;
 		pier_count <= 0;
 		MBUS_RNW <= 1;
+		NO_DATA <= 'h4E71;
 
 		if(PIER_QUIRK) BANK_REG <= '{0,0,0,0,0,0,0,0};
 		else BANK_REG <= '{0,1,2,3,4,5,6,7};
@@ -979,18 +982,21 @@ always @(posedge MCLK) begin
 		MBUS_RAM_READ:
 			begin
 				data <= ram68k_q;
+				if(msrc == MSRC_M68K) NO_DATA <= ram68k_q;
 				mstate <= MBUS_FINISH;
 			end
 
 		MBUS_ROM_READ:
 			if (ROM_REQ == ROM_ACK) begin
 				data <= ROM_DATA;
+				if(msrc == MSRC_M68K) NO_DATA <= ROM_DATA;
 				mstate <= MBUS_FINISH;
 			end
 
 		MBUS_SRAM_READ:
 			begin
 				data <= {sram_q,sram_q};
+				if(msrc == MSRC_M68K) NO_DATA <= {sram_q,sram_q};
 				SRAM_SEL <= 0;
 				mstate <= MBUS_FINISH;
 			end
@@ -999,6 +1005,8 @@ always @(posedge MCLK) begin
 			if (~VDP_DTACK_N) begin
 				VDP_SEL <= 0;
 				data <= VDP_DO;
+				if(MBUS_A[4:2] == 1) data[15:10] <= NO_DATA[15:10]; //unused status bits
+				else if(MBUS_A[4]) data <= NO_DATA; // PSG/debug registers
 				mstate <= MBUS_FINISH;
 			end
 
@@ -1251,18 +1259,5 @@ genesis_lpf lpf_left
 	.in(PRE_LPF_L),
 	.out(DAC_LDATA)
 );
-
-//-----------------------------------------------------------------------
-// BUS NOISE GENERATOR
-//-----------------------------------------------------------------------
-reg [15:0] NO_DATA;
-always @(posedge MCLK) begin
-	reg [16:0] lfsr;
-
-	if (M68K_CLKEN) begin
-		lfsr <= {(lfsr[0] ^ lfsr[2] ^ !lfsr), lfsr[16:1]};
-		NO_DATA <= {NO_DATA[14:0], lfsr[0]};
-	end
-end
 
 endmodule
