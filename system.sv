@@ -462,7 +462,7 @@ vdp vdp
 );
 
 // PSG 0x10-0x17 in VDP space
-wire [10:0] PSG_SND;
+wire signed [10:0] PSG_SND;
 jt89 psg
 (
 	.rst(reset),
@@ -1235,7 +1235,7 @@ jt12_genmix genmix
 	.clk(MCLK),
 	.fm_left((LPF_MODE == 2'b01) ? FM_LPF_left : FM_left),
 	.fm_right((LPF_MODE == 2'b01) ? FM_LPF_right : FM_right),
-	.psg_snd(PSG_SND),
+	.psg_snd((PSG_SND >>> 1) + (PSG_SND >>> 5)),
 	.fm_en(ENABLE_FM),
 	.psg_en(ENABLE_PSG),
 	.snd_left(PRE_LPF_L),
