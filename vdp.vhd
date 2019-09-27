@@ -2481,7 +2481,7 @@ SP1E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_INT_POS + 1 else '0
 -- Stage 2 - runs in the active area
 SP2E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = 0 else '0';
 -- Stage 3 runs 3 slots after the background rendering ends
-SP3E_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = H_DISP_WIDTH + 5 else '0';
+SP3E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_DISP_WIDTH + 5 else '0';
 
 process( CLK )
 	variable x : std_logic_vector(8 downto 0);
