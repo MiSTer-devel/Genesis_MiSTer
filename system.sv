@@ -52,7 +52,6 @@ module system
 	input         EEPROM_QUIRK,
 	input         NORAM_QUIRK,
 	input         PIER_QUIRK,
-	input         TTN2_QUIRK,
 	input         SVP_QUIRK, 
 	input         FMBUSY_QUIRK,
 
@@ -124,7 +123,6 @@ always @(negedge MCLK) begin
 	reg [3:0] VCLKCNT = 0;
 	reg [3:0] ZCLKCNT = 0;
 	reg [3:0] PCLKCNT = 0;
-	reg [3:0] ZCLKMAX = 0;
 	reg [3:0] VCLKMAX = 0;
 	reg [3:0] VCLKMID = 0;
 
@@ -136,14 +134,13 @@ always @(negedge MCLK) begin
 		PSG_CLKEN <= 1;
 		M68K_CLKENp <= 1;
 		M68K_CLKENn <= 1;
-		ZCLKMAX <= TTN2_QUIRK ? 4'd13 : 4'd14;
 		VCLKMAX = 6;
 		VCLKMID = 3;
 	end
 	else begin
 		Z80_CLKEN <= 0;
 		ZCLKCNT <= ZCLKCNT + 1'b1;
-		if (ZCLKCNT == ZCLKMAX) begin
+		if (ZCLKCNT == 14) begin
 			ZCLKCNT <= 0;
 			Z80_CLKEN <= 1;
 		end
@@ -655,17 +652,6 @@ wire [15:0] SVP_DRAM_DO;
 wire        SVP_DRAM_WE;
 wire [15:0] SVP_DRAM_DI = BRAM_DO;
 
-/*
-spram #(16,16) svp_dram
-(
-	.clock(MCLK),
-	.address(SVP_DRAM_A),
-	.data(SVP_DRAM_DO),
-	.wren(SVP_DRAM_WE),
-	.q(SVP_DRAM_DI)
-);
-*/
-
 reg SVP_CLKEN;
 always @(posedge MCLK) SVP_CLKEN <= ~reset & ~SVP_CLKEN;
 
@@ -774,6 +760,7 @@ localparam 	MBUS_IDLE         = 0,
 always @(posedge MCLK) begin
 	reg [15:0] data;
 	reg  [3:0] pier_count;
+	reg  [7:0] zwait;
 
 	if (reset) begin
 		M68K_MBUS_DTACK_N <= 1;
@@ -788,6 +775,7 @@ always @(posedge MCLK) begin
 		pier_count <= 0;
 		MBUS_RNW <= 1;
 		NO_DATA <= 'h4E71;
+		zwait <= 0;
 
 		if(PIER_QUIRK) BANK_REG <= '{0,0,0,0,0,0,0,0};
 		else BANK_REG <= '{0,1,2,3,4,5,6,7};
@@ -1047,11 +1035,15 @@ always @(posedge MCLK) begin
 
 				MSRC_Z80:
 					begin
-						Z80_MBUS_D <= Z80_A[0] ? data[7:0] : data[15:8];
-						Z80_MBUS_DTACK_N <= 0;
-						MBUS_UDS_N <= Z80_A[0];
-						MBUS_LDS_N <= ~Z80_A[0];
-						mstate <= MBUS_IDLE;
+						zwait <= zwait + 1'd1;
+						if(zwait == 40 || TURBO) begin
+							zwait <= 0;
+							Z80_MBUS_D <= Z80_A[0] ? data[7:0] : data[15:8];
+							Z80_MBUS_DTACK_N <= 0;
+							MBUS_UDS_N <= Z80_A[0];
+							MBUS_LDS_N <= ~Z80_A[0];
+							mstate <= MBUS_IDLE;
+						end
 					end
 
 				MSRC_VDP:
