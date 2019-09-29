@@ -52,7 +52,6 @@ module system
 	input         EEPROM_QUIRK,
 	input         NORAM_QUIRK,
 	input         PIER_QUIRK,
-	input         TTN2_QUIRK,
 	input         SVP_QUIRK, 
 	input         FMBUSY_QUIRK,
 
@@ -104,7 +103,8 @@ module system
 	output        ROM_REQ2,
 	input         ROM_ACK2, 
 	
-	input         EN_HIFI_PCM
+	input         EN_HIFI_PCM,
+	input         OBJ_LIMIT_HIGH
 );
 
 reg reset;
@@ -123,7 +123,6 @@ always @(negedge MCLK) begin
 	reg [3:0] VCLKCNT = 0;
 	reg [3:0] ZCLKCNT = 0;
 	reg [3:0] PCLKCNT = 0;
-	reg [3:0] ZCLKMAX = 0;
 	reg [3:0] VCLKMAX = 0;
 	reg [3:0] VCLKMID = 0;
 
@@ -135,14 +134,13 @@ always @(negedge MCLK) begin
 		PSG_CLKEN <= 1;
 		M68K_CLKENp <= 1;
 		M68K_CLKENn <= 1;
-		ZCLKMAX <= TTN2_QUIRK ? 4'd13 : 4'd14;
 		VCLKMAX = 6;
 		VCLKMID = 3;
 	end
 	else begin
 		Z80_CLKEN <= 0;
 		ZCLKCNT <= ZCLKCNT + 1'b1;
-		if (ZCLKCNT == ZCLKMAX) begin
+		if (ZCLKCNT == 14) begin
 			ZCLKCNT <= 0;
 			Z80_CLKEN <= 1;
 		end
@@ -443,6 +441,7 @@ vdp vdp
 	.VSCROLL_BUG(0),
 	.BORDER_EN(BORDER),
 	.SVP_QUIRK(SVP_QUIRK),
+	.OBJ_LIMIT_HIGH_EN(OBJ_LIMIT_HIGH),
 
 	.FIELD_OUT(FIELD),
 	.INTERLACE(INTERLACE),
@@ -460,7 +459,7 @@ vdp vdp
 );
 
 // PSG 0x10-0x17 in VDP space
-wire [10:0] PSG_SND;
+wire signed [10:0] PSG_SND;
 jt89 psg
 (
 	.rst(reset),
@@ -653,17 +652,6 @@ wire [15:0] SVP_DRAM_DO;
 wire        SVP_DRAM_WE;
 wire [15:0] SVP_DRAM_DI = BRAM_DO;
 
-/*
-spram #(16,16) svp_dram
-(
-	.clock(MCLK),
-	.address(SVP_DRAM_A),
-	.data(SVP_DRAM_DO),
-	.wren(SVP_DRAM_WE),
-	.q(SVP_DRAM_DI)
-);
-*/
-
 reg SVP_CLKEN;
 always @(posedge MCLK) SVP_CLKEN <= ~reset & ~SVP_CLKEN;
 
@@ -742,6 +730,8 @@ reg        MBUS_RNW;
 reg        MBUS_UDS_N;
 reg        MBUS_LDS_N;
 
+reg [15:0] NO_DATA;
+
 reg [4:0]  BANK_REG[0:7];
 reg [2:0]  BANK_MODE; //0 = none, 1 = BANK SRAM, 2 = BANK ROM
 
@@ -770,6 +760,7 @@ localparam 	MBUS_IDLE         = 0,
 always @(posedge MCLK) begin
 	reg [15:0] data;
 	reg  [3:0] pier_count;
+	reg  [7:0] zwait;
 
 	if (reset) begin
 		M68K_MBUS_DTACK_N <= 1;
@@ -783,6 +774,8 @@ always @(posedge MCLK) begin
 		mstate <= MBUS_IDLE;
 		pier_count <= 0;
 		MBUS_RNW <= 1;
+		NO_DATA <= 'h4E71;
+		zwait <= 0;
 
 		if(PIER_QUIRK) BANK_REG <= '{0,0,0,0,0,0,0,0};
 		else BANK_REG <= '{0,1,2,3,4,5,6,7};
@@ -977,18 +970,21 @@ always @(posedge MCLK) begin
 		MBUS_RAM_READ:
 			begin
 				data <= ram68k_q;
+				if(msrc == MSRC_M68K) NO_DATA <= ram68k_q;
 				mstate <= MBUS_FINISH;
 			end
 
 		MBUS_ROM_READ:
 			if (ROM_REQ == ROM_ACK) begin
 				data <= ROM_DATA;
+				if(msrc == MSRC_M68K) NO_DATA <= ROM_DATA;
 				mstate <= MBUS_FINISH;
 			end
 
 		MBUS_SRAM_READ:
 			begin
 				data <= {sram_q,sram_q};
+				if(msrc == MSRC_M68K) NO_DATA <= {sram_q,sram_q};
 				SRAM_SEL <= 0;
 				mstate <= MBUS_FINISH;
 			end
@@ -997,6 +993,8 @@ always @(posedge MCLK) begin
 			if (~VDP_DTACK_N) begin
 				VDP_SEL <= 0;
 				data <= VDP_DO;
+				if(MBUS_A[4:2] == 1) data[15:10] <= NO_DATA[15:10]; //unused status bits
+				else if(MBUS_A[4]) data <= NO_DATA; // PSG/debug registers
 				mstate <= MBUS_FINISH;
 			end
 
@@ -1037,11 +1035,15 @@ always @(posedge MCLK) begin
 
 				MSRC_Z80:
 					begin
-						Z80_MBUS_D <= Z80_A[0] ? data[7:0] : data[15:8];
-						Z80_MBUS_DTACK_N <= 0;
-						MBUS_UDS_N <= Z80_A[0];
-						MBUS_LDS_N <= ~Z80_A[0];
-						mstate <= MBUS_IDLE;
+						zwait <= zwait + 1'd1;
+						if(zwait == 43 || TURBO) begin
+							zwait <= 0;
+							Z80_MBUS_D <= Z80_A[0] ? data[7:0] : data[15:8];
+							Z80_MBUS_DTACK_N <= 0;
+							MBUS_UDS_N <= Z80_A[0];
+							MBUS_LDS_N <= ~Z80_A[0];
+							mstate <= MBUS_IDLE;
+						end
 					end
 
 				MSRC_VDP:
@@ -1225,7 +1227,7 @@ jt12_genmix genmix
 	.clk(MCLK),
 	.fm_left((LPF_MODE == 2'b01) ? FM_LPF_left : FM_left),
 	.fm_right((LPF_MODE == 2'b01) ? FM_LPF_right : FM_right),
-	.psg_snd(PSG_SND),
+	.psg_snd((PSG_SND >>> 1) + (PSG_SND >>> 5)),
 	.fm_en(ENABLE_FM),
 	.psg_en(ENABLE_PSG),
 	.snd_left(PRE_LPF_L),
@@ -1249,18 +1251,5 @@ genesis_lpf lpf_left
 	.in(PRE_LPF_L),
 	.out(DAC_LDATA)
 );
-
-//-----------------------------------------------------------------------
-// BUS NOISE GENERATOR
-//-----------------------------------------------------------------------
-reg [15:0] NO_DATA;
-always @(posedge MCLK) begin
-	reg [16:0] lfsr;
-
-	if (M68K_CLKEN) begin
-		lfsr <= {(lfsr[0] ^ lfsr[2] ^ !lfsr), lfsr[16:1]};
-		NO_DATA <= {NO_DATA[14:0], lfsr[0]};
-	end
-end
 
 endmodule

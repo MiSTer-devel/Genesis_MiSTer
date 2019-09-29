@@ -60,6 +60,11 @@ module emu
 	output  [1:0] LED_POWER,
 	output  [1:0] LED_DISK,
 
+	// I/O board button press simulation (active high)
+	// b[1]: user button
+	// b[0]: osd button
+	output  [1:0] BUTTONS,
+
 	output [15:0] AUDIO_L,
 	output [15:0] AUDIO_R,
 	output        AUDIO_S, // 1 - signed audio samples, 0 - unsigned
@@ -68,7 +73,7 @@ module emu
 	//ADC
 	inout   [3:0] ADC_BUS,
 
-	// SD-SPI
+	//SD-SPI
 	output        SD_SCK,
 	output        SD_MOSI,
 	input         SD_MISO,
@@ -111,10 +116,10 @@ module emu
 	// Open-drain User port.
 	// 0 - D+/RX
 	// 1 - D-/TX
-	// 2..5 - USR1..USR4
+	// 2..6 - USR2..USR6
 	// Set USER_OUT to 1 to read from USER_IN.
-	input   [5:0] USER_IN,
-	output  [5:0] USER_OUT,
+	input   [6:0] USER_IN,
+	output  [6:0] USER_OUT,
 
 	input         OSD_STATUS
 );
@@ -122,6 +127,7 @@ module emu
 assign ADC_BUS  = 'Z;
 assign USER_OUT = '1;
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
+assign BUTTONS   = 0;
 assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 assign {SDRAM_DQ, SDRAM_A, SDRAM_BA, SDRAM_CLK, SDRAM_CKE, SDRAM_DQML, SDRAM_DQMH, SDRAM_nWE, SDRAM_nCAS, SDRAM_nRAS, SDRAM_nCS} = 'Z;
 
@@ -198,6 +204,7 @@ localparam CONF_STR = {
 	"OK,Mouse Flip Y,No,Yes;",
 	"-;",
 	"OPQ,CPU Turbo,None,Medium,High;",
+	"OR,Sprite Limit,Normal,High;",
 	"-;",
 `ifdef SOUND_DBG
 	"OB,Enable FM,Yes,No;",
@@ -337,6 +344,13 @@ wire [1:0] resolution;
 assign DDRAM_CLK = clk_ram;
 wire reset = RESET | status[0] | buttons[1] | region_set | bk_loading;
 
+wire [7:0] color_lut[16] = '{
+	8'd0,   8'd27,  8'd49,  8'd71,
+	8'd87,  8'd103, 8'd119, 8'd130,
+	8'd146, 8'd157, 8'd174, 8'd190,
+	8'd206, 8'd228, 8'd255, 8'd255
+};
+
 system system
 (
 	.RESET_N(~reset),
@@ -349,7 +363,6 @@ system system
 	.EEPROM_QUIRK(eeprom_quirk),
 	.NORAM_QUIRK(noram_quirk),
 	.PIER_QUIRK(pier_quirk),
-	.TTN2_QUIRK(ttn2_quirk),
 	.FMBUSY_QUIRK(fmbusy_quirk),
 
 	.DAC_LDATA(AUDIO_L),
@@ -396,6 +409,8 @@ system system
 `endif
 	.EN_HIFI_PCM(status[23]), // Option "N"
 	.LPF_MODE(status[15:14]),
+
+	.OBJ_LIMIT_HIGH(status[27]),
 
 	.BRAM_A({sd_lba[6:0],sd_buff_addr}),
 	.BRAM_DI(sd_buff_dout),
@@ -452,8 +467,7 @@ assign VGA_SL = {~interlace,~interlace}&sl[1:0];
 reg old_ce_pix;
 always @(posedge CLK_VIDEO) old_ce_pix <= ce_pix;
 
-
-video_mixer #(.LINE_LENGTH(320), .HALF_DEPTH(1)) video_mixer
+video_mixer #(.LINE_LENGTH(320), .HALF_DEPTH(0)) video_mixer
 (
 	.*,
 
@@ -467,9 +481,9 @@ video_mixer #(.LINE_LENGTH(320), .HALF_DEPTH(1)) video_mixer
 
 	.mono(0),
 
-	.R(r),
-	.G(g),
-	.B(b),
+	.R(color_lut[r]),
+	.G(color_lut[g]),
+	.B(color_lut[b]),
 
 	// Positive pulses.
 	.HSync(hs),
@@ -611,7 +625,6 @@ reg eeprom_quirk = 0;
 reg fifo_quirk = 0;
 reg noram_quirk = 0;
 reg pier_quirk = 0;
-reg ttn2_quirk = 0;
 reg svp_quirk = 0;
 reg fmbusy_quirk = 0;
 always @(posedge clk_sys) begin
@@ -619,7 +632,7 @@ always @(posedge clk_sys) begin
 	reg old_download;
 	old_download <= cart_download;
 
-	if(~old_download && cart_download) {fifo_quirk,eeprom_quirk,sram_quirk,noram_quirk,pier_quirk,ttn2_quirk,svp_quirk,fmbusy_quirk} <= 0;
+	if(~old_download && cart_download) {fifo_quirk,eeprom_quirk,sram_quirk,noram_quirk,pier_quirk,svp_quirk,fmbusy_quirk} <= 0;
 
 	if(ioctl_wr & cart_download) begin
 		if(ioctl_addr == 'h182) cart_id[63:56] <= ioctl_data[15:8];
@@ -646,7 +659,6 @@ always @(posedge clk_sys) begin
 			else if(cart_id == "T-89016 ") fifo_quirk   <= 1; // Clue
 			else if(cart_id == "T-574023") pier_quirk   <= 1; // Pier Solar Reprint
 			else if(cart_id == "T-574013") pier_quirk   <= 1; // Pier Solar 1st Edition
-			else if(cart_id == "TITAN002") ttn2_quirk   <= 1; // Titan Overdrive 2
 			else if(cart_id == "MK-1229 ") svp_quirk    <= 1; // Virtua Racing EU/US
 			else if(cart_id == "G-7001  ") svp_quirk    <= 1; // Virtua Racing JP
 			else if(cart_id == "T-35036 ") fmbusy_quirk <= 1; // Hellfire US
@@ -705,7 +717,7 @@ always @(posedge clk_sys) begin
 			sd_rd <=  bk_load;
 			sd_wr <= ~bk_load;
 		end
-		if(old_downloading & ~cart_download & |img_size & bk_ena) begin
+		if(old_downloading & ~downloading & |img_size & bk_ena) begin
 			bk_state <= 1;
 			bk_loading <= 1;
 			sd_lba <= 0;
