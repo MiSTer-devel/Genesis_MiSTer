@@ -1036,7 +1036,7 @@ always @(posedge MCLK) begin
 				MSRC_Z80:
 					begin
 						zwait <= zwait + 1'd1;
-						if(zwait == 40 || TURBO) begin
+						if(zwait == 43 || TURBO) begin
 							zwait <= 0;
 							Z80_MBUS_D <= Z80_A[0] ? data[7:0] : data[15:8];
 							Z80_MBUS_DTACK_N <= 0;
