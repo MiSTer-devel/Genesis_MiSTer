@@ -52,8 +52,8 @@ module hps_io #(parameter STRLEN=0, PS2DIV=0, WIDE=0, VDNUM=1, PS2WE=0)
 	output      [1:0] buttons,
 	output            forced_scandoubler,
 
-	output reg [31:0] status,
-	input      [31:0] status_in,
+	output reg [63:0] status,
+	input      [63:0] status_in,
 	input             status_set,
 	input      [15:0] status_menumask,
 
@@ -290,7 +290,7 @@ always@(posedge clk_sys) begin
 	reg  [2:0] stick_idx;
 	reg        ps2skip = 0;
 	reg  [3:0] stflg = 0;
-	reg [31:0] status_req;
+	reg [63:0] status_req;
 	reg        old_status_set = 0;
 
 	old_status_set <= status_set;
@@ -436,9 +436,13 @@ always@(posedge clk_sys) begin
 					// send image info
 					'h1d: if(byte_cnt<5) img_size[{byte_cnt-1'b1, 4'b0000} +:16] <= io_din;
 
-					// status, 32bit version
-					'h1e: if(byte_cnt==1) status[15:0] <= io_din;
-								else if(byte_cnt==2) status[31:16] <= io_din;
+					// status, 64bit version
+					'h1e: case(byte_cnt)
+								1: status[15:00] <= io_din;
+								2: status[31:16] <= io_din;
+								3: status[47:32] <= io_din;
+								4: status[63:48] <= io_din;
+							endcase
 
 					// reading keyboard LED status
 					'h1f: io_dout <= {|PS2WE, 2'b01, ps2_kbd_led_status[2], ps2_kbd_led_use[2], ps2_kbd_led_status[1], ps2_kbd_led_use[1], ps2_kbd_led_status[0], ps2_kbd_led_use[0]};
@@ -484,8 +488,10 @@ always@(posedge clk_sys) begin
 
 					//status set
 					'h29: case(byte_cnt)
-								1: io_dout <= status_req[15:0];
+								1: io_dout <= status_req[15:00];
 								2: io_dout <= status_req[31:16];
+								3: io_dout <= status_req[47:32];
+								4: io_dout <= status_req[63:48];
 							endcase
 					
 					//menu mask
