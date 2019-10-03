@@ -37,6 +37,8 @@ module jt12_acc(
     input               rst,
     input               clk,
     input               clk_en,
+    input               ladder,
+    input               channel_en,
     input signed [8:0]  op_result,
     input        [ 1:0] rl,
     input               zero,
@@ -49,8 +51,8 @@ module jt12_acc(
     input               pcm_en, // only enabled for channel 6
     input   signed [8:0] pcm,
     // combined output
-    output reg signed   [11:0]  left,
-    output reg signed   [11:0]  right
+    output reg signed   [15:0]  left,
+    output reg signed   [15:0]  right
 );
 
 reg sum_en;
@@ -72,38 +74,36 @@ always @(posedge clk) if(clk_en)
 
 wire use_pcm = ch6op && pcm_en;
 wire sum_or_pcm = sum_en | use_pcm;
-wire left_en = rl[1];
-wire right_en= rl[0];
 wire signed [8:0] pcm_data = pcm_sum ? pcm : 9'd0;
-wire [8:0] acc_input =  use_pcm ? pcm_data : op_result;
+
+wire signed [8:0] acc_input = ~channel_en ? 9'd0 : (use_pcm ? pcm_data : op_result);
 
 // Continuous output
-wire signed   [11:0]  pre_left, pre_right;
-jt12_single_acc #(.win(9),.wout(12)) u_left(
+wire signed   [8:0]  acc_out;
+jt12_single_acc #(.win(9),.wout(9)) u_acc(
     .clk        ( clk            ),
     .clk_en     ( clk_en         ),
     .op_result  ( acc_input      ),
-    .sum_en     ( sum_or_pcm & left_en ),
+    .sum_en     ( sum_or_pcm     ),
     .zero       ( zero           ),
-    .snd        ( pre_left       )
+    .snd        ( acc_out        )
 );
 
-jt12_single_acc #(.win(9),.wout(12)) u_right(
-    .clk        ( clk            ),
-    .clk_en     ( clk_en         ),
-    .op_result  ( acc_input      ),
-    .sum_en     ( sum_or_pcm & right_en ),
-    .zero       ( zero           ),
-    .snd        ( pre_right      )
-);
+wire signed [15:0] acc_expand = {{7{acc_out[8]}}, acc_out};
 
-// Output can be amplied by 8/6=1.33 to use full range
-// an easy alternative is to add 1/4th and get 1.25 amplification
- //////This is unsafe to do.  The accumulator is adding operators, not channels (up to 24, not 6).
- //////Also, if this was safe, I believe this should be adding pre_left and pre_right, not left and right.
+reg [1:0] rl_latch, rl_old;
+
+wire signed [4:0] ladder_left = ~ladder ? 5'd0 : (acc_expand >= 0 ? 5'd7 : (rl_old[1] ? 5'd0 : -5'd6));
+wire signed [4:0] ladder_right = ~ladder ? 5'd0 : (acc_expand >= 0 ? 5'd7 : (rl_old[0] ? 5'd0 : -5'd6));
+
 always @(posedge clk) if(clk_en) begin
-    left  <= pre_left  - { {2{pre_left [11]}}, pre_left [11:2] };
-    right <= pre_right - { {2{pre_right[11]}}, pre_right[11:2] };
+    if (channel_en)
+        rl_latch <= rl;
+    if (zero)
+        rl_old <= rl_latch;
+
+    left  <= rl_old[1] ? acc_expand + ladder_left : ladder_left;
+    right <= rl_old[0] ? acc_expand + ladder_right : ladder_right;
 end
 
 endmodule
