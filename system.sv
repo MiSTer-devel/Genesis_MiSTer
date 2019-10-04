@@ -104,6 +104,7 @@ module system
 	input         ROM_ACK2, 
 	
 	input         EN_HIFI_PCM,
+	input         LADDER,
 	input         OBJ_LIMIT_HIGH
 );
 
@@ -1201,6 +1202,7 @@ jt12 fm
 	.din(ZBUS_DO),
 	.dout(FM_DO),
 	.en_hifi_pcm( EN_HIFI_PCM ),
+	.ladder(LADDER),
 	.snd_left(FM_left),
 	.snd_right(FM_right)
 );
@@ -1221,13 +1223,21 @@ genesis_fm_lpf fm_lpf_r
 	.out(FM_LPF_right)
 );
 
+wire signed [15:0] fm_select_l = ((LPF_MODE == 2'b01) ? FM_LPF_left : FM_left);
+wire signed [15:0] fm_select_r = ((LPF_MODE == 2'b01) ? FM_LPF_right : FM_right);
+
+wire signed [15:0] fm_adjust_l = (fm_select_l << 4) + (fm_select_l << 2) + (fm_select_l << 1) + (fm_select_l >>> 2);
+wire signed [15:0] fm_adjust_r = (fm_select_r << 4) + (fm_select_r << 2) + (fm_select_r << 1) + (fm_select_r >>> 2);
+
+wire signed [10:0] psg_adjust = PSG_SND - (PSG_SND >>> 5);
+
 jt12_genmix genmix
 (
 	.rst(reset),
 	.clk(MCLK),
-	.fm_left((LPF_MODE == 2'b01) ? FM_LPF_left : FM_left),
-	.fm_right((LPF_MODE == 2'b01) ? FM_LPF_right : FM_right),
-	.psg_snd((PSG_SND >>> 1) + (PSG_SND >>> 5)),
+	.fm_left(fm_adjust_l),
+	.fm_right(fm_adjust_r),
+	.psg_snd(psg_adjust),
 	.fm_en(ENABLE_FM),
 	.psg_en(ENABLE_PSG),
 	.snd_left(PRE_LPF_L),

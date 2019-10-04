@@ -32,6 +32,7 @@ module jt12_top (
     input   [1:0]   addr,
     input           cs_n,
     input           wr_n,
+    input           ladder,
 
     output  [7:0]   dout,
     output          irq_n,
@@ -559,11 +560,17 @@ assign op_result_hd = 'd0;
 `endif
 
 /* verilator tracing_on */
+genvar i;
+wire signed [15:0] accum_r[7];
+wire signed [15:0] accum_l[7];
+
+assign fm_snd_left = accum_l[0] + accum_l[1] + accum_l[2] + accum_l[4] + accum_l[5] + accum_l[6];
+assign fm_snd_right = accum_r[0] + accum_r[1] + accum_r[2] + accum_r[4] + accum_r[5] + accum_r[6];
 
 generate
     if( use_pcm==1 ) begin: gen_pcm_acc // YM2612 accumulator
-        assign fm_snd_right[3:0] = 4'd0;
-        assign fm_snd_left [3:0] = 4'd0;
+        //assign fm_snd_right[3:0] = 4'd0;
+        //assign fm_snd_left [3:0] = 4'd0;
         assign snd_sample        = zero;
         reg signed [8:0] pcm2;
 
@@ -607,27 +614,32 @@ generate
         assign pcm2 = pcm;
         `endif
 
-        jt12_acc u_acc(
-            .rst        ( rst       ),
-            .clk        ( clk       ),
-            .clk_en     ( clk_en    ),
-            .op_result  ( op_result ),
-            .rl         ( rl        ),
-            // note that the order changes to deal
-            // with the operator pipeline delay
-            .zero       ( zero      ),
-            .s1_enters  ( s2_enters ),
-            .s2_enters  ( s1_enters ),
-            .s3_enters  ( s4_enters ),
-            .s4_enters  ( s3_enters ),
-            .ch6op      ( ch6op     ),
-            .pcm_en     ( pcm_en    ),  // only enabled for channel 6
-            .pcm        ( pcm2      ),
-            .alg        ( alg_I     ),
-            // combined output
-            .left       ( fm_snd_left [15:4]  ),
-            .right      ( fm_snd_right[15:4]  )
-        );
+        for (i = 0; i < 7; i = i + 1) begin : accumulator_block
+            jt12_acc u_acc(
+                .rst        ( rst       ),
+                .clk        ( clk       ),
+                .clk_en     ( clk_en    ),
+                .channel_en (cur_ch == i),
+                .ladder     ( ladder    ),
+                .op_result  ( op_result ),
+                .rl         ( rl        ),
+                // note that the order changes to deal
+                // with the operator pipeline delay
+                .zero       ( zero      ),
+                .s1_enters  ( s2_enters ),
+                .s2_enters  ( s1_enters ),
+                .s3_enters  ( s4_enters ),
+                .s4_enters  ( s3_enters ),
+                .ch6op      ( ch6op     ),
+                .pcm_en     ( pcm_en    ),  // only enabled for channel 6
+                .pcm        ( pcm2      ),
+                .alg        ( alg_I     ),
+                // combined output
+                .left       ( accum_l[i]),
+                .right      ( accum_r[i])
+            );
+        end
+
     end
     if( use_pcm==0 && use_adpcm==0 ) begin : gen_2203_acc // YM2203 accumulator
         wire signed [15:0] mono_snd;

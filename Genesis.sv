@@ -173,6 +173,13 @@ assign LED_USER  = cart_download | sav_pending;
 
 //`define SOUND_DBG
 
+// Status Bit Map:
+//             Upper                             Lower              
+// 0         1         2         3          4         5         6   
+// 01234567890123456789012345678901 23456789012345678901234567890123
+// 0123456789ABCDEFGHIJKLMNOPQRSTUV 1234567890abcdefghijklmnopqrstuv
+// XXXXXXXXXXXX XXXXXXXXXXXXXXXXXXX                                 
+
 `include "build_id.v"
 localparam CONF_STR = {
 	"Genesis;;",
@@ -195,6 +202,7 @@ localparam CONF_STR = {
 	"OT,Border,No,Yes;",
 	"-;",
 	"OEF,Audio Filter,Model 1,Model 2,Minimal,No Filter;",
+	"OB,FM Chip,YM2612,YM3438;",
 	"ON,HiFi PCM,No,Yes;",
 	"-;",
 	"O4,Swap Joysticks,No,Yes;",
@@ -204,11 +212,11 @@ localparam CONF_STR = {
 	"OK,Mouse Flip Y,No,Yes;",
 	"-;",
 	"OPQ,CPU Turbo,None,Medium,High;",
-	"OR,Sprite Limit,Normal,High;",
+	"OV,Sprite Limit,Normal,High;",
 	"-;",
 `ifdef SOUND_DBG
-	"OB,Enable FM,Yes,No;",
-	"OC,Enable PSG,Yes,No;",
+	"OR,Enable FM,Yes,No;",
+	"OS,Enable PSG,Yes,No;",
 `endif	
 	"R0,Reset;",
 	"J1,A,B,C,Start,Mode,X,Y,Z;",
@@ -401,16 +409,17 @@ system system
 	.MOUSE_OPT(status[20:18]),
 
 `ifdef SOUND_DBG
-	.ENABLE_FM(~status[11]),
-	.ENABLE_PSG(~status[12]),
+	.ENABLE_FM(~status[27]),
+	.ENABLE_PSG(~status[28]),
 `else
 	.ENABLE_FM(1),
 	.ENABLE_PSG(1),
 `endif
 	.EN_HIFI_PCM(status[23]), // Option "N"
+	.LADDER(~status[11]),
 	.LPF_MODE(status[15:14]),
 
-	.OBJ_LIMIT_HIGH(status[27]),
+	.OBJ_LIMIT_HIGH(status[31]),
 
 	.BRAM_A({sd_lba[6:0],sd_buff_addr}),
 	.BRAM_DI(sd_buff_dout),
