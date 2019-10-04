@@ -171,14 +171,14 @@ assign LED_POWER = 0;
 assign LED_USER  = cart_download | sav_pending;
 
 
-//`define SOUND_DBG
+`define SOUND_DBG
 
 // Status Bit Map:
 //             Upper                             Lower              
 // 0         1         2         3          4         5         6   
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 1234567890abcdefghijklmnopqrstuv
-// XXXXXXXXXXXX XXXXXXXXXXXXXXXXXXX                                 
+// XXXXXXXXXXXX XXXXXXXXXXXXXXXXXXX XX                                
 
 `include "build_id.v"
 localparam CONF_STR = {
@@ -214,18 +214,15 @@ localparam CONF_STR = {
 	"OPQ,CPU Turbo,None,Medium,High;",
 	"OV,Sprite Limit,Normal,High;",
 	"-;",
-`ifdef SOUND_DBG
-	"OR,Enable FM,Yes,No;",
-	"OS,Enable PSG,Yes,No;",
-`endif	
+	"H3o0,Enable FM,Yes,No;",
+	"H3o1,Enable PSG,Yes,No;",
+	"H3-;",
 	"R0,Reset;",
 	"J1,A,B,C,Start,Mode,X,Y,Z;",
 	"V,v",`BUILD_DATE
 };
-// free: V [B C]
 
-wire [15:0] status_menumask = {~status[8],~gg_available,~bk_ena};
-wire [31:0] status;
+wire [63:0] status;
 wire  [1:0] buttons;
 wire [11:0] joystick_0,joystick_1,joystick_2,joystick_3;
 wire        ioctl_download;
@@ -267,9 +264,9 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(1)) hps_io
 	.new_vmode(new_vmode),
 
 	.status(status),
-	.status_in({status[31:8],region_req,status[5:0]}),
+	.status_in({status[63:8],region_req,status[5:0]}),
 	.status_set(region_set),
-	.status_menumask(status_menumask),
+	.status_menumask({~dbg_menu,~status[8],~gg_available,~bk_ena}),
 
 	.ioctl_download(ioctl_download),
 	.ioctl_index(ioctl_index),
@@ -408,13 +405,8 @@ system system
 	.MOUSE(ps2_mouse),
 	.MOUSE_OPT(status[20:18]),
 
-`ifdef SOUND_DBG
-	.ENABLE_FM(~status[27]),
-	.ENABLE_PSG(~status[28]),
-`else
-	.ENABLE_FM(1),
-	.ENABLE_PSG(1),
-`endif
+	.ENABLE_FM(~dbg_menu | ~status[32]),
+	.ENABLE_PSG(~dbg_menu | ~status[33]),
 	.EN_HIFI_PCM(status[23]), // Option "N"
 	.LADDER(~status[11]),
 	.LPF_MODE(status[15:14]),
@@ -455,6 +447,25 @@ always @(posedge clk_sys) begin
 	if(to) begin
 		to <= to - 1;
 		if(to == 1) new_vmode <= ~new_vmode;
+	end
+end
+
+reg dbg_menu = 0;
+always @(posedge clk_sys) begin
+	reg old_stb;
+	reg enter = 0;
+	reg esc = 0;
+	
+	old_stb <= ps2_key[10];
+	if(old_stb ^ ps2_key[10]) begin
+		if(ps2_key[7:0] == 'h5A) enter <= ps2_key[9];
+		if(ps2_key[7:0] == 'h76) esc   <= ps2_key[9];
+	end
+	
+	if(enter & esc) begin
+		dbg_menu <= ~dbg_menu;
+		enter <= 0;
+		esc <= 0;
 	end
 end
 
