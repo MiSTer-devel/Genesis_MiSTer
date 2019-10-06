@@ -176,9 +176,9 @@ assign LED_USER  = cart_download | sav_pending;
 // Status Bit Map:
 //             Upper                             Lower              
 // 0         1         2         3          4         5         6   
-// 01234567890123456789012345678901 23456789012345678901234567890123
-// 0123456789ABCDEFGHIJKLMNOPQRSTUV 1234567890abcdefghijklmnopqrstuv
-// XXXXXXXXXXXX XXXXXXXXXXXXXXXXXXX XX                                
+// 01234567890123456789012345678901 234567890123456789012345678901234
+// 0123456789ABCDEFGHIJKLMNOPQRSTUV 01234567890abcdefghijklmnopqrstuv
+// XXXXXXXXXXXX XXXXXXXXXXXXXXXXXXX XXX                               
 
 `include "build_id.v"
 localparam CONF_STR = {
@@ -200,6 +200,7 @@ localparam CONF_STR = {
 	"OU,320x224 Aspect,Original,Corrected;",
 	"O13,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
 	"OT,Border,No,Yes;",
+	"o2,Composite Blending,Off,On;",
 	"-;",
 	"OEF,Audio Filter,Model 1,Model 2,Minimal,No Filter;",
 	"OB,FM Chip,YM2612,YM3438;",
@@ -487,6 +488,23 @@ assign VGA_SL = {~interlace,~interlace}&sl[1:0];
 reg old_ce_pix;
 always @(posedge CLK_VIDEO) old_ce_pix <= ce_pix;
 
+wire [7:0] red, green, blue;
+
+cofi coffee (
+	.clk(CLK_VIDEO),
+	.pix_ce(~old_ce_pix & ce_pix),
+	.enable(status[34]),
+	.blank(hblank | vblank),
+
+	.red(color_lut[r]),
+	.green(color_lut[g]),
+	.blue(color_lut[b]),
+
+	.red_out(red),
+	.green_out(green),
+	.blue_out(blue)
+);
+
 video_mixer #(.LINE_LENGTH(320), .HALF_DEPTH(0)) video_mixer
 (
 	.*,
@@ -501,9 +519,9 @@ video_mixer #(.LINE_LENGTH(320), .HALF_DEPTH(0)) video_mixer
 
 	.mono(0),
 
-	.R(color_lut[r]),
-	.G(color_lut[g]),
-	.B(color_lut[b]),
+	.R(red),
+	.G(green),
+	.B(blue),
 
 	// Positive pulses.
 	.HSync(hs),
