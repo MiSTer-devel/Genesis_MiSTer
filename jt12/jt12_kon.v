@@ -45,8 +45,11 @@ reg din;
 wire csr_out;
 
 reg [3:0] next_op_hot;
-reg [3:0] next_op6_hot;
 
+reg [3:0] tkeyon_op;
+reg [2:0] tkeyon_ch;
+reg [3:0] okeyon_op;
+reg [2:0] okeyon_ch;
 
 always @(*) begin
     case( next_op )
@@ -55,14 +58,11 @@ always @(*) begin
         2'd2: next_op_hot = 4'b0010; // S2
         2'd3: next_op_hot = 4'b1000; // S4
     endcase
-    din = keyon_ch==next_ch && up_keyon ? |(keyon_op&next_op_hot) : csr_out;
+    din = (okeyon_ch==next_ch) ? |(okeyon_op&next_op_hot) : csr_out;
 end
 
 generate
 if(num_ch==6) begin
-    wire middle;
-    reg  mid_din;
-
     // capture overflow signal so it lasts long enough
     reg overflow2;
     reg [4:0] overflow_cycle;
@@ -76,32 +76,25 @@ if(num_ch==6) begin
         end
     end
 
-    always @(posedge clk) if( clk_en ) 
+    always @(posedge clk) if( clk_en )
         keyon_I <= (csm&&next_ch==3'd2&&overflow2) || csr_out;
 
-    always @(*) begin
-        case( {~next_op[1], next_op[0]} )
-            2'd0: next_op6_hot = 4'b0001; // S1
-            2'd1: next_op6_hot = 4'b0100; // S3
-            2'd2: next_op6_hot = 4'b0010; // S2
-            2'd3: next_op6_hot = 4'b1000; // S4
-        endcase
-        mid_din = keyon_ch==next_ch && up_keyon ? |(keyon_op&next_op6_hot) : middle;
+    always @(posedge clk) if( clk_en ) begin
+        if (up_keyon) begin
+            tkeyon_op <= keyon_op;
+            tkeyon_ch <= keyon_ch;
+        end
+        if ((next_ch == 3'd6) && (next_op == 2'd3)) begin
+            okeyon_op <= tkeyon_op;
+            okeyon_ch <= tkeyon_ch;
+        end
     end
 
-    jt12_sh_rst #(.width(1),.stages(12),.rstval(1'b0)) u_konch0(
+    jt12_sh_rst #(.width(1),.stages(24),.rstval(1'b0)) u_konch0(
         .clk    ( clk       ),
         .clk_en ( clk_en    ),
         .rst    ( rst       ),
         .din    ( din       ),
-        .drop   ( middle    )
-    );
-
-    jt12_sh_rst #(.width(1),.stages(12),.rstval(1'b0)) u_konch1(
-        .clk    ( clk       ),
-        .clk_en ( clk_en    ),
-        .rst    ( rst       ),
-        .din    ( mid_din   ),
         .drop   ( csr_out   )
     );
 end
