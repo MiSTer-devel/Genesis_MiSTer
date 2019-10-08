@@ -26,7 +26,7 @@
 module jt12_kon(
     input           rst,
     input           clk,
-    input           clk_en,
+    input           clk_en /* synthesis direct_enable */,
     input   [3:0]   keyon_op,
     input   [2:0]   keyon_ch,
     input   [1:0]   next_op,
@@ -41,25 +41,7 @@ module jt12_kon(
 
 parameter num_ch=6;
 
-reg din;
 wire csr_out;
-
-reg [3:0] next_op_hot;
-
-reg [3:0] tkeyon_op;
-reg [2:0] tkeyon_ch;
-reg [3:0] okeyon_op;
-reg [2:0] okeyon_ch;
-
-always @(*) begin
-    case( next_op )
-        2'd0: next_op_hot = 4'b0001; // S1
-        2'd1: next_op_hot = 4'b0100; // S3
-        2'd2: next_op_hot = 4'b0010; // S2
-        2'd3: next_op_hot = 4'b1000; // S4
-    endcase
-    din = (okeyon_ch==next_ch) ? |(okeyon_op&next_op_hot) : csr_out;
-end
 
 generate
 if(num_ch==6) begin
@@ -79,26 +61,61 @@ if(num_ch==6) begin
     always @(posedge clk) if( clk_en )
         keyon_I <= (csm&&next_ch==3'd2&&overflow2) || csr_out;
 
-    always @(posedge clk) if( clk_en ) begin
-        if (up_keyon) begin
-            tkeyon_op <= keyon_op;
-            tkeyon_ch <= keyon_ch;
-        end
-        if ((next_ch == 3'd6) && (next_op == 2'd3)) begin
-            okeyon_op <= tkeyon_op;
-            okeyon_ch <= tkeyon_ch;
-        end
-    end
+    wire key_upnow = up_keyon && (keyon_ch==next_ch) && (next_op == 2'd3);
+    wire middle1;
+    wire middle2;
+    wire middle3;
+    wire din      = key_upnow ? keyon_op[3] : csr_out;
+    wire mid_din2 = key_upnow ? keyon_op[1] : middle1;
+    wire mid_din3 = key_upnow ? keyon_op[2] : middle2;
+    wire mid_din4 = key_upnow ? keyon_op[0] : middle3;
 
-    jt12_sh_rst #(.width(1),.stages(24),.rstval(1'b0)) u_konch0(
+    jt12_sh_rst #(.width(1),.stages(6),.rstval(1'b0)) u_konch0(
         .clk    ( clk       ),
         .clk_en ( clk_en    ),
         .rst    ( rst       ),
         .din    ( din       ),
+        .drop   ( middle1   )
+    );
+
+    jt12_sh_rst #(.width(1),.stages(6),.rstval(1'b0)) u_konch1(
+        .clk    ( clk       ),
+        .clk_en ( clk_en    ),
+        .rst    ( rst       ),
+        .din    ( mid_din2  ),
+        .drop   ( middle2   )
+    );
+
+    jt12_sh_rst #(.width(1),.stages(6),.rstval(1'b0)) u_konch2(
+        .clk    ( clk       ),
+        .clk_en ( clk_en    ),
+        .rst    ( rst       ),
+        .din    ( mid_din3  ),
+        .drop   ( middle3   )
+    );
+
+    jt12_sh_rst #(.width(1),.stages(6),.rstval(1'b0)) u_konch3(
+        .clk    ( clk       ),
+        .clk_en ( clk_en    ),
+        .rst    ( rst       ),
+        .din    ( mid_din4  ),
         .drop   ( csr_out   )
     );
 end
 else begin // 3 channels
+    reg din;
+    reg [3:0] next_op_hot;
+	 
+    always @(*) begin
+        case( next_op )
+            2'd0: next_op_hot = 4'b0001; // S1
+            2'd1: next_op_hot = 4'b0100; // S3
+            2'd2: next_op_hot = 4'b0010; // S2
+            2'd3: next_op_hot = 4'b1000; // S4
+        endcase
+        din = keyon_ch==next_ch && up_keyon ? |(keyon_op&next_op_hot) : csr_out;
+    end
+
     always @(posedge clk) if( clk_en ) 
         keyon_I <= csr_out; // No CSM for YM2203
 
