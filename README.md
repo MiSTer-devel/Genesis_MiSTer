@@ -36,6 +36,6 @@ Heder may include several regions - the correct one will be selected depending o
 * SVP chip (Virtua Racing)
 * Audio Filters for Model 1, Model 2, Minimal, No Filter.
 * Option to choose between YM2612 and YM3438 (changes Ladder Effect behavior).
-* Composite Blend, smooth dithering patterns in games.
+* Composite Blending, smooth dithering patterns in games.
 * Sprite Limit, enables more sprites.
 * CPU Turbo.
