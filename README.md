@@ -38,4 +38,4 @@ Heder may include several regions - the correct one will be selected depending o
 * Option to choose between YM2612 and YM3438 (changes Ladder Effect behavior).
 * Composite Blending, smooth dithering patterns in games.
 * Sprite Limit, enables more sprites.
-* CPU Turbo.
+* CPU Turbo, mitigates slowdowns.
