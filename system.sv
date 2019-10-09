@@ -1183,12 +1183,12 @@ end
 
 wire        FM_SEL = ZBUS_A[14:13] == 2'b10;
 wire  [7:0] FM_DO;
-wire [15:0] FM_right;
-wire [15:0] FM_left;
-wire [15:0] FM_LPF_right;
-wire [15:0] FM_LPF_left;
-wire [15:0] PRE_LPF_L;
-wire [15:0] PRE_LPF_R;
+wire signed [15:0] FM_right;
+wire signed [15:0] FM_left;
+wire signed [15:0] FM_LPF_right;
+wire signed [15:0] FM_LPF_left;
+wire signed [15:0] PRE_LPF_L;
+wire signed [15:0] PRE_LPF_R;
 
 jt12 fm
 (
@@ -1207,11 +1207,14 @@ jt12 fm
 	.snd_right(FM_right)
 );
 
+wire signed [15:0] fm_adjust_l = (FM_left << 4) + (FM_left << 2) + (FM_left << 1) + (FM_left >>> 2);
+wire signed [15:0] fm_adjust_r = (FM_right << 4) + (FM_right << 2) + (FM_right << 1) + (FM_right >>> 2);
+
 genesis_fm_lpf fm_lpf_l
 (
 	.clk(MCLK),
 	.reset(reset),
-	.in(FM_left),
+	.in(fm_adjust_l),
 	.out(FM_LPF_left)
 );
 
@@ -1219,15 +1222,12 @@ genesis_fm_lpf fm_lpf_r
 (
 	.clk(MCLK),
 	.reset(reset),
-	.in(FM_right),
+	.in(fm_adjust_r),
 	.out(FM_LPF_right)
 );
 
-wire signed [15:0] fm_select_l = ((LPF_MODE == 2'b01) ? FM_LPF_left : FM_left);
-wire signed [15:0] fm_select_r = ((LPF_MODE == 2'b01) ? FM_LPF_right : FM_right);
-
-wire signed [15:0] fm_adjust_l = (fm_select_l << 4) + (fm_select_l << 2) + (fm_select_l << 1) + (fm_select_l >>> 2);
-wire signed [15:0] fm_adjust_r = (fm_select_r << 4) + (fm_select_r << 2) + (fm_select_r << 1) + (fm_select_r >>> 2);
+wire signed [15:0] fm_select_l = ((LPF_MODE == 2'b01) ? FM_LPF_left : fm_adjust_l);
+wire signed [15:0] fm_select_r = ((LPF_MODE == 2'b01) ? FM_LPF_right : fm_adjust_r);
 
 wire signed [10:0] psg_adjust = PSG_SND - (PSG_SND >>> 5);
 
@@ -1235,8 +1235,8 @@ jt12_genmix genmix
 (
 	.rst(reset),
 	.clk(MCLK),
-	.fm_left(fm_adjust_l),
-	.fm_right(fm_adjust_r),
+	.fm_left(fm_select_l),
+	.fm_right(fm_select_r),
 	.psg_snd(psg_adjust),
 	.fm_en(ENABLE_FM),
 	.psg_en(ENABLE_PSG),
