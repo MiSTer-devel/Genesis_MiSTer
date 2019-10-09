@@ -34,4 +34,8 @@ Heder may include several regions - the correct one will be selected depending o
 
 * Multitaps: 4-way, Team player, J-Cart
 * SVP chip (Virtua Racing)
-
+* Audio Filters for Model 1, Model 2, Minimal, No Filter.
+* Option to choose between YM2612 and YM3438 (changes Ladder Effect behavior).
+* Composite Blending, smooth dithering patterns in games.
+* Sprite Limit, enables more sprites.
+* CPU Turbo, mitigates slowdowns.
