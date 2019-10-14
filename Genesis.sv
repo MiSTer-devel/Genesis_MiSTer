@@ -389,7 +389,8 @@ system system
 	.INTERLACE(interlace),
 	.RESOLUTION(resolution),
 	.FAST_FIFO(fifo_quirk),
-	.SVP_QUIRK(svp_quirk), 
+	.SVP_QUIRK(svp_quirk),
+	.SCHAN_QUIRK(schan_quirk),
 	
 	.GG_RESET(code_download && ioctl_wr && !ioctl_addr),
 	.GG_EN(status[24]),
@@ -423,6 +424,9 @@ system system
 	.ROMSZ(rom_sz[24:1]),
 	.ROM_ADDR(rom_addr),
 	.ROM_DATA(rom_data),
+	.ROM_WDATA(rom_wdata),
+	.ROM_WE(rom_we),
+	.ROM_BE(rom_be),
 	.ROM_REQ(rom_rd),
 	.ROM_ACK(rom_rdack),
 	
@@ -533,8 +537,9 @@ video_mixer #(.LINE_LENGTH(320), .HALF_DEPTH(0)) video_mixer
 ///////////////////////////////////////////////////
 
 wire [24:1] rom_addr, rom_addr2;
-wire [15:0] rom_data, rom_data2;
-wire rom_rd, rom_rdack, rom_rd2, rom_rdack2; 
+wire [15:0] rom_data, rom_data2, rom_wdata;
+wire  [1:0] rom_be;
+wire rom_rd, rom_rdack, rom_rd2, rom_rdack2, rom_we;
 
 ddram ddram
 (
@@ -547,9 +552,12 @@ ddram ddram
 	
 	.rdaddr(rom_addr),
 	.dout(rom_data),
+	.rom_din(rom_wdata),
+	.rom_be(rom_be),
+	.rom_we(rom_we),
 	.rd_req(rom_rd),
 	.rd_ack(rom_rdack),
-	
+
 	.rdaddr2(rom_addr2),
 	.dout2(rom_data2),
 	.rd_req2(rom_rd2),
@@ -665,12 +673,13 @@ reg noram_quirk = 0;
 reg pier_quirk = 0;
 reg svp_quirk = 0;
 reg fmbusy_quirk = 0;
+reg schan_quirk = 0;
 always @(posedge clk_sys) begin
 	reg [63:0] cart_id;
 	reg old_download;
 	old_download <= cart_download;
 
-	if(~old_download && cart_download) {fifo_quirk,eeprom_quirk,sram_quirk,noram_quirk,pier_quirk,svp_quirk,fmbusy_quirk} <= 0;
+	if(~old_download && cart_download) {fifo_quirk,eeprom_quirk,sram_quirk,noram_quirk,pier_quirk,svp_quirk,fmbusy_quirk,schan_quirk} <= 0;
 
 	if(ioctl_wr & cart_download) begin
 		if(ioctl_addr == 'h182) cart_id[63:56] <= ioctl_data[15:8];
@@ -702,6 +711,7 @@ always @(posedge clk_sys) begin
 			else if(cart_id == "T-35036 ") fmbusy_quirk <= 1; // Hellfire US
 			else if(cart_id == "T-25073 ") fmbusy_quirk <= 1; // Hellfire JP
 			else if(cart_id == "MK-1137-") fmbusy_quirk <= 1; // Hellfire EU
+			else if(cart_id == "T-68???-") schan_quirk  <= 1; // Game no Kanzume Otokuyou
 		end
 	end
 end

@@ -54,6 +54,7 @@ module system
 	input         PIER_QUIRK,
 	input         SVP_QUIRK, 
 	input         FMBUSY_QUIRK,
+	input         SCHAN_QUIRK,
 
 	input   [1:0] TURBO,
 
@@ -95,9 +96,12 @@ module system
 	input  [24:1] ROMSZ,
 	output [24:1] ROM_ADDR,
 	input  [15:0] ROM_DATA,
+	output [15:0] ROM_WDATA,
+	output reg    ROM_WE,
+	output  [1:0] ROM_BE,
 	output reg    ROM_REQ,
 	input         ROM_ACK,
-	
+
 	output [24:1] ROM_ADDR2,
 	input  [15:0] ROM_DATA2,
 	output        ROM_REQ2,
@@ -580,6 +584,9 @@ always_comb begin
 	endcase
 end
 
+assign ROM_BE = ~{MBUS_UDS_N, MBUS_LDS_N};
+assign ROM_WDATA = MBUS_DO;
+
 //-----------------------------------------------------------------------
 // 64KB SRAM / 128KB SVP DRAM
 //-----------------------------------------------------------------------
@@ -748,14 +755,15 @@ localparam 	MBUS_IDLE         = 0,
 				MBUS_SELECT       = 1,
 				MBUS_RAM_READ     = 2,
 				MBUS_ROM_READ     = 3,
-				MBUS_VDP_READ     = 4,
-				MBUS_IO_READ      = 5,
-				MBUS_JCRT_READ    = 6,
-				MBUS_SRAM_READ    = 7,
-				MBUS_ZBUS_PRE     = 8,
-				MBUS_ZBUS_READ    = 9,
-				MBUS_SVP_READ     = 10,
-				MBUS_FINISH       = 11; 
+				MBUS_ROM_WRITE    = 4,
+				MBUS_VDP_READ     = 5,
+				MBUS_IO_READ      = 6,
+				MBUS_JCRT_READ    = 7,
+				MBUS_SRAM_READ    = 8,
+				MBUS_ZBUS_PRE     = 9,
+				MBUS_ZBUS_READ    = 10,
+				MBUS_SVP_READ     = 11,
+				MBUS_FINISH       = 12; 
 
 				
 always @(posedge MCLK) begin
@@ -855,9 +863,13 @@ always @(posedge MCLK) begin
 						SVP_SEL <= 1;
 						mstate <= MBUS_SVP_READ;
 					end 
+					else if (SCHAN_QUIRK && ~MBUS_RNW && (MBUS_A < 'h400000)) begin
+						mstate <= MBUS_ROM_WRITE;
+					end
 					else if (MBUS_A < ROMSZ) begin
 						if (PIER_QUIRK) BANK_MODE <= (MBUS_A >= 23'h140000) ? 3'h3 : 3'h0;
 						if (SVP_QUIRK && msrc == MSRC_VDP) MBUS_A <= MBUS_A - 1'd1;
+						ROM_WE <= 0;
 						ROM_REQ <= ~ROM_ACK;
 						mstate <= MBUS_ROM_READ;
 					end
@@ -975,6 +987,27 @@ always @(posedge MCLK) begin
 				mstate <= MBUS_FINISH;
 			end
 
+		MBUS_ROM_WRITE:
+			case(msrc)
+			MSRC_M68K:
+				if(M68K_AS_N | (~M68K_UDS_N | ~M68K_LDS_N)) begin
+					MBUS_UDS_N <= M68K_UDS_N;
+					MBUS_LDS_N <= M68K_LDS_N;
+					ROM_WE <= 1;
+					ROM_REQ <= ~ROM_ACK;
+					mstate <= MBUS_ROM_READ;
+				end
+
+			MSRC_Z80:
+				begin
+					MBUS_UDS_N <= Z80_A[0];
+					MBUS_LDS_N <= ~Z80_A[0];
+					ROM_WE <= 1;
+					ROM_REQ <= ~ROM_ACK;
+					mstate <= MBUS_ROM_READ;
+				end
+			endcase
+
 		MBUS_ROM_READ:
 			if (ROM_REQ == ROM_ACK) begin
 				data <= ROM_DATA;
@@ -1037,7 +1070,7 @@ always @(posedge MCLK) begin
 				MSRC_Z80:
 					begin
 						zwait <= zwait + 1'd1;
-						if(zwait == 43 || TURBO) begin
+						if(zwait == 38 || TURBO) begin
 							zwait <= 0;
 							Z80_MBUS_D <= Z80_A[0] ? data[7:0] : data[15:8];
 							Z80_MBUS_DTACK_N <= 0;
