@@ -171,7 +171,14 @@ assign LED_POWER = 0;
 assign LED_USER  = cart_download | sav_pending;
 
 
-//`define SOUND_DBG
+`define SOUND_DBG
+
+// Status Bit Map:
+//             Upper                             Lower              
+// 0         1         2         3          4         5         6   
+// 01234567890123456789012345678901 234567890123456789012345678901234
+// 0123456789ABCDEFGHIJKLMNOPQRSTUV 01234567890abcdefghijklmnopqrstuv
+// XXXXXXXXXXXX XXXXXXXXXXXXXXXXXXX XXX                               
 
 `include "build_id.v"
 localparam CONF_STR = {
@@ -193,8 +200,10 @@ localparam CONF_STR = {
 	"OU,320x224 Aspect,Original,Corrected;",
 	"O13,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
 	"OT,Border,No,Yes;",
+	"o2,Composite Blending,Off,On;",
 	"-;",
 	"OEF,Audio Filter,Model 1,Model 2,Minimal,No Filter;",
+	"OB,FM Chip,YM2612,YM3438;",
 	"ON,HiFi PCM,No,Yes;",
 	"-;",
 	"O4,Swap Joysticks,No,Yes;",
@@ -204,20 +213,17 @@ localparam CONF_STR = {
 	"OK,Mouse Flip Y,No,Yes;",
 	"-;",
 	"OPQ,CPU Turbo,None,Medium,High;",
-	"OR,Sprite Limit,Normal,High;",
+	"OV,Sprite Limit,Normal,High;",
 	"-;",
-`ifdef SOUND_DBG
-	"OB,Enable FM,Yes,No;",
-	"OC,Enable PSG,Yes,No;",
-`endif	
+	"H3o0,Enable FM,Yes,No;",
+	"H3o1,Enable PSG,Yes,No;",
+	"H3-;",
 	"R0,Reset;",
 	"J1,A,B,C,Start,Mode,X,Y,Z;",
 	"V,v",`BUILD_DATE
 };
-// free: V [B C]
 
-wire [15:0] status_menumask = {~status[8],~gg_available,~bk_ena};
-wire [31:0] status;
+wire [63:0] status;
 wire  [1:0] buttons;
 wire [11:0] joystick_0,joystick_1,joystick_2,joystick_3;
 wire        ioctl_download;
@@ -259,9 +265,9 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(1)) hps_io
 	.new_vmode(new_vmode),
 
 	.status(status),
-	.status_in({status[31:8],region_req,status[5:0]}),
+	.status_in({status[63:8],region_req,status[5:0]}),
 	.status_set(region_set),
-	.status_menumask(status_menumask),
+	.status_menumask({~dbg_menu,~status[8],~gg_available,~bk_ena}),
 
 	.ioctl_download(ioctl_download),
 	.ioctl_index(ioctl_index),
@@ -383,7 +389,8 @@ system system
 	.INTERLACE(interlace),
 	.RESOLUTION(resolution),
 	.FAST_FIFO(fifo_quirk),
-	.SVP_QUIRK(svp_quirk), 
+	.SVP_QUIRK(svp_quirk),
+	.SCHAN_QUIRK(schan_quirk),
 	
 	.GG_RESET(code_download && ioctl_wr && !ioctl_addr),
 	.GG_EN(status[24]),
@@ -400,17 +407,13 @@ system system
 	.MOUSE(ps2_mouse),
 	.MOUSE_OPT(status[20:18]),
 
-`ifdef SOUND_DBG
-	.ENABLE_FM(~status[11]),
-	.ENABLE_PSG(~status[12]),
-`else
-	.ENABLE_FM(1),
-	.ENABLE_PSG(1),
-`endif
+	.ENABLE_FM(~dbg_menu | ~status[32]),
+	.ENABLE_PSG(~dbg_menu | ~status[33]),
 	.EN_HIFI_PCM(status[23]), // Option "N"
+	.LADDER(~status[11]),
 	.LPF_MODE(status[15:14]),
 
-	.OBJ_LIMIT_HIGH(status[27]),
+	.OBJ_LIMIT_HIGH(status[31]),
 
 	.BRAM_A({sd_lba[6:0],sd_buff_addr}),
 	.BRAM_DI(sd_buff_dout),
@@ -421,6 +424,9 @@ system system
 	.ROMSZ(rom_sz[24:1]),
 	.ROM_ADDR(rom_addr),
 	.ROM_DATA(rom_data),
+	.ROM_WDATA(rom_wdata),
+	.ROM_WE(rom_we),
+	.ROM_BE(rom_be),
 	.ROM_REQ(rom_rd),
 	.ROM_ACK(rom_rdack),
 	
@@ -449,6 +455,25 @@ always @(posedge clk_sys) begin
 	end
 end
 
+reg dbg_menu = 0;
+always @(posedge clk_sys) begin
+	reg old_stb;
+	reg enter = 0;
+	reg esc = 0;
+	
+	old_stb <= ps2_key[10];
+	if(old_stb ^ ps2_key[10]) begin
+		if(ps2_key[7:0] == 'h5A) enter <= ps2_key[9];
+		if(ps2_key[7:0] == 'h76) esc   <= ps2_key[9];
+	end
+	
+	if(enter & esc) begin
+		dbg_menu <= ~dbg_menu;
+		enter <= 0;
+		esc <= 0;
+	end
+end
+
 //lock resolution for the whole frame.
 reg [1:0] res;
 always @(posedge clk_sys) begin
@@ -467,6 +492,23 @@ assign VGA_SL = {~interlace,~interlace}&sl[1:0];
 reg old_ce_pix;
 always @(posedge CLK_VIDEO) old_ce_pix <= ce_pix;
 
+wire [7:0] red, green, blue;
+
+cofi coffee (
+	.clk(CLK_VIDEO),
+	.pix_ce(~old_ce_pix & ce_pix),
+	.enable(status[34]),
+	.blank(hblank | vblank),
+
+	.red(color_lut[r]),
+	.green(color_lut[g]),
+	.blue(color_lut[b]),
+
+	.red_out(red),
+	.green_out(green),
+	.blue_out(blue)
+);
+
 video_mixer #(.LINE_LENGTH(320), .HALF_DEPTH(0)) video_mixer
 (
 	.*,
@@ -481,9 +523,9 @@ video_mixer #(.LINE_LENGTH(320), .HALF_DEPTH(0)) video_mixer
 
 	.mono(0),
 
-	.R(color_lut[r]),
-	.G(color_lut[g]),
-	.B(color_lut[b]),
+	.R(red),
+	.G(green),
+	.B(blue),
 
 	// Positive pulses.
 	.HSync(hs),
@@ -495,8 +537,9 @@ video_mixer #(.LINE_LENGTH(320), .HALF_DEPTH(0)) video_mixer
 ///////////////////////////////////////////////////
 
 wire [24:1] rom_addr, rom_addr2;
-wire [15:0] rom_data, rom_data2;
-wire rom_rd, rom_rdack, rom_rd2, rom_rdack2; 
+wire [15:0] rom_data, rom_data2, rom_wdata;
+wire  [1:0] rom_be;
+wire rom_rd, rom_rdack, rom_rd2, rom_rdack2, rom_we;
 
 ddram ddram
 (
@@ -509,9 +552,12 @@ ddram ddram
 	
 	.rdaddr(rom_addr),
 	.dout(rom_data),
+	.rom_din(rom_wdata),
+	.rom_be(rom_be),
+	.rom_we(rom_we),
 	.rd_req(rom_rd),
 	.rd_ack(rom_rdack),
-	
+
 	.rdaddr2(rom_addr2),
 	.dout2(rom_data2),
 	.rd_req2(rom_rd2),
@@ -627,12 +673,13 @@ reg noram_quirk = 0;
 reg pier_quirk = 0;
 reg svp_quirk = 0;
 reg fmbusy_quirk = 0;
+reg schan_quirk = 0;
 always @(posedge clk_sys) begin
 	reg [63:0] cart_id;
 	reg old_download;
 	old_download <= cart_download;
 
-	if(~old_download && cart_download) {fifo_quirk,eeprom_quirk,sram_quirk,noram_quirk,pier_quirk,svp_quirk,fmbusy_quirk} <= 0;
+	if(~old_download && cart_download) {fifo_quirk,eeprom_quirk,sram_quirk,noram_quirk,pier_quirk,svp_quirk,fmbusy_quirk,schan_quirk} <= 0;
 
 	if(ioctl_wr & cart_download) begin
 		if(ioctl_addr == 'h182) cart_id[63:56] <= ioctl_data[15:8];
@@ -664,6 +711,7 @@ always @(posedge clk_sys) begin
 			else if(cart_id == "T-35036 ") fmbusy_quirk <= 1; // Hellfire US
 			else if(cart_id == "T-25073 ") fmbusy_quirk <= 1; // Hellfire JP
 			else if(cart_id == "MK-1137-") fmbusy_quirk <= 1; // Hellfire EU
+			else if(cart_id == "T-68???-") schan_quirk  <= 1; // Game no Kanzume Otokuyou
 		end
 	end
 end

@@ -54,6 +54,7 @@ module system
 	input         PIER_QUIRK,
 	input         SVP_QUIRK, 
 	input         FMBUSY_QUIRK,
+	input         SCHAN_QUIRK,
 
 	input   [1:0] TURBO,
 
@@ -95,15 +96,19 @@ module system
 	input  [24:1] ROMSZ,
 	output [24:1] ROM_ADDR,
 	input  [15:0] ROM_DATA,
+	output [15:0] ROM_WDATA,
+	output reg    ROM_WE,
+	output  [1:0] ROM_BE,
 	output reg    ROM_REQ,
 	input         ROM_ACK,
-	
+
 	output [24:1] ROM_ADDR2,
 	input  [15:0] ROM_DATA2,
 	output        ROM_REQ2,
 	input         ROM_ACK2, 
 	
 	input         EN_HIFI_PCM,
+	input         LADDER,
 	input         OBJ_LIMIT_HIGH
 );
 
@@ -579,6 +584,9 @@ always_comb begin
 	endcase
 end
 
+assign ROM_BE = ~{MBUS_UDS_N, MBUS_LDS_N};
+assign ROM_WDATA = MBUS_DO;
+
 //-----------------------------------------------------------------------
 // 64KB SRAM / 128KB SVP DRAM
 //-----------------------------------------------------------------------
@@ -747,14 +755,15 @@ localparam 	MBUS_IDLE         = 0,
 				MBUS_SELECT       = 1,
 				MBUS_RAM_READ     = 2,
 				MBUS_ROM_READ     = 3,
-				MBUS_VDP_READ     = 4,
-				MBUS_IO_READ      = 5,
-				MBUS_JCRT_READ    = 6,
-				MBUS_SRAM_READ    = 7,
-				MBUS_ZBUS_PRE     = 8,
-				MBUS_ZBUS_READ    = 9,
-				MBUS_SVP_READ     = 10,
-				MBUS_FINISH       = 11; 
+				MBUS_ROM_WRITE    = 4,
+				MBUS_VDP_READ     = 5,
+				MBUS_IO_READ      = 6,
+				MBUS_JCRT_READ    = 7,
+				MBUS_SRAM_READ    = 8,
+				MBUS_ZBUS_PRE     = 9,
+				MBUS_ZBUS_READ    = 10,
+				MBUS_SVP_READ     = 11,
+				MBUS_FINISH       = 12; 
 
 				
 always @(posedge MCLK) begin
@@ -854,9 +863,13 @@ always @(posedge MCLK) begin
 						SVP_SEL <= 1;
 						mstate <= MBUS_SVP_READ;
 					end 
+					else if (SCHAN_QUIRK && ~MBUS_RNW && (MBUS_A < 'h400000)) begin
+						mstate <= MBUS_ROM_WRITE;
+					end
 					else if (MBUS_A < ROMSZ) begin
 						if (PIER_QUIRK) BANK_MODE <= (MBUS_A >= 23'h140000) ? 3'h3 : 3'h0;
 						if (SVP_QUIRK && msrc == MSRC_VDP) MBUS_A <= MBUS_A - 1'd1;
+						ROM_WE <= 0;
 						ROM_REQ <= ~ROM_ACK;
 						mstate <= MBUS_ROM_READ;
 					end
@@ -974,6 +987,27 @@ always @(posedge MCLK) begin
 				mstate <= MBUS_FINISH;
 			end
 
+		MBUS_ROM_WRITE:
+			case(msrc)
+			MSRC_M68K:
+				if(M68K_AS_N | (~M68K_UDS_N | ~M68K_LDS_N)) begin
+					MBUS_UDS_N <= M68K_UDS_N;
+					MBUS_LDS_N <= M68K_LDS_N;
+					ROM_WE <= 1;
+					ROM_REQ <= ~ROM_ACK;
+					mstate <= MBUS_ROM_READ;
+				end
+
+			MSRC_Z80:
+				begin
+					MBUS_UDS_N <= Z80_A[0];
+					MBUS_LDS_N <= ~Z80_A[0];
+					ROM_WE <= 1;
+					ROM_REQ <= ~ROM_ACK;
+					mstate <= MBUS_ROM_READ;
+				end
+			endcase
+
 		MBUS_ROM_READ:
 			if (ROM_REQ == ROM_ACK) begin
 				data <= ROM_DATA;
@@ -1036,7 +1070,7 @@ always @(posedge MCLK) begin
 				MSRC_Z80:
 					begin
 						zwait <= zwait + 1'd1;
-						if(zwait == 43 || TURBO) begin
+						if(zwait == 38 || TURBO) begin
 							zwait <= 0;
 							Z80_MBUS_D <= Z80_A[0] ? data[7:0] : data[15:8];
 							Z80_MBUS_DTACK_N <= 0;
@@ -1182,12 +1216,12 @@ end
 
 wire        FM_SEL = ZBUS_A[14:13] == 2'b10;
 wire  [7:0] FM_DO;
-wire [15:0] FM_right;
-wire [15:0] FM_left;
-wire [15:0] FM_LPF_right;
-wire [15:0] FM_LPF_left;
-wire [15:0] PRE_LPF_L;
-wire [15:0] PRE_LPF_R;
+wire signed [15:0] FM_right;
+wire signed [15:0] FM_left;
+wire signed [15:0] FM_LPF_right;
+wire signed [15:0] FM_LPF_left;
+wire signed [15:0] PRE_LPF_L;
+wire signed [15:0] PRE_LPF_R;
 
 jt12 fm
 (
@@ -1201,15 +1235,19 @@ jt12 fm
 	.din(ZBUS_DO),
 	.dout(FM_DO),
 	.en_hifi_pcm( EN_HIFI_PCM ),
+	.ladder(LADDER),
 	.snd_left(FM_left),
 	.snd_right(FM_right)
 );
+
+wire signed [15:0] fm_adjust_l = (FM_left << 4) + (FM_left << 2) + (FM_left << 1) + (FM_left >>> 2);
+wire signed [15:0] fm_adjust_r = (FM_right << 4) + (FM_right << 2) + (FM_right << 1) + (FM_right >>> 2);
 
 genesis_fm_lpf fm_lpf_l
 (
 	.clk(MCLK),
 	.reset(reset),
-	.in(FM_left),
+	.in(fm_adjust_l),
 	.out(FM_LPF_left)
 );
 
@@ -1217,17 +1255,22 @@ genesis_fm_lpf fm_lpf_r
 (
 	.clk(MCLK),
 	.reset(reset),
-	.in(FM_right),
+	.in(fm_adjust_r),
 	.out(FM_LPF_right)
 );
+
+wire signed [15:0] fm_select_l = ((LPF_MODE == 2'b01) ? FM_LPF_left : fm_adjust_l);
+wire signed [15:0] fm_select_r = ((LPF_MODE == 2'b01) ? FM_LPF_right : fm_adjust_r);
+
+wire signed [10:0] psg_adjust = PSG_SND - (PSG_SND >>> 5);
 
 jt12_genmix genmix
 (
 	.rst(reset),
 	.clk(MCLK),
-	.fm_left((LPF_MODE == 2'b01) ? FM_LPF_left : FM_left),
-	.fm_right((LPF_MODE == 2'b01) ? FM_LPF_right : FM_right),
-	.psg_snd((PSG_SND >>> 1) + (PSG_SND >>> 5)),
+	.fm_left(fm_select_l),
+	.fm_right(fm_select_r),
+	.psg_snd(psg_adjust),
 	.fm_en(ENABLE_FM),
 	.psg_en(ENABLE_PSG),
 	.snd_left(PRE_LPF_L),
