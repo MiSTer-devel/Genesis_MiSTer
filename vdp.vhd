@@ -2691,7 +2691,7 @@ begin
   if rising_edge( CLK ) then
     if FF_VS = '1' then
       -- LSM(0) = 1 and FIELD = 0 right before vsync start -> start the delay
-      if HV_HCNT = VSYNC_HSTART and HV_VCNT = VSYNC_START and LSM(0) = '1' and FIELD = '0' then
+      if HV_HCNT = VSYNC_HSTART and HV_VCNT = VSYNC_START and LSM(0) = '1' and FIELD = '1' then
         VS_START_DELAY := 1710;
         VS_DELAY_ACTIVE := true;
       end if;
