@@ -501,19 +501,28 @@ always @(posedge CLK_VIDEO) old_ce_pix <= ce_pix;
 wire [7:0] red, green, blue;
 
 cofi coffee (
-	.clk(CLK_VIDEO),
-	.pix_ce(~old_ce_pix & ce_pix),
+	.clk(clk_sys),
+	.pix_ce(ce_pix),
 	.enable(status[34]),
-	.blank(hblank | vblank),
 
+	.hblank(hblank),
+	.vblank(vblank),
+	.hs(hs),
+	.vs(vs),
 	.red(color_lut[r]),
 	.green(color_lut[g]),
 	.blue(color_lut[b]),
 
+	.hblank_out(hblank_c),
+	.vblank_out(vblank_c),
+	.hs_out(hs_c),
+	.vs_out(vs_c),
 	.red_out(red),
 	.green_out(green),
 	.blue_out(blue)
 );
+
+wire hs_c,vs_c,hblank_c,vblank_c;
 
 video_mixer #(.LINE_LENGTH(320), .HALF_DEPTH(0), .GAMMA(1)) video_mixer
 (
@@ -534,10 +543,10 @@ video_mixer #(.LINE_LENGTH(320), .HALF_DEPTH(0), .GAMMA(1)) video_mixer
 	.B(blue),
 
 	// Positive pulses.
-	.HSync(hs),
-	.VSync(vs),
-	.HBlank(hblank),
-	.VBlank(vblank)
+	.HSync(hs_c),
+	.VSync(vs_c),
+	.HBlank(hblank_c),
+	.VBlank(vblank_c)
 );
 
 ///////////////////////////////////////////////////
