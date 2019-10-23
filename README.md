@@ -27,7 +27,7 @@ There are 2 versions of region detection:
 * MD  -> EU
 
 2) Header. It may not always work as not all ROMs follow the rule, especially in European region.
-Heder may include several regions - the correct one will be selected depending on priority option.
+The header may include several regions - the correct one will be selected depending on priority option.
 
 
 ## Additional features
