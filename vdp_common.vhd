@@ -66,7 +66,7 @@ constant HSYNC_START_H32        : integer := H_DISP_START_H32 + 0;
 constant HSYNC_START_H40        : integer := H_DISP_START_H40 + 7;
 
 constant HSYNC_END_H32          : integer := H_DISP_START_H32 + 23;
-constant HSYNC_END_H40          : integer := H_DISP_START_H40 + 29;
+constant HSYNC_END_H40          : integer := H_DISP_START_H40 + 28;
 
 constant VSYNC_HSTART_H32       : integer := HSYNC_START_H32;
 constant VSYNC_HSTART_H40       : integer := HSYNC_START_H40;
