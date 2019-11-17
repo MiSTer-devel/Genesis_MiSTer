@@ -1,18 +1,25 @@
 // Composite-like horizontal blending by Kitrinx
 
 module cofi (
-	input clk,
-	input pix_ce,
-	input enable,
+	input        clk,
+	input        pix_ce,
+	input        enable,
 
-	input blank,
-	input [7:0] red,
-	input [7:0] green,
-	input [7:0] blue,
+	input        hblank,
+	input        vblank,
+	input        hs,
+	input        vs,
+	input  [7:0] red,
+	input  [7:0] green,
+	input  [7:0] blue,
 
-	output [7:0] red_out,
-	output [7:0] green_out,
-	output [7:0] blue_out
+	output reg       hblank_out,
+	output reg       vblank_out,
+	output reg       hs_out,
+	output reg       vs_out,
+	output reg [7:0] red_out,
+	output reg [7:0] green_out,
+	output reg [7:0] blue_out
 );
 
 	function bit [7:0] color_blend (
@@ -25,33 +32,25 @@ module cofi (
 	end
 	endfunction
 
-reg blank_last;
-
 reg [7:0] red_last;
 reg [7:0] green_last;
 reg [7:0] blue_last;
 
-reg [7:0] red_mix;
-reg [7:0] green_mix;
-reg [7:0] blue_mix;
-
-assign red_out = enable ? red_mix : red;
-assign blue_out = enable ? blue_mix : blue;
-assign green_out = enable ? green_mix : green;
-
 always @(posedge clk) if (pix_ce) begin
 	
-	blank_last <= blank;
+	hblank_out <= hblank;
+	vblank_out <= vblank;
+	vs_out     <= vs;
+	hs_out     <= hs;
 
-	red_last <= red;
-	blue_last <= blue;
+	red_last   <= red;
+	blue_last  <= blue;
 	green_last <= green;
 
-	red_mix <= color_blend(red_last, red, blank_last);
-	blue_mix <= color_blend(blue_last, blue, blank_last);
-	green_mix <= color_blend(green_last, green, blank_last);
-	
-end
+	red_out    <= enable ? color_blend(red_last,   red,   hblank_out) : red;
+	blue_out   <= enable ? color_blend(blue_last,  blue,  hblank_out) : blue;
+	green_out  <= enable ? color_blend(green_last, green, hblank_out) : green;
 
+end
 
 endmodule
