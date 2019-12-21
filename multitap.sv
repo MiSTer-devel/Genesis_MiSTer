@@ -35,16 +35,18 @@
 
 module multitap
 (
-   input        RESET,
-   input        CLK,
-   input        CE,
+	input        RESET,
+	input        CLK,
+	input        CE,
 
-   input        J3BUT,
+	input        J3BUT,
 
-   input        P1_UP, P1_DOWN, P1_LEFT, P1_RIGHT, P1_A, P1_B, P1_C, P1_START, P1_MODE, P1_X, P1_Y, P1_Z,
-   input        P2_UP, P2_DOWN, P2_LEFT, P2_RIGHT, P2_A, P2_B, P2_C, P2_START, P2_MODE, P2_X, P2_Y, P2_Z,
-   input        P3_UP, P3_DOWN, P3_LEFT, P3_RIGHT, P3_A, P3_B, P3_C, P3_START, P3_MODE, P3_X, P3_Y, P3_Z,
-   input        P4_UP, P4_DOWN, P4_LEFT, P4_RIGHT, P4_A, P4_B, P4_C, P4_START, P4_MODE, P4_X, P4_Y, P4_Z,
+	input        P1_UP, P1_DOWN, P1_LEFT, P1_RIGHT, P1_A, P1_B, P1_C, P1_START, P1_MODE, P1_X, P1_Y, P1_Z,
+	input        P2_UP, P2_DOWN, P2_LEFT, P2_RIGHT, P2_A, P2_B, P2_C, P2_START, P2_MODE, P2_X, P2_Y, P2_Z,
+	input        P3_UP, P3_DOWN, P3_LEFT, P3_RIGHT, P3_A, P3_B, P3_C, P3_START, P3_MODE, P3_X, P3_Y, P3_Z,
+	input        P4_UP, P4_DOWN, P4_LEFT, P4_RIGHT, P4_A, P4_B, P4_C, P4_START, P4_MODE, P4_X, P4_Y, P4_Z,
+
+	input        DISK,
 
 	input        TEAMPLAYER_EN,
 	input        FOURWAY_EN,
@@ -52,15 +54,15 @@ module multitap
 	input [24:0] MOUSE,
 	input  [2:0] MOUSE_OPT,
 
-   input        PAL,
-   input        EXPORT,
+	input        PAL,
+	input        EXPORT,
 
-   input        SEL,
-   input  [4:1] A,
-   input        RNW,
-   input  [7:0] DI,
-   output [7:0] DO,
-   output       DTACK_N,
+	input        SEL,
+	input  [4:1] A,
+	input        RNW,
+	input  [7:0] DI,
+	output [7:0] DO,
+	output       DTACK_N,
 
 	input        JCART_SEL,
 	output[15:0] JCART_DO,

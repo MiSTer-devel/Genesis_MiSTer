@@ -36,50 +36,52 @@
 // gen-hw.txt from line 416
 module gen_io
 (
-   input            RESET,
-   input            CLK,
-   input            CE,
-   
-   input            J3BUT,
-   
-   input            P1_UP,
-   input            P1_DOWN,
-   input            P1_LEFT,
-   input            P1_RIGHT,
-   input            P1_A,
-   input            P1_B,
-   input            P1_C,
-   input            P1_START,
-   input            P1_MODE,
-   input            P1_X,
-   input            P1_Y,
-   input            P1_Z,
-   
-   input            P2_UP,
-   input            P2_DOWN,
-   input            P2_LEFT,
-   input            P2_RIGHT,
-   input            P2_A,
-   input            P2_B,
-   input            P2_C,
-   input            P2_START,
-   input            P2_MODE,
-   input            P2_X,
-   input            P2_Y,
-   input            P2_Z,
+	input            RESET,
+	input            CLK,
+	input            CE,
+
+	input            J3BUT,
+
+	input            P1_UP,
+	input            P1_DOWN,
+	input            P1_LEFT,
+	input            P1_RIGHT,
+	input            P1_A,
+	input            P1_B,
+	input            P1_C,
+	input            P1_START,
+	input            P1_MODE,
+	input            P1_X,
+	input            P1_Y,
+	input            P1_Z,
+
+	input            P2_UP,
+	input            P2_DOWN,
+	input            P2_LEFT,
+	input            P2_RIGHT,
+	input            P2_A,
+	input            P2_B,
+	input            P2_C,
+	input            P2_START,
+	input            P2_MODE,
+	input            P2_X,
+	input            P2_Y,
+	input            P2_Z,
+
+	input            DISK,
 
 	input     [24:0] MOUSE,
 	input      [2:0] MOUSE_OPT,
 
-   input            SEL,
-   input      [4:1] A,
-   input            RNW,
-   input      [7:0] DI,
-   output reg [7:0] DO,
-   output reg       DTACK_N,
+	input            SEL,
+	input      [4:1] A,
+	input            RNW,
+	input      [7:0] DI,
+	output reg [7:0] DO,
+	output reg       DTACK_N,
 
-   input            PAL,
-   input            EXPORT
+	input            PAL,
+	input            EXPORT
 );
 
 reg  [7:0] R[16];
@@ -101,7 +103,7 @@ always @(posedge RESET or posedge CLK) begin
 			else begin
 				// Read
 				case(A)
-						0: DO <= {EXPORT, PAL, 6'h20};
+						0: DO <= {EXPORT, PAL, ~DISK, 5'd0};
 						1: DO <= (CTLA & DATA) | (~CTLA & (MOUSE_OPT[0] ? mdata : PAD1_DO));
 						2: DO <= (CTLB & DATB) | (~CTLB & (MOUSE_OPT[1] ? mdata : PAD2_DO));
 						3: DO <= R[3] & R[6]; // Unconnected port
