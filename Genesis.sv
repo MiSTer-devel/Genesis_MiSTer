@@ -353,7 +353,7 @@ wire hblank, vblank;
 wire interlace;
 wire [1:0] resolution;
 
-assign DDRAM_CLK = clk_ram;
+//assign DDRAM_CLK = clk_ram;
 wire reset = RESET | status[0] | buttons[1] | region_set | bk_loading;
 
 wire [7:0] color_lut[16] = '{
@@ -431,9 +431,10 @@ system system
 	.ROM_ADDR(rom_addr),
 	.ROM_DATA(rom_data),
 	.ROM_WDATA(rom_wdata),
+	.ROM_RD(rom_rd),
 	.ROM_WE(rom_we),
 	.ROM_BE(rom_be),
-	.ROM_REQ(rom_rd),
+	.ROM_REQ(rom_req),
 	.ROM_ACK(rom_rdack),
 	
 	.ROM_ADDR2(rom_addr2),
@@ -550,34 +551,69 @@ video_mixer #(.LINE_LENGTH(320), .HALF_DEPTH(0), .GAMMA(1)) video_mixer
 );
 
 ///////////////////////////////////////////////////
+sdram sdram
+(
+	.*,
+	.init(~locked),
+	.clk(clk_ram),
+	
+	.addr0(cart_download ? ioctl_addr[24:1] : rom_sz),
+	.din0({ioctl_data[7:0],ioctl_data[15:8]}),
+	.dout0(),
+	.rd0(1'b0),
+	.wrl0(cart_download),
+	.wrh0(cart_download),
+	.req0(rom_wr),
+	.ack0(rom_wrack),
+	
+	.addr1(rom_addr),
+	.din1(rom_wdata),
+	.dout1(rom_data),
+	.rd1(rom_rd),
+	.wrl1(rom_we & rom_be[0]),
+	.wrh1(rom_we & rom_be[1]),
+	.req1(rom_req),
+	.ack1(rom_rdack),
+	
+	.addr2(0),
+	.din2(0),
+	.dout2(),
+	.rd2(0),
+	.wrl2(0),
+	.wrh2(0),
+	.req2(0),
+	.ack2()
+);
 
 wire [24:1] rom_addr, rom_addr2;
 wire [15:0] rom_data, rom_data2, rom_wdata;
 wire  [1:0] rom_be;
-wire rom_rd, rom_rdack, rom_rd2, rom_rdack2, rom_we;
+wire rom_req, rom_rd, rom_rdack, rom_rd2, rom_rdack2, rom_we;
+//
+//ddram ddram
+//(
+//	.*,
+//	
+//	.wraddr(cart_download ? ioctl_addr : rom_sz),
+//	.din({ioctl_data[7:0],ioctl_data[15:8]}),
+//	.we_req(rom_wr),
+//	.we_ack(rom_wrack),
+//	
+//	.rdaddr(rom_addr),
+//	.dout(rom_data),
+//	.rom_din(rom_wdata),
+//	.rom_be(rom_be),
+//	.rom_we(rom_we),
+//	.rd_req(rom_rd),
+//	.rd_ack(rom_rdack),
+//
+//	.rdaddr2(rom_addr2),
+//	.dout2(rom_data2),
+//	.rd_req2(rom_rd2),
+//	.rd_ack2(rom_rdack2) 
+//);
+assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DDRAM_WE} = 0;
 
-ddram ddram
-(
-	.*,
-	
-	.wraddr(cart_download ? ioctl_addr : rom_sz),
-	.din({ioctl_data[7:0],ioctl_data[15:8]}),
-	.we_req(rom_wr),
-	.we_ack(rom_wrack),
-	
-	.rdaddr(rom_addr),
-	.dout(rom_data),
-	.rom_din(rom_wdata),
-	.rom_be(rom_be),
-	.rom_we(rom_we),
-	.rd_req(rom_rd),
-	.rd_ack(rom_rdack),
-
-	.rdaddr2(rom_addr2),
-	.dout2(rom_data2),
-	.rd_req2(rom_rd2),
-	.rd_ack2(rom_rdack2) 
-);
 
 reg  rom_wr;
 wire rom_wrack;

@@ -8,6 +8,8 @@ set_global_assignment -name SYSTEMVERILOG_FILE EEPROM_STM95.sv
 set_global_assignment -name VHDL_FILE bram.vhd
 set_global_assignment -name VHDL_FILE mlab.vhd
 set_global_assignment -name SYSTEMVERILOG_FILE ddram.sv
+set_global_assignment -name SYSTEMVERILOG_FILE sdram.sv
+set_global_assignment -name SDC_FILE sdram.sdc
 set_global_assignment -name VERILOG_FILE audio_iir_filter.v
 set_global_assignment -name VERILOG_FILE genesis_lpf.v
 set_global_assignment -name VHDL_FILE vdp_common.vhd
