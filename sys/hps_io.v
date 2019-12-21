@@ -51,6 +51,7 @@ module hps_io #(parameter STRLEN=0, PS2DIV=0, WIDE=0, VDNUM=1, PS2WE=0)
 
 	output      [1:0] buttons,
 	output            forced_scandoubler,
+	output            direct_video,
 
 	output reg [63:0] status,
 	input      [63:0] status_in,
@@ -104,6 +105,10 @@ module hps_io #(parameter STRLEN=0, PS2DIV=0, WIDE=0, VDNUM=1, PS2WE=0)
 
 	// UART flags
 	input      [15:0] uart_mode,
+	
+	// CD interface
+	input      [48:0] cd_in,
+	output reg [48:0] cd_out, 
 
 	// ps2 keyboard emulation
 	output            ps2_kbd_clk_out,
@@ -147,12 +152,13 @@ assign HPS_BUS[36]   = clk_sys;
 assign HPS_BUS[32]   = io_wide;
 assign HPS_BUS[15:0] = io_dout;
 
-reg [7:0] cfg;
+reg [15:0] cfg;
 assign buttons = cfg[1:0];
 //cfg[2] - vga_scaler handled in sys_top
 //cfg[3] - csync handled in sys_top
 assign forced_scandoubler = cfg[4];
 //cfg[5] - ypbpr handled in sys_top
+assign direct_video = cfg[10];
 
 // command byte read by the io controller
 wire [15:0] sd_cmd =
@@ -212,6 +218,8 @@ always@(posedge clk_sys) begin
 	reg  [3:0] stflg = 0;
 	reg [63:0] status_req;
 	reg        old_status_set = 0;
+	reg  [7:0] cd_req = 0;
+	reg        old_cd = 0; 
 
 	old_status_set <= status_set;
 	if(~old_status_set & status_set) begin
@@ -219,6 +227,9 @@ always@(posedge clk_sys) begin
 		status_req <= status_in;
 	end
 
+	old_cd <= cd_in[48];
+	if(old_cd ^ cd_in[48]) cd_req <= cd_req + 1'd1; 
+	
 	sd_buff_wr <= b_wr[0];
 	if(b_wr[2] && (~&sd_buff_addr)) sd_buff_addr <= sd_buff_addr + 1'b1;
 	b_wr <= (b_wr<<1);
@@ -237,6 +248,7 @@ always@(posedge clk_sys) begin
 		end
 		if(cmd == 'h22) RTC[64] <= ~RTC[64];
 		if(cmd == 'h24) TIMESTAMP[32] <= ~TIMESTAMP[32];
+		if(cmd == 'h35) cd_out[48] <= ~cd_out[48]; 
 		cmd <= 0;
 		byte_cnt <= 0;
 		sd_ack <= 0;
@@ -260,6 +272,7 @@ always@(posedge clk_sys) begin
 					'h2B: io_dout <= 1;
 					'h2F: io_dout <= 1;
 					'h32: io_dout <= gamma_bus[21];
+					'h34: io_dout <= cd_req; 
 				endcase
 
 				sd_buff_addr <= 0;
@@ -269,7 +282,7 @@ always@(posedge clk_sys) begin
 
 				case(cmd)
 					// buttons and switches
-					'h01: cfg <= io_din[7:0];
+					'h01: cfg <= io_din;
 					'h02: if(byte_cnt==1) joystick_0[15:0] <= io_din; else joystick_0[31:16] <= io_din;
 					'h03: if(byte_cnt==1) joystick_1[15:0] <= io_din; else joystick_1[31:16] <= io_din;
 					'h10: if(byte_cnt==1) joystick_2[15:0] <= io_din; else joystick_2[31:16] <= io_din;
@@ -405,7 +418,7 @@ always@(posedge clk_sys) begin
 					
 					//menu mask
 					'h2E: if(byte_cnt == 1) io_dout <= status_menumask;
-
+					
 					//sdram size set
 					'h31: if(byte_cnt == 1) sdram_sz <= io_din;
 
@@ -416,6 +429,20 @@ always@(posedge clk_sys) begin
 						{gamma_wr, gamma_value} <= {1'b1,io_din[7:0]};
 						if (byte_cnt[1:0] == 3) byte_cnt <= 1;
 					end
+
+					//CD get
+					'h34: case(byte_cnt)
+								1: io_dout <= cd_in[15:0];
+								2: io_dout <= cd_in[31:16];
+								3: io_dout <= cd_in[47:32];
+							endcase
+
+					//CD set
+					'h35: case(byte_cnt)
+								1: cd_out[15:0]  <= io_din;
+								2: cd_out[31:16] <= io_din;
+								3: cd_out[47:32] <= io_din;
+							endcase 
 				endcase
 			end
 		end
