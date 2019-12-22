@@ -790,11 +790,12 @@ always @(posedge MCLK) begin
 				MBUS_RNW <= 1;
 				MBUS_UDS_N <= 1;
 				MBUS_LDS_N <= 1;
+				/*
 				if (rfs_pend) begin
 					rfs_pend <= 0;
 					mstate <= MBUS_REFRESH;
 				end
-				else if (!M68K_AS_N && M68K_MBUS_DTACK_N && M68K_CLKENn) begin
+				else */ if (!M68K_AS_N && M68K_MBUS_DTACK_N && M68K_CLKENn) begin
 					msrc <= MSRC_M68K;
 					MBUS_A <= M68K_A[23:1];
 					data <= NO_DATA;

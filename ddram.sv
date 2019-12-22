@@ -45,13 +45,13 @@ module ddram
 	input  [15:0] rom_din,
 	input   [1:0] rom_be,
 	input         rom_we,
-	input         rd_req,
-	output reg    rd_ack,
+	input         rom_req,
+	output reg    rom_ack,
 
 	input  [27:1] rdaddr2,
 	output [15:0] dout2,
 	input         rd_req2,
-	output reg    rd_ack2 
+	output reg    rd_ack2
 );
 
 assign DDRAM_BURSTCNT = ram_burst;
@@ -91,7 +91,7 @@ always @(posedge DDRAM_CLK) begin
 					ch          <= 1;
 					state       <= 1;
 				end
-				else if(rd_req != rd_ack) begin
+				else if(rom_req != rom_ack) begin
 					if(rom_we) begin
 						ram_be      <= rom_be;
 						ram_data		<= {4{rom_din}};
@@ -101,9 +101,9 @@ always @(posedge DDRAM_CLK) begin
 						ch          <= 0;
 						state       <= 1;
 					end
-					else if(cache_addr[27:3] == rdaddr[27:3]) rd_ack <= rd_req;
+					else if(cache_addr[27:3] == rdaddr[27:3]) rom_ack <= rom_req;
 					else if((cache_addr[27:3]+1'd1) == rdaddr[27:3]) begin
-						rd_ack      <= rd_req;
+						rom_ack     <= rom_req;
 						ram_q       <= next_q;
 						cache_addr  <= {rdaddr[27:3],3'b000};
 						ram_address <= {rdaddr[27:3]+1'd1,3'b000};
@@ -149,14 +149,14 @@ always @(posedge DDRAM_CLK) begin
 					cache_addr[3:0] <= 0;
 					cache_addr2[3:0] <= 0; 
 					if(ch) we_ack <= we_req;
-					else rd_ack <= rd_req;
+					else rom_ack <= rom_req;
 					state <= 0;
 				end
 
 			2: if(DDRAM_DOUT_READY) begin
 					if (~ch) begin
 						ram_q  <= DDRAM_DOUT;
-						rd_ack <= rd_req;
+						rom_ack <= rom_req;
 					end
 					else begin
 						ram_q2  <= DDRAM_DOUT;

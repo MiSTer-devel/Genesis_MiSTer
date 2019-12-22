@@ -129,7 +129,6 @@ assign USER_OUT = '1;
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 assign BUTTONS   = 0;
 assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
-assign {SDRAM_DQ, SDRAM_A, SDRAM_BA, SDRAM_CLK, SDRAM_CKE, SDRAM_DQML, SDRAM_DQMH, SDRAM_nWE, SDRAM_nCAS, SDRAM_nRAS, SDRAM_nCS} = 'Z;
 
 always_comb begin
 	if (status[10]) begin
@@ -176,9 +175,9 @@ assign LED_USER  = cart_download | sav_pending;
 // Status Bit Map:
 //             Upper                             Lower              
 // 0         1         2         3          4         5         6   
-// 01234567890123456789012345678901 234567890123456789012345678901234
-// 0123456789ABCDEFGHIJKLMNOPQRSTUV 01234567890abcdefghijklmnopqrstuv
-// XXXXXXXXXXXX XXXXXXXXXXXXXXXXXXX XXX                               
+// 01234567890123456789012345678901 23456789012345678901234567890123
+// 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
+// XXXXXXXXXXXX XXXXXXXXXXXXXXXXXXX XXXXX                             
 
 `include "build_id.v"
 localparam CONF_STR = {
@@ -211,6 +210,8 @@ localparam CONF_STR = {
 	"OLM,Multitap,Disabled,4-Way,TeamPlayer,J-Cart;",
 	"OIJ,Mouse,None,Port1,Port2;",
 	"OK,Mouse Flip Y,No,Yes;",
+	"-;",
+	"o34,ROM Storage,Auto,SDRAM,DDR3;",
 	"-;",
 	"OPQ,CPU Turbo,None,Medium,High;",
 	"OV,Sprite Limit,Normal,High;",
@@ -252,6 +253,7 @@ wire [10:0] ps2_key;
 wire [24:0] ps2_mouse;
 
 wire [21:0] gamma_bus;
+wire [15:0] sdram_sz;
 
 hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(1)) hps_io
 (
@@ -293,6 +295,7 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(1)) hps_io
 	.img_size(img_size),
 
 	.gamma_bus(gamma_bus),
+	.sdram_sz(sdram_sz),
 
 	.ps2_key(ps2_key),
 	.ps2_mouse(ps2_mouse)
@@ -353,7 +356,6 @@ wire hblank, vblank;
 wire interlace;
 wire [1:0] resolution;
 
-//assign DDRAM_CLK = clk_ram;
 wire reset = RESET | status[0] | buttons[1] | region_set | bk_loading;
 
 wire [7:0] color_lut[16] = '{
@@ -429,14 +431,14 @@ system system
 
 	.ROMSZ(rom_sz[24:1]),
 	.ROM_ADDR(rom_addr),
-	.ROM_DATA(rom_data),
+	.ROM_DATA(use_sdr ? sdrom_data : ddrom_data),
 	.ROM_WDATA(rom_wdata),
 	.ROM_RD(rom_rd),
 	.ROM_WE(rom_we),
 	.ROM_BE(rom_be),
 	.ROM_REQ(rom_req),
-	.ROM_ACK(rom_rdack),
-	
+	.ROM_ACK(use_sdr ? sdrom_rdack : ddrom_rdack),
+
 	.ROM_ADDR2(rom_addr2),
 	.ROM_DATA2(rom_data2),
 	.ROM_REQ2(rom_rd2),
@@ -556,25 +558,25 @@ sdram sdram
 	.*,
 	.init(~locked),
 	.clk(clk_ram),
-	
-	.addr0(cart_download ? ioctl_addr[24:1] : rom_sz),
+
+	.addr0(ioctl_addr[24:1]),
 	.din0({ioctl_data[7:0],ioctl_data[15:8]}),
 	.dout0(),
-	.rd0(1'b0),
-	.wrl0(cart_download),
-	.wrh0(cart_download),
+	.rd0(0),
+	.wrl0(1),
+	.wrh0(1),
 	.req0(rom_wr),
-	.ack0(rom_wrack),
-	
+	.ack0(sdrom_wrack),
+
 	.addr1(rom_addr),
 	.din1(rom_wdata),
-	.dout1(rom_data),
+	.dout1(sdrom_data),
 	.rd1(rom_rd),
 	.wrl1(rom_we & rom_be[0]),
 	.wrh1(rom_we & rom_be[1]),
 	.req1(rom_req),
-	.ack1(rom_rdack),
-	
+	.ack1(sdrom_rdack),
+
 	.addr2(0),
 	.din2(0),
 	.dout2(),
@@ -586,37 +588,38 @@ sdram sdram
 );
 
 wire [24:1] rom_addr, rom_addr2;
-wire [15:0] rom_data, rom_data2, rom_wdata;
+wire [15:0] sdrom_data, ddrom_data, rom_data2, rom_wdata;
 wire  [1:0] rom_be;
-wire rom_req, rom_rd, rom_rdack, rom_rd2, rom_rdack2, rom_we;
-//
-//ddram ddram
-//(
-//	.*,
-//	
-//	.wraddr(cart_download ? ioctl_addr : rom_sz),
-//	.din({ioctl_data[7:0],ioctl_data[15:8]}),
-//	.we_req(rom_wr),
-//	.we_ack(rom_wrack),
-//	
-//	.rdaddr(rom_addr),
-//	.dout(rom_data),
-//	.rom_din(rom_wdata),
-//	.rom_be(rom_be),
-//	.rom_we(rom_we),
-//	.rd_req(rom_rd),
-//	.rd_ack(rom_rdack),
-//
-//	.rdaddr2(rom_addr2),
-//	.dout2(rom_data2),
-//	.rd_req2(rom_rd2),
-//	.rd_ack2(rom_rdack2) 
-//);
-assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DDRAM_WE} = 0;
+wire rom_req, rom_rd, sdrom_rdack, ddrom_rdack, rom_rd2, rom_rdack2, rom_we;
 
+assign DDRAM_CLK = clk_ram;
+ddram ddram
+(
+	.*,
+	.wraddr(ioctl_addr),
+	.din({ioctl_data[7:0],ioctl_data[15:8]}),
+	.we_req(rom_wr),
+	.we_ack(ddrom_wrack),
+
+	.rdaddr(rom_addr),
+	.dout(ddrom_data),
+	.rom_din(rom_wdata),
+	.rom_be(rom_be),
+	.rom_we(rom_we),
+	.rom_req(rom_req),
+	.rom_ack(ddrom_rdack),
+
+	.rdaddr2(rom_addr2),
+	.dout2(rom_data2),
+	.rd_req2(rom_rd2),
+	.rd_ack2(rom_rdack2) 
+);
+
+reg use_sdr;
+always @(posedge clk_sys) use_sdr <= (!status[36:35]) ? |sdram_sz[2:0] : status[35];
 
 reg  rom_wr;
-wire rom_wrack;
+wire sdrom_wrack, ddrom_wrack;
 reg [24:0] rom_sz;
 always @(posedge clk_sys) begin
 	reg old_download, old_reset;
@@ -635,7 +638,7 @@ always @(posedge clk_sys) begin
 		if(ioctl_wr) begin
 			ioctl_wait <= 1;
 			rom_wr <= ~rom_wr;
-		end else if(ioctl_wait && (rom_wr == rom_wrack)) begin
+		end else if(ioctl_wait && (rom_wr == sdrom_wrack) && (rom_wr == ddrom_wrack)) begin
 			ioctl_wait <= 0;
 		end
 	end
