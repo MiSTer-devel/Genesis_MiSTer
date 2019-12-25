@@ -743,7 +743,8 @@ localparam 	MBUS_IDLE         = 0,
 				MBUS_ZBUS_READ    = 11,
 				MBUS_SVP_READ     = 12,
 				MBUS_REFRESH      = 13,
-				MBUS_FINISH       = 14; 
+				MBUS_FINISH       = 14,
+				MBUS_Z80_PREREAD  = 15; 
 
 				
 always @(posedge MCLK) begin
@@ -752,6 +753,7 @@ always @(posedge MCLK) begin
 	reg [8:0] refresh_timer;
 	reg rfs_pend;
 	reg [1:0] rfs_wait;
+	reg [1:0] cycle_cnt;
 
 	if (reset) begin
 		M68K_MBUS_DTACK_N <= 1;
@@ -776,6 +778,10 @@ always @(posedge MCLK) begin
 			refresh_timer <= 0;
 			rfs_pend <= 1;
 		end
+		
+		if (M68K_CLKENp) begin
+			if (cycle_cnt) cycle_cnt = cycle_cnt - 1'd1;
+		end
 
 		if (M68K_AS_N) M68K_MBUS_DTACK_N <= 1;
 		if (~Z80_IO)   Z80_MBUS_DTACK_N  <= 1;
@@ -790,12 +796,12 @@ always @(posedge MCLK) begin
 				MBUS_RNW <= 1;
 				MBUS_UDS_N <= 1;
 				MBUS_LDS_N <= 1;
-				/*
-				if (rfs_pend) begin
+				
+				/*if (rfs_pend) begin
 					rfs_pend <= 0;
 					mstate <= MBUS_REFRESH;
 				end
-				else */ if (!M68K_AS_N && M68K_MBUS_DTACK_N && M68K_CLKENn) begin
+				else*/ if (!M68K_AS_N && M68K_MBUS_DTACK_N) begin
 					msrc <= MSRC_M68K;
 					MBUS_A <= M68K_A[23:1];
 					data <= NO_DATA;
@@ -808,18 +814,29 @@ always @(posedge MCLK) begin
 					MBUS_A <= VBUS_A;
 					data <= NO_DATA;
 					MBUS_DO <= 0;
-					mstate <= MBUS_SELECT;
+					mstate <=  MBUS_SELECT;
+					rfs_pend <= 0;
+					refresh_timer <= 0;
 				end
-				else if (Z80_IO && !Z80_ZBUS && Z80_MBUS_DTACK_N && !Z80_BGACK_N && Z80_BR_N && Z80_CLKENn) begin
+				else if (Z80_IO && !Z80_ZBUS && Z80_MBUS_DTACK_N && !Z80_BGACK_N && Z80_BR_N) begin
 					msrc <= MSRC_Z80;
 					MBUS_A <= Z80_A[15] ? {BAR[23:15],Z80_A[14:1]} : {16'hC000, Z80_A[7:1]};
 					data <= 16'hFFFF;
 					MBUS_DO <= {Z80_DO,Z80_DO};
 					MBUS_RNW <= Z80_WR_N;
-					mstate <= MBUS_SELECT;
+					mstate <= MBUS_Z80_PREREAD;
+					cycle_cnt = 2'd1;
 				end
 			end
 			
+		MBUS_Z80_PREREAD:
+			begin
+				if (!cycle_cnt) begin
+					mstate <= MBUS_SELECT;
+					cycle_cnt = 2'd1;
+				end
+			end
+
 		MBUS_SELECT:
 			begin
 				//NO DEVICE (usually lockup on real HW)
@@ -946,7 +963,7 @@ always @(posedge MCLK) begin
 					MBUS_UDS_N <= M68K_UDS_N;
 					MBUS_LDS_N <= M68K_LDS_N;
 					ZBUS_SEL <= 1;
-					mstate <= MBUS_ZBUS_WS;
+					mstate <= MBUS_RNW ? MBUS_ZBUS_WS : MBUS_ZBUS_READ;
 				end
 
 			MSRC_Z80:
@@ -1015,7 +1032,8 @@ always @(posedge MCLK) begin
 				data <= ROM_DATA;
 				if(msrc == MSRC_M68K) NO_DATA <= ROM_DATA;
 				ROM_RD <= 0;
-				mstate <= MBUS_FINISH;
+				if (msrc != MSRC_Z80 || !cycle_cnt)
+					mstate <= MBUS_FINISH;
 			end
 
 		MBUS_SRAM_READ:
@@ -1081,7 +1099,7 @@ always @(posedge MCLK) begin
 
 				MSRC_Z80:
 					begin
-						if (M68K_CLKENp) begin
+						if (Z80_CLKENp) begin
 							Z80_MBUS_D <= Z80_A[0] ? data[7:0] : data[15:8];
 							Z80_MBUS_DTACK_N <= 0;
 							MBUS_UDS_N <= Z80_A[0];
@@ -1197,6 +1215,7 @@ dpram #(13) ramZ80
 always @(posedge MCLK) begin
 	reg [1:0] zstate;
 	reg [1:0] zsrc;
+	reg Z80_BGACK_DIS;
 
 	localparam 	ZSRC_MBUS = 0,
 					ZSRC_Z80  = 1;
@@ -1214,6 +1233,7 @@ always @(posedge MCLK) begin
 		
 		Z80_BR_N <= 1;
 		Z80_BGACK_N <= 1;
+		Z80_BGACK_DIS <= 0;
 	end
 	else begin
 		if (~ZBUS_SEL)     MBUS_ZBUS_DTACK_N <= 1;
@@ -1267,8 +1287,12 @@ always @(posedge MCLK) begin
 		else if (!Z80_BGACK_N && !Z80_BR_N && !M68K_BG_N && M68K_CLKENp) begin
 			Z80_BR_N <= 1;
 		end
-		else if (!Z80_BGACK_N && Z80_BR_N && !Z80_MBUS_SEL) begin
+		else if (!Z80_BGACK_DIS && !Z80_BGACK_N && Z80_BR_N && !Z80_MBUS_SEL && M68K_CLKENn) begin
+			Z80_BGACK_DIS <= 1;
+		end
+		else if (!Z80_BGACK_N && Z80_BGACK_DIS && M68K_CLKENn) begin
 			Z80_BGACK_N <= 1;
+			Z80_BGACK_DIS <= 0;
 		end
 	end
 end
