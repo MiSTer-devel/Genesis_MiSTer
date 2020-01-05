@@ -61,14 +61,29 @@ if(num_ch==6) begin
     always @(posedge clk) if( clk_en )
         keyon_I <= (csm&&next_ch==3'd2&&overflow2) || csr_out;
 
-    wire key_upnow = up_keyon && (keyon_ch==next_ch) && (next_op == 2'd3);
+	 reg up_keyon_reg;
+    reg [3:0] tkeyon_op;
+    reg [2:0] tkeyon_ch;
+    always @(posedge clk) if( clk_en ) begin
+		if (rst)
+			up_keyon_reg <= 1'b0;
+		if (up_keyon) begin
+			up_keyon_reg <= 1'b1;
+			tkeyon_op <= keyon_op;
+			tkeyon_ch <= keyon_ch;		end
+		else if (key_upnow)
+			up_keyon_reg <= 1'b0;
+	 end
+
+    wire key_upnow = up_keyon_reg && (tkeyon_ch==next_ch) && (next_op == 2'd3);
+
     wire middle1;
     wire middle2;
     wire middle3;
-    wire din      = key_upnow ? keyon_op[3] : csr_out;
-    wire mid_din2 = key_upnow ? keyon_op[1] : middle1;
-    wire mid_din3 = key_upnow ? keyon_op[2] : middle2;
-    wire mid_din4 = key_upnow ? keyon_op[0] : middle3;
+    wire din      = key_upnow ? tkeyon_op[3] : csr_out;
+    wire mid_din2 = key_upnow ? tkeyon_op[1] : middle1;
+    wire mid_din3 = key_upnow ? tkeyon_op[2] : middle2;
+    wire mid_din4 = key_upnow ? tkeyon_op[0] : middle3;
 
     jt12_sh_rst #(.width(1),.stages(6),.rstval(1'b0)) u_konch0(
         .clk    ( clk       ),

@@ -266,6 +266,7 @@ reg [15:0] cfg;
 
 reg        cfg_got      = 0;
 reg        cfg_set      = 0;
+wire       vga_fb       = cfg[12];
 wire [1:0] hdmi_limited = {cfg[11],cfg[8]};
 wire       direct_video = cfg[10];
 wire       dvi_mode     = cfg[7];
@@ -835,6 +836,9 @@ osd hdmi_osd
 	.osd_status(osd_status)
 );
 
+wire hdmi_cs_osd;
+csync csync_hdmi(clk_hdmi, hdmi_hs_osd, hdmi_vs_osd, hdmi_cs_osd);
+
 reg [23:0] dv_data;
 reg        dv_hs, dv_vs, dv_de;
 always @(posedge clk_vid) begin
@@ -879,7 +883,7 @@ end
 wire hdmi_tx_clk;
 cyclonev_clkselect hdmi_clk_sw
 ( 
-	.clkselect({1'b1, direct_video}),
+	.clkselect({1'b1, ~vga_fb & direct_video}),
 	.inclk({clk_vid, hdmi_clk_out, 2'b00}),
 	.outclk(hdmi_tx_clk)
 );
@@ -918,10 +922,10 @@ always @(posedge hdmi_tx_clk) begin
 	reg hs,vs,de;
 	reg [23:0] d;
 	
-	hs <= direct_video ? dv_hs   : hdmi_hs_osd;
-	vs <= direct_video ? dv_vs   : hdmi_vs_osd;
-	de <= direct_video ? dv_de   : hdmi_de_osd;
-	d  <= direct_video ? dv_data : hdmi_data_osd;
+	hs <= (~vga_fb & direct_video) ? dv_hs   : (direct_video & csync_en) ? hdmi_cs_osd : hdmi_hs_osd;
+	vs <= (~vga_fb & direct_video) ? dv_vs   : hdmi_vs_osd;
+	de <= (~vga_fb & direct_video) ? dv_de   : hdmi_de_osd;
+	d  <= (~vga_fb & direct_video) ? dv_data : hdmi_data_osd;
 
 	hdmi_out_hs <= hs;
 	hdmi_out_vs <= vs;
@@ -985,15 +989,12 @@ csync csync_vga(clk_vid, vga_hs_osd, vga_vs_osd, vga_cs_osd);
 		.ypbpr_full(0),
 		.ypbpr_en(ypbpr_en),
 		.dout(vga_o),
-		.din(vga_scaler ? {24{hdmi_de_osd}} & hdmi_data_osd : vga_data_osd)
+		.din((vga_fb | vga_scaler) ? {24{hdmi_de_osd}} & hdmi_data_osd : vga_data_osd)
 	);
 
-	wire hdmi_cs_osd;
-	csync csync_hdmi(clk_hdmi, hdmi_hs_osd, hdmi_vs_osd, hdmi_cs_osd);
-
-	wire vs1 = vga_scaler ? hdmi_vs_osd : vga_vs_osd;
-	wire hs1 = vga_scaler ? hdmi_hs_osd : vga_hs_osd;
-	wire cs1 = vga_scaler ? hdmi_cs_osd : vga_cs_osd;
+	wire vs1 = (vga_fb | vga_scaler) ? hdmi_vs_osd : vga_vs_osd;
+	wire hs1 = (vga_fb | vga_scaler) ? hdmi_hs_osd : vga_hs_osd;
+	wire cs1 = (vga_fb | vga_scaler) ? hdmi_cs_osd : vga_cs_osd;
 
 	assign VGA_VS = (VGA_EN | SW[3]) ? 1'bZ      : csync_en ? 1'b1 : ~vs1;
 	assign VGA_HS = (VGA_EN | SW[3]) ? 1'bZ      : csync_en ? ~cs1 : ~hs1;

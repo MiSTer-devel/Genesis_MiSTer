@@ -39,7 +39,6 @@ module sdram
 	input             clk,			// sdram is accessed at up to 128MHz
 
 	input      [24:1] addr0,
-	input             rd0,
 	input             wrl0,
 	input             wrh0,
 	input      [15:0] din0,
@@ -48,7 +47,6 @@ module sdram
 	output reg        ack0,
 	
 	input      [24:1] addr1,
-	input             rd1,
 	input             wrl1,
 	input             wrh1,
 	input      [15:0] din1,
@@ -57,7 +55,6 @@ module sdram
 	output reg        ack1,
 	
 	input      [24:1] addr2,
-	input             rd2,
 	input             wrl2,
 	input             wrh2,
 	input      [15:0] din2,
@@ -94,7 +91,6 @@ reg  [1:0] dqm;
 reg        active = 0;
 reg  [2:0] ram_req = 0;
 wire [2:0] wr = {wrl2|wrh2,wrl1|wrh1,wrl0|wrh0};
-wire [2:0] rd = {rd2,rd1,rd0};
 
 reg [15:0] dout;
 
@@ -106,22 +102,21 @@ assign dout2 = dout;
 
 // access manager
 always @(posedge clk) begin
-	reg [2:0] old_rd, old_wr;
 	reg [9:0] rfs_cnt;
-	reg rfs;
+	reg rfs, rfs2;
 	
 	rfs_cnt <= rfs_cnt + 1'd1;
 	if (rfs_cnt == 850) begin
 		rfs <= 1;
 		rfs_cnt <= 0;
 	end
-	
-	old_rd <= old_rd & rd;
-	old_wr <= old_wr & wr;
+
+	if (rfs_cnt == 425) rfs2 <= 1;
 	
 	if(state == STATE_IDLE && mode == MODE_NORMAL) begin
 		if (rfs) begin
 			rfs <= 0;
+			rfs2 <= 0;
 			rfs_cnt <= 0;
 			we <= 0;
 			dqm <= 2'b00;
@@ -129,40 +124,34 @@ always @(posedge clk) begin
 			state <= STATE_START;
 		end
 		else if (ack0 != req0) begin
-			old_rd[0] <= rd[0];
-			old_wr[0] <= wr[0];
 			{ba,a} <= addr0;
 			data <= din0;
 			we <= wr[0];
 			dqm <= wr[0] ? ~{wrh0,wrl0} : 2'b00;
 			active <= 1;
-			state <= STATE_START;
 			ram_req[0] <= 1;
-			rfs <= rd[0];
+			rfs <= rfs2;
+			state <= STATE_START;
 		end
 		else if (ack1 != req1) begin
-			old_rd[1] <= rd[1];
-			old_wr[1] <= wr[1];
 			{ba,a} <= addr1;
 			data <= din1;
 			we <= wr[1];
 			dqm <= wr[1] ? ~{wrh1,wrl1} : 2'b00;
 			active <= 1;
-			state <= STATE_START;
 			ram_req[1] <= 1;
-			rfs <= rd[1];
+			rfs <= rfs2;
+			state <= STATE_START;
 		end
 		else if (ack2 != req2) begin
-			old_rd[2] <= rd[2];
-			old_wr[2] <= wr[2];
 			{ba,a} <= addr2;
 			data <= din2;
 			we <= wr[2];
 			dqm <= wr[2] ? ~{wrh2,wrl2} : 2'b00;
 			active <= 1;
-			state <= STATE_START;
 			ram_req[2] <= 1;
-			rfs <= rd[2];
+			rfs <= rfs2;
+			state <= STATE_START;
 		end
 	end
 

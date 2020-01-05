@@ -97,7 +97,6 @@ module system
 	output [24:1] ROM_ADDR,
 	input  [15:0] ROM_DATA,
 	output [15:0] ROM_WDATA,
-	output reg    ROM_RD,
 	output reg    ROM_WE,
 	output  [1:0] ROM_BE,
 	output reg    ROM_REQ,
@@ -110,10 +109,7 @@ module system
 	
 	input         EN_HIFI_PCM,
 	input         LADDER,
-	input         OBJ_LIMIT_HIGH,
-	
-	output [23:0] DBG_M68K_A,
-	output [23:0] DBG_MBUS_A
+	input         OBJ_LIMIT_HIGH
 );
 
 reg reset;
@@ -561,10 +557,6 @@ end
 assign ROM_BE = ~{MBUS_UDS_N, MBUS_LDS_N};
 assign ROM_WDATA = MBUS_DO;
 
-assign DBG_MBUS_A = {MBUS_A,1'b0};
-assign DBG_M68K_A = {M68K_A,1'b0};
-
-
 //-----------------------------------------------------------------------
 // 64KB SRAM / 128KB SVP DRAM
 //-----------------------------------------------------------------------
@@ -825,7 +817,7 @@ always @(posedge MCLK) begin
 					MBUS_DO <= {Z80_DO,Z80_DO};
 					MBUS_RNW <= Z80_WR_N;
 					mstate <= MBUS_Z80_PREREAD;
-					cycle_cnt = 2'd1;
+					cycle_cnt <= 2'd1;
 				end
 			end
 			
@@ -833,7 +825,7 @@ always @(posedge MCLK) begin
 			begin
 				if (!cycle_cnt) begin
 					mstate <= MBUS_SELECT;
-					cycle_cnt = 2'd1;
+					cycle_cnt <= 2'd1;
 				end
 			end
 
@@ -878,7 +870,6 @@ always @(posedge MCLK) begin
 					else if (MBUS_A < ROMSZ) begin
 						if (PIER_QUIRK) BANK_MODE <= (MBUS_A >= 23'h140000) ? 3'h3 : 3'h0;
 						if (SVP_QUIRK && msrc == MSRC_VDP) MBUS_A <= MBUS_A - 1'd1;
-						ROM_RD <= 1;
 						ROM_WE <= 0;
 						ROM_REQ <= ~ROM_ACK;
 						mstate <= MBUS_ROM_READ;
@@ -1031,7 +1022,6 @@ always @(posedge MCLK) begin
 			if (ROM_REQ == ROM_ACK) begin
 				data <= ROM_DATA;
 				if(msrc == MSRC_M68K) NO_DATA <= ROM_DATA;
-				ROM_RD <= 0;
 				if (msrc != MSRC_Z80 || !cycle_cnt)
 					mstate <= MBUS_FINISH;
 			end
