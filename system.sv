@@ -765,12 +765,13 @@ always @(posedge MCLK) begin
 		else BANK_REG <= '{0,1,2,3,4,5,6,7};
 	end
 	else begin
+	/*
 		refresh_timer <= refresh_timer + 1'd1;
 		if (refresh_timer == 'h17F) begin
 			refresh_timer <= 0;
 			rfs_pend <= 1;
 		end
-		
+	*/	
 		if (M68K_CLKENp) begin
 			if (cycle_cnt) cycle_cnt = cycle_cnt - 1'd1;
 		end
@@ -807,8 +808,8 @@ always @(posedge MCLK) begin
 					data <= NO_DATA;
 					MBUS_DO <= 0;
 					mstate <=  MBUS_SELECT;
-					rfs_pend <= 0;
-					refresh_timer <= 0;
+					//rfs_pend <= 0;
+					//refresh_timer <= 0;
 				end
 				else if (Z80_IO && !Z80_ZBUS && Z80_MBUS_DTACK_N && !Z80_BGACK_N && Z80_BR_N) begin
 					msrc <= MSRC_Z80;
