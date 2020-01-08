@@ -187,6 +187,7 @@ video_calc video_calc
 (
 	.clk_100(HPS_BUS[43]),
 	.clk_vid(HPS_BUS[42]),
+	.clk_sys(clk_sys),
 	.ce_pix(HPS_BUS[41]),
 	.de(HPS_BUS[40]),
 	.hs(HPS_BUS[39]),
@@ -463,7 +464,7 @@ end
 generate
 	if(PS2DIV) begin
 		reg clk_ps2;
-		always @(negedge clk_sys) begin
+		always @(posedge clk_sys) begin
 			integer cnt;
 			cnt <= cnt + 1'd1;
 			if(cnt == PS2DIV) begin
@@ -742,6 +743,8 @@ module video_calc
 (
 	input clk_100,
 	input clk_vid,
+	input clk_sys,
+
 	input ce_pix,
 	input de,
 	input hs,
@@ -754,22 +757,22 @@ module video_calc
 	output reg [15:0] dout
 );
 
-always @(*) begin
+always @(posedge clk_sys) begin
 	case(par_num)
-		1: dout = {|vid_int, vid_nres};
-		2: dout = vid_hcnt[15:0];
-		3: dout = vid_hcnt[31:16];
-		4: dout = vid_vcnt[15:0];
-		5: dout = vid_vcnt[31:16];
-		6: dout = vid_htime[15:0];
-		7: dout = vid_htime[31:16];
-		8: dout = vid_vtime[15:0];
-		9: dout = vid_vtime[31:16];
-	  10: dout = vid_pix[15:0];
-	  11: dout = vid_pix[31:16];
-	  12: dout = vid_vtime_hdmi[15:0];
-	  13: dout = vid_vtime_hdmi[31:16];
-	  default dout = 0;
+		1: dout <= {|vid_int, vid_nres};
+		2: dout <= vid_hcnt[15:0];
+		3: dout <= vid_hcnt[31:16];
+		4: dout <= vid_vcnt[15:0];
+		5: dout <= vid_vcnt[31:16];
+		6: dout <= vid_htime[15:0];
+		7: dout <= vid_htime[31:16];
+		8: dout <= vid_vtime[15:0];
+		9: dout <= vid_vtime[31:16];
+	  10: dout <= vid_pix[15:0];
+	  11: dout <= vid_pix[31:16];
+	  12: dout <= vid_vtime_hdmi[15:0];
+	  13: dout <= vid_vtime_hdmi[31:16];
+	  default dout <= 0;
 	endcase
 end
 
