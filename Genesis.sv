@@ -127,7 +127,7 @@ module emu
 assign ADC_BUS  = 'Z;
 assign USER_OUT = '1;
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
-assign BUTTONS   = 0;
+assign BUTTONS   = osd_btn;
 assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 
 always_comb begin
@@ -305,6 +305,25 @@ wire code_index = &ioctl_index;
 wire cart_download = ioctl_download & ~code_index;
 wire code_download = ioctl_download & code_index;
 
+reg osd_btn = 0;
+always @(posedge clk_sys) begin
+	integer timeout = 0;
+	reg     has_bootrom = 0;
+	reg     last_rst = 0;
+
+	if (RESET) last_rst = 0;
+	if (status[0]) last_rst = 1;
+
+	if (cart_download & ioctl_wr & status[0]) has_bootrom <= 1;
+
+	if(last_rst & ~status[0]) begin
+		osd_btn <= 0;
+		if(timeout < 24000000) begin
+			timeout <= timeout + 1;
+			osd_btn <= ~has_bootrom;
+		end
+	end
+end
 ///////////////////////////////////////////////////
 wire clk_sys, clk_ram, locked;
 
