@@ -61,8 +61,8 @@ assign DDRAM_RD       = ram_read;
 assign DDRAM_DIN      = ram_data;
 assign DDRAM_WE       = ram_write;
 
-assign dout  = (rdaddr  < wraddr) ?  ram_q[{rdaddr[2:1],  4'b0000} +:16] : 16'd0;
-assign dout2 = (rdaddr2 < wraddr) ? ram_q2[{rdaddr2[2:1], 4'b0000} +:16] : 16'd0; 
+assign dout  =  ram_q[{rdaddr[2:1],  4'b0000} +:16];
+assign dout2 = ram_q2[{rdaddr2[2:1], 4'b0000} +:16]; 
 
 reg  [7:0] ram_burst;
 reg [63:0] ram_q, next_q, ram_q2, next_q2;
@@ -73,7 +73,7 @@ reg        ram_write = 0;
 reg  [7:0] ram_be = 0;
 
 reg [1:0]  state  = 0;
-reg        ch = 0; 
+reg        ch = 0;
 
 always @(posedge DDRAM_CLK) begin
 
