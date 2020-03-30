@@ -72,6 +72,14 @@ module gen_io
 
 	input     [24:0] MOUSE,
 	input      [2:0] MOUSE_OPT,
+	
+	input            GUN_OPT,
+	input            GUN_TYPE,
+	input            GUN_SENSOR,
+	input            GUN_A,
+	input            GUN_B,
+	input            GUN_C,
+	input            GUN_START,
 
 	input            SEL,
 	input      [4:1] A,
@@ -79,6 +87,7 @@ module gen_io
 	input      [7:0] DI,
 	output reg [7:0] DO,
 	output reg       DTACK_N,
+	output reg       HL,
 
 	input            PAL,
 	input            EXPORT
@@ -105,7 +114,7 @@ always @(posedge RESET or posedge CLK) begin
 				case(A)
 						0: DO <= {EXPORT, PAL, ~DISK, 5'd0};
 						1: DO <= (CTLA & DATA) | (~CTLA & (MOUSE_OPT[0] ? mdata : PAD1_DO));
-						2: DO <= (CTLB & DATB) | (~CTLB & (MOUSE_OPT[1] ? mdata : PAD2_DO));
+						2: DO <= (CTLB & DATB) | (~CTLB & (GUN_OPT ? GUN_DO : (MOUSE_OPT[1] ? mdata : PAD2_DO)));
 						3: DO <= R[3] & R[6]; // Unconnected port
 				default: DO <= R[A];
 				endcase
@@ -173,6 +182,23 @@ pad_io pad2
 	.DO(PAD2_DO)
 );
 
+wire [7:0] GUN_DO;
+gun_io gun
+(
+	.RESET(RESET),
+	.CLK(CLK),
+	.CE(CE),
+
+	.GUN_TYPE(GUN_TYPE),
+	.SENSOR(GUN_SENSOR),
+	.P_A(GUN_A),
+	.P_B(GUN_B),
+	.P_C(GUN_C),
+	.P_START(GUN_START),
+
+	.DI((CTLB & DATB) | ~CTLB),
+	.DO(GUN_DO)
+);
 
 reg   [8:0] dx,dy;
 reg   [4:0] mdata;
@@ -192,6 +218,13 @@ always @(posedge CLK) begin
 	reg mtrd,mtrd2;
 	reg [3:0] cnt;
 	reg [5:0] delay;
+	
+	if (GUN_OPT & CTLB[7] & ~CTLB[6]) begin
+		HL <= GUN_DO[6];
+	end		
+	else begin
+		HL <= 1'b1;
+	end
 	
 	if(!delay) begin
 		if(mtrd ^ MTR) delay <= 1;
@@ -324,6 +357,76 @@ always @(posedge RESET or posedge CLK) begin
 			if(~RNW) di <= DI;
 			DTACK_N <= 0;
 		end 
+	end
+end
+
+endmodule
+
+module gun_io
+(
+	input RESET,
+	input CLK,
+	input CE,
+
+	input GUN_TYPE,
+	input SENSOR,
+	input P_A,
+	input P_B,
+	input P_C,
+	input P_START,
+
+	input [7:0] DI,
+	output reg [7:0] DO
+);
+
+reg [5:0] mdo; // Menacer
+reg [5:0] jdo; // Justifier
+reg th;
+reg jth;
+reg mth;
+
+always @(*) begin
+	DO[7:6] = {1'b0, th & (GUN_TYPE ? jth : mth)};
+	DO[5:0] = GUN_TYPE ? jdo : mdo;
+end
+
+always @(posedge RESET or posedge CLK) begin
+	reg jgunsel; // Justifier blue gun or pink gun.
+	reg jgunen;  // Justifier gun enabled.
+	reg mrsten;  // Menacer RST signal level
+
+	if(RESET) begin
+		jth  <= 1;
+		mth  <= 1;
+	end
+	else if(CE) begin
+		th <= DI[6];
+
+		// Menacer
+		mrsten <= DI[5];
+		if(mrsten & ~DI[5] & ~DI[4]) mth <= 1'b1;
+		if(SENSOR) mth <= 1'b0;
+		mdo <= {2'b00, P_START, P_C, P_A, P_B};
+
+		// Justifier
+		jgunsel <= DI[5];
+		jgunen <= DI[4];
+		jdo[5:3] = {jgunsel, jgunen, 1'b0};
+		if(~jgunen) begin
+			if(~jgunsel) begin
+				// Blue gun
+				jdo[2:0] <= {!SENSOR & th, !P_START,!P_A};
+				if(SENSOR) jth <= 1'b0;
+			end
+			else begin
+				// Pink gun (2nd player not supported yet)
+				jdo[2:0] <= {th, 2'b11};
+			end
+		end
+		else begin
+			jdo[2:0] <= th ? 3'b000 : 3'b011;
+			jth <= 1;
+		end
 	end
 end
 

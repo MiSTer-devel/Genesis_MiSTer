@@ -73,6 +73,8 @@ entity vdp is
 		vram32_a    : out std_logic_vector(15 downto 1);
 		vram32_q    : in  std_logic_vector(31 downto 0);
 
+		EXINT       : out std_logic;
+		HL          : in  std_logic;
 		HINT        : out std_logic;
 		VINT_TG68   : out std_logic;
 		VINT_T80    : out std_logic;
@@ -192,6 +194,10 @@ signal SCOL_CLR		: std_logic;
 ----------------------------------------------------------------
 -- INTERRUPTS
 ----------------------------------------------------------------
+signal EXINT_PENDING          : std_logic;
+signal EXINT_PENDING_SET		: std_logic;
+signal EXINT_FF					: std_logic;
+
 signal HINT_COUNT	: std_logic_vector(7 downto 0);
 signal HINT_EN		: std_logic;
 signal HINT_PENDING	: std_logic;
@@ -232,9 +238,11 @@ signal WRIGT_LATCH  : std_logic;
 signal BGCOL		: std_logic_vector(5 downto 0);
 
 signal HIT			: std_logic_vector(7 downto 0);
+signal IE2			: std_logic;
 signal IE1			: std_logic;
 signal IE0			: std_logic;
 
+signal OLD_HL 		: std_logic;
 signal M3			: std_logic;
 signal DE			: std_logic;
 signal M5			: std_logic;
@@ -877,6 +885,7 @@ WRIGT <= REG(17)(7);
 BGCOL <= REG(7)(5 downto 0);
 
 HIT <= REG(10);
+IE2 <= REG(11)(3);
 IE1 <= REG(0)(4);
 IE0 <= REG(1)(5);
 
@@ -2276,6 +2285,7 @@ begin
 		V_ACTIVE <= '0';
 		V_ACTIVE_DISP <= '0';
 
+		EXINT_PENDING_SET <= '0';
 		HINT_EN <= '0';
 		HINT_PENDING_SET <= '0';
 		VINT_TG68_PENDING_SET <= '0';
@@ -2296,10 +2306,7 @@ begin
 
 	elsif rising_edge(CLK) then
 
-		if M3='0' then
-			HV <= HV_VCNT_EXT(7 downto 1) & HV8 & HV_HCNT(8 downto 1);
-		end if;
-
+		EXINT_PENDING_SET <= '0';
 		HINT_PENDING_SET <= '0';
 		VINT_TG68_PENDING_SET <= '0';
 		VINT_T80_SET <= '0';
@@ -2314,6 +2321,16 @@ begin
 		--BGA_PATTERN_EN <= '0';
 		BGB_MAPPING_EN <= '0';
 		--BGB_PATTERN_EN <= '0';
+		
+		OLD_HL <= HL;
+		if OLD_HL = '1' and HL = '0' then
+			HV <= HV_VCNT_EXT(7 downto 1) & HV8 & HV_HCNT(8 downto 1);
+			EXINT_PENDING_SET <= '1';
+		end if;
+		
+		if M3 ='0' then	
+			HV <= HV_VCNT_EXT(7 downto 1) & HV8 & HV_HCNT(8 downto 1);
+		end if;
 
 		-- H40 slow slots: 8aaaaaaa99aaaaaaa8aaaaaaa99aaaaaaa
 		-- 8, 10, 10, 10, 10, 10, 10, 10, 9, 9, 10, 10, 10, 10, 10, 10, 10, 8, 10, 10, 10, 10, 10, 10, 10, 9, 9, 10, 10, 10, 10, 10, 10, 10
@@ -3517,6 +3534,7 @@ end process;
 process( RST_N, CLK )
 begin
 	if RST_N = '0' then
+		EXINT_PENDING <= '0';
 		HINT_PENDING <= '0';
 		VINT_TG68_PENDING <= '0';
 	elsif rising_edge( CLK) then
@@ -3527,13 +3545,33 @@ begin
 				VINT_TG68_PENDING <= '0';
 			elsif HINT_FF = '1' then
 				HINT_PENDING <= '0';
+			elsif EXINT_FF = '1' then
+				EXINT_PENDING <= '0';
 			end if;
+		end if;
+		if EXINT_PENDING_SET = '1' then
+			EXINT_PENDING <= '1';
 		end if;
 		if HINT_PENDING_SET = '1' then
 			HINT_PENDING <= '1';
 		end if;
 		if VINT_TG68_PENDING_SET = '1' then
 			VINT_TG68_PENDING <= '1';
+		end if;
+	end if;	
+end process;
+
+-- EXINT
+EXINT <= EXINT_FF;
+process( RST_N, CLK )
+begin
+	if RST_N = '0' then
+		EXINT_FF <= '0';
+	elsif rising_edge( CLK) then
+		if EXINT_PENDING = '1' and IE2 = '1' then
+			EXINT_FF <= '1';
+		else
+			EXINT_FF <= '0';
 		end if;
 	end if;	
 end process;

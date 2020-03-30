@@ -177,7 +177,7 @@ assign LED_USER  = cart_download | sav_pending;
 // 0         1         2         3          4         5         6   
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// XXXXXXXXXXXX XXXXXXXX  XXXXXXXXX XXXXXXXX                          
+// XXXXXXXXXXXX XXXXXXXXXXXXXXXXXXX XXXXXXXXXXXXX                    
 
 `include "build_id.v"
 localparam CONF_STR = {
@@ -211,6 +211,10 @@ localparam CONF_STR = {
 	"OIJ,Mouse,None,Port1,Port2;",
 	"OK,Mouse Flip Y,No,Yes;",
 	"-;",
+	"o89,Gun,Disabled,Joy1,Joy2,Mouse;",
+	"H4oA,Gun Btn,Joy,Mouse;",
+	"H4oBC,Cross,Small,Med,Big,None;",
+	"-;",
 	"o34,ROM Storage,Auto,SDRAM,DDR3;",
 	"-;",
 	"OPQ,CPU Turbo,None,Medium,High;",
@@ -229,6 +233,7 @@ localparam CONF_STR = {
 wire [63:0] status;
 wire  [1:0] buttons;
 wire [11:0] joystick_0,joystick_1,joystick_2,joystick_3,joystick_4;
+wire  [7:0] joy0_x,joy0_y,joy1_x,joy1_y;
 wire        ioctl_download;
 wire        ioctl_wr;
 wire [24:0] ioctl_addr;
@@ -267,6 +272,9 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(1)) hps_io
 	.joystick_2(joystick_2),
 	.joystick_3(joystick_3),
 	.joystick_4(joystick_4),
+	.joystick_analog_0({joy0_y, joy0_x}),
+	.joystick_analog_1({joy1_y, joy1_x}),
+
 	.buttons(buttons),
 	.forced_scandoubler(forced_scandoubler),
 	.new_vmode(new_vmode),
@@ -274,7 +282,7 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(1)) hps_io
 	.status(status),
 	.status_in({status[63:8],region_req,status[5:0]}),
 	.status_set(region_set),
-	.status_menumask({~dbg_menu,~status[8],~gg_available,~bk_ena}),
+	.status_menumask({!gun_mode,~dbg_menu,~status[8],~gg_available,~bk_ena}),
 
 	.ioctl_download(ioctl_download),
 	.ioctl_index(ioctl_index),
@@ -301,6 +309,9 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(1)) hps_io
 	.ps2_key(ps2_key),
 	.ps2_mouse(ps2_mouse)
 );
+
+wire [1:0] gun_mode = status[41:40];
+wire       gun_btn_mode = status[42];
 
 wire code_index = &ioctl_index;
 wire cart_download = ioctl_download & ~code_index;
@@ -435,6 +446,14 @@ system system
 
 	.MOUSE(ps2_mouse),
 	.MOUSE_OPT(status[20:18]),
+	
+	.GUN_OPT(|gun_mode),
+	.GUN_TYPE(gun_type),
+	.GUN_SENSOR(lg_sensor),
+	.GUN_A(lg_a),
+	.GUN_B(lg_b),
+	.GUN_C(lg_c),
+	.GUN_START(lg_start),
 
 	.ENABLE_FM(~dbg_menu | ~status[32]),
 	.ENABLE_PSG(~dbg_menu | ~status[33]),
@@ -561,15 +580,53 @@ video_mixer #(.LINE_LENGTH(320), .HALF_DEPTH(0), .GAMMA(1)) video_mixer
 
 	.mono(0),
 
-	.R(red),
-	.G(green),
-	.B(blue),
+	.R((lg_target && gun_mode && (~&status[44:43])) ? {8{lg_target[0]}} : red),
+	.G((lg_target && gun_mode && (~&status[44:43])) ? {8{lg_target[1]}} : green),
+	.B((lg_target && gun_mode && (~&status[44:43])) ? {8{lg_target[2]}} : blue),
 
 	// Positive pulses.
 	.HSync(hs_c),
 	.VSync(vs_c),
 	.HBlank(hblank_c),
 	.VBlank(vblank_c)
+);
+
+wire [2:0] lg_target;
+wire       lg_sensor;
+wire       lg_a;
+wire       lg_b;
+wire       lg_c;
+wire       lg_start;
+
+lightgun lightgun
+(
+	.CLK(clk_sys),
+	.RESET(reset),
+
+	.MOUSE(ps2_mouse),
+	.MOUSE_XY(&gun_mode),
+
+	.JOY_X(gun_mode[0] ? joy0_x : joy1_x),
+	.JOY_Y(gun_mode[0] ? joy0_y : joy1_y),
+	.JOY(gun_mode[0] ? joystick_0 : joystick_1),
+
+	.RELOAD(gun_type),
+
+	.HDE(~hblank_c),
+	.VDE(~vblank_c),
+	.CE_PIX(ce_pix),
+	.H40(res[0]),
+
+	.BTN_MODE(gun_btn_mode),
+	.SIZE(status[44:43]),
+	.SENSOR_DELAY(gun_sensor_delay),
+
+	.TARGET(lg_target),
+	.SENSOR(lg_sensor),
+	.BTN_A(lg_a),
+	.BTN_B(lg_b),
+	.BTN_C(lg_c),
+	.BTN_START(lg_start)
 );
 
 ///////////////////////////////////////////////////
@@ -738,6 +795,8 @@ reg pier_quirk = 0;
 reg svp_quirk = 0;
 reg fmbusy_quirk = 0;
 reg schan_quirk = 0;
+reg gun_type = 0;
+reg [7:0] gun_sensor_delay = 8'd44;
 always @(posedge clk_sys) begin
 	reg [63:0] cart_id;
 	reg old_download;
@@ -776,6 +835,32 @@ always @(posedge clk_sys) begin
 			else if(cart_id == "T-25073 ") fmbusy_quirk <= 1; // Hellfire JP
 			else if(cart_id == "MK-1137-") fmbusy_quirk <= 1; // Hellfire EU
 			else if(cart_id == "T-68???-") schan_quirk  <= 1; // Game no Kanzume Otokuyou
+			
+			// Lightgun device and timing offsets
+			if(cart_id == "MK-1533 ") begin						  // Body Count
+				gun_type  <= 0;
+				gun_sensor_delay <= 8'd100;
+			end
+			else if(cart_id == "T-95096-") begin				  // Lethal Enforcers
+				gun_type  <= 1;
+				gun_sensor_delay <= 8'd52;
+			end
+			else if(cart_id == "T-95136-") begin				  // Lethal Enforcers II
+				gun_type  <= 1;
+				gun_sensor_delay <= 8'd30;
+			end
+			else if(cart_id == "MK-1658 ") begin				  // Menacer 6-in-1
+				gun_type  <= 0;
+				gun_sensor_delay <= 8'd120;
+			end
+			else if(cart_id == "T-081156") begin				  // T2: The Arcade Game
+				gun_type  <= 0;
+				gun_sensor_delay <= 8'd126;
+			end
+			else begin
+				gun_type  <= 0;
+				gun_sensor_delay <= 8'd44;
+			end
 		end
 	end
 end
