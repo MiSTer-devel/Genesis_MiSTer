@@ -177,7 +177,7 @@ assign LED_USER  = cart_download | sav_pending;
 // 0         1         2         3          4         5         6   
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// XXXXXXXXXXXX XXXXXXXXXXXXXXXXXXX XXXXX                             
+// XXXXXXXXXXXX XXXXXXXX  XXXXXXXXX XXXXXXXX                          
 
 `include "build_id.v"
 localparam CONF_STR = {
@@ -207,7 +207,7 @@ localparam CONF_STR = {
 	"-;",
 	"O4,Swap Joysticks,No,Yes;",
 	"O5,6 Buttons Mode,No,Yes;",
-	"OLM,Multitap,Disabled,4-Way,TeamPlayer,J-Cart;",
+	"o57,Multitap,Disabled,4-Way,TeamPlayer: Port1,TeamPlayer: Port2,J-Cart;",
 	"OIJ,Mouse,None,Port1,Port2;",
 	"OK,Mouse Flip Y,No,Yes;",
 	"-;",
@@ -228,7 +228,7 @@ localparam CONF_STR = {
 
 wire [63:0] status;
 wire  [1:0] buttons;
-wire [11:0] joystick_0,joystick_1,joystick_2,joystick_3;
+wire [11:0] joystick_0,joystick_1,joystick_2,joystick_3,joystick_4;
 wire        ioctl_download;
 wire        ioctl_wr;
 wire [24:0] ioctl_addr;
@@ -266,6 +266,7 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(1)) hps_io
 	.joystick_1(joystick_1),
 	.joystick_2(joystick_2),
 	.joystick_3(joystick_3),
+	.joystick_4(joystick_4),
 	.buttons(buttons),
 	.forced_scandoubler(forced_scandoubler),
 	.new_vmode(new_vmode),
@@ -429,7 +430,8 @@ system system
 	.JOY_2(status[4] ? joystick_0 : joystick_1),
 	.JOY_3(joystick_2),
 	.JOY_4(joystick_3),
-	.MULTITAP(status[22:21]),
+	.JOY_5(joystick_4),
+	.MULTITAP(status[39:37]),
 
 	.MOUSE(ps2_mouse),
 	.MOUSE_OPT(status[20:18]),
