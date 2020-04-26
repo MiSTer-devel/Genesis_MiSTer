@@ -21,3 +21,4 @@ set_global_assignment -name SYSTEMVERILOG_FILE multitap.sv
 set_global_assignment -name SYSTEMVERILOG_FILE system.sv
 set_global_assignment -name SDC_FILE Genesis.sdc
 set_global_assignment -name SYSTEMVERILOG_FILE Genesis.sv
+set_global_assignment -name SYSTEMVERILOG_FILE lightgun.sv
