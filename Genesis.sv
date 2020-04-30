@@ -494,10 +494,10 @@ wire BGA_DITHER_DETECT;
 wire BGB_DITHER_DETECT;
 
 
-wire cofi_enable = (status[36:34]==3'd1) ||																					// Force on (whole screen).
-						 (status[36:34]==3'd2 && BG_LAYER_ACTIVE && BGA_DITHER_DETECT) ||								// Auto-detect on Background Layer A.
-						 (status[36:34]==3'd3 && BG_LAYER_ACTIVE && BGB_DITHER_DETECT) ||								// Auto-detect on Background Layer B.
-						 (status[36:34]==3'd4 && BG_LAYER_ACTIVE && (BGA_DITHER_DETECT || BGB_DITHER_DETECT));	// Auto-detect on BOTH Background layers.
+wire cofi_enable = (status[36:34]==3'd1) ||																							// Force on (whole screen).
+						 (status[36:34]==3'd2 && /*BG_LAYER_ACTIVE &&*/ BGA_DITHER_DETECT) ||								// Auto-detect on Background Layer A.
+						 (status[36:34]==3'd3 && /*BG_LAYER_ACTIVE &&*/ BGB_DITHER_DETECT) ||								// Auto-detect on Background Layer B.
+						 (status[36:34]==3'd4 && /*BG_LAYER_ACTIVE &&*/ (BGA_DITHER_DETECT || BGB_DITHER_DETECT));	// Auto-detect on BOTH Background layers.
 
 wire PAL = status[7];
 
