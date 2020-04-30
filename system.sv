@@ -118,7 +118,11 @@ module system
 	
 	input         EN_HIFI_PCM,
 	input         LADDER,
-	input         OBJ_LIMIT_HIGH
+	input         OBJ_LIMIT_HIGH,
+
+	output		  BG_LAYER_ACTIVE,
+	output		  BGA_DITHER_DETECT,
+	output		  BGB_DITHER_DETECT
 );
 
 reg reset;
@@ -446,8 +450,14 @@ vdp vdp
 	.VS(VDP_vs),
 	.CE_PIX(CE_PIX),
 	.HBL(HBL),
-	.VBL(VBL)
+	.VBL(VBL),
+	
+	.BG_LAYER_ACTIVE(BG_LAYER_ACTIVE),
+	
+	.BGA_DITHER_DETECT(BGA_DITHER_DETECT),
+	.BGB_DITHER_DETECT(BGB_DITHER_DETECT)
 );
+
 
 // PSG 0x10-0x17 in VDP space
 wire signed [10:0] PSG_SND;

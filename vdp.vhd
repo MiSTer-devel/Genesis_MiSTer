@@ -108,7 +108,12 @@ entity vdp is
 		VRAM_SPEED  : in  std_logic := '1'; -- 0 - full speed, 1 - FIFO throttle emulation
 		VSCROLL_BUG : in  std_logic := '1'; -- 0 - use nicer effect, 1 - HW original
 		BORDER_EN   : in  std_logic := '1';  -- Enable border
-		OBJ_LIMIT_HIGH_EN : in std_logic := '0' -- Enable more sprites and pixels per line
+		OBJ_LIMIT_HIGH_EN : in std_logic := '0'; -- Enable more sprites and pixels per line
+
+		BG_LAYER_ACTIVE : out std_logic;
+		
+		BGA_DITHER_DETECT : out std_logic;
+		BGB_DITHER_DETECT : out std_logic
 	);
 end vdp;
 
@@ -440,6 +445,19 @@ type bgbc_t is (
 	BGBC_DONE
 );
 signal BGBC		: bgbc_t;
+
+
+-- Smart De-dither signals. (ElectronAsh).
+signal PRI_LEVEL	: std_logic_vector(2 downto 0);
+
+signal BGA_SHIFT_REG_0	: std_logic_vector(3 downto 0);
+signal BGA_SHIFT_REG_1	: std_logic_vector(3 downto 0);
+signal BGA_SHIFT_REG_2	: std_logic_vector(3 downto 0);
+
+signal BGB_SHIFT_REG_0	: std_logic_vector(3 downto 0);
+signal BGB_SHIFT_REG_1	: std_logic_vector(3 downto 0);
+signal BGB_SHIFT_REG_2	: std_logic_vector(3 downto 0);
+
 
 -- signal BGB_COLINFO		: colinfo_t;
 signal BGB_COLINFO_ADDR_A	: std_logic_vector(8 downto 0);
@@ -2594,22 +2612,48 @@ begin
 					end if;
 				end if;
 
-				if OBJ_COLINFO2_Q(3 downto 0) /= "0000" and OBJ_COLINFO2_Q(6) = '1' and
-					(SHI='0' or OBJ_COLINFO2_Q(5 downto 1) /= "11111") then
+				-- Smart de-dither detection. (ElectronAsh).
+				BGA_SHIFT_REG_2 <= BGA_SHIFT_REG_1;
+				BGA_SHIFT_REG_1 <= BGA_SHIFT_REG_0;
+				BGA_SHIFT_REG_0 <= BGA_COLINFO_Q_B(3 downto 0);
+
+				BGB_SHIFT_REG_2 <= BGB_SHIFT_REG_1;
+				BGB_SHIFT_REG_1 <= BGB_SHIFT_REG_0;
+				BGB_SHIFT_REG_0 <= BGB_COLINFO_Q_B(3 downto 0);
+				
+				if (BGA_SHIFT_REG_2="0000" and BGA_SHIFT_REG_1/="0000" and BGA_SHIFT_REG_0="0000" and BGA_COLINFO_Q_B(3 downto 0)/="0000") or
+					(BGA_SHIFT_REG_2/="0000" and BGA_SHIFT_REG_1="0000" and BGA_SHIFT_REG_0/="0000" and BGA_COLINFO_Q_B(3 downto 0)="0000") then BGA_DITHER_DETECT <= '1';
+					else BGA_DITHER_DETECT <= '0';
+				end if;
+
+				if (BGB_SHIFT_REG_2="0000" and BGB_SHIFT_REG_1/="0000" and BGB_SHIFT_REG_0="0000" and BGB_COLINFO_Q_B(3 downto 0)/="0000") or
+					(BGB_SHIFT_REG_2/="0000" and BGB_SHIFT_REG_1="0000" and BGB_SHIFT_REG_0/="0000" and BGB_COLINFO_Q_B(3 downto 0)="0000") then BGB_DITHER_DETECT <= '1';
+					else BGB_DITHER_DETECT <= '0';
+				end if;
+				
+				
+				-- Priority encoder for backgrounds and sprites.
+				if OBJ_COLINFO2_Q(3 downto 0) /= "0000" and OBJ_COLINFO2_Q(6) = '1' and (SHI='0' or OBJ_COLINFO2_Q(5 downto 1) /= "11111") then
 					col := OBJ_COLINFO2_Q(5 downto 0);
+					PRI_LEVEL <= "110";
 				elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" and BGA_COLINFO_Q_B(6) = '1' then
 					col := BGA_COLINFO_Q_B(5 downto 0);
+					PRI_LEVEL <= "101";
 				elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" and BGB_COLINFO_Q_B(6) = '1' then
 					col := BGB_COLINFO_Q_B(5 downto 0);
-				elsif OBJ_COLINFO2_Q(3 downto 0) /= "0000" and
-					(SHI='0' or OBJ_COLINFO2_Q(5 downto 1) /= "11111") then
+					PRI_LEVEL <= "100";
+				elsif OBJ_COLINFO2_Q(3 downto 0) /= "0000" and (SHI='0' or OBJ_COLINFO2_Q(5 downto 1) /= "11111") then
 					col := OBJ_COLINFO2_Q(5 downto 0);
+					PRI_LEVEL <= "011";
 				elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" then
 					col := BGA_COLINFO_Q_B(5 downto 0);
+					PRI_LEVEL <= "010";
 				elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" then
 					col := BGB_COLINFO_Q_B(5 downto 0);
+					PRI_LEVEL <= "001";
 				else
 					col := BGCOL;
+					PRI_LEVEL <= "000";
 				end if;
 
 				case DBG(8 downto 7) is
@@ -2668,6 +2712,9 @@ begin
 
 	end if;
 end process;
+
+BG_LAYER_ACTIVE <= '1' when (PRI_LEVEL="001" or PRI_LEVEL="010" or PRI_LEVEL="100" or PRI_LEVEL="101") else '0';
+
 
 ----------------------------------------------------------------
 -- VIDEO OUTPUT
