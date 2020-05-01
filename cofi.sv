@@ -22,15 +22,19 @@ module cofi (
 	output reg [7:0] blue_out
 );
 
-	function bit [7:0] color_blend (
-		input [7:0] color_prev,
-		input [7:0] color_curr,
-		input blank_last
-	);
-	begin
-		color_blend = blank_last ? color_curr : (color_prev >> 1) + (color_curr >> 1);
-	end
-	endfunction
+function bit [7:0] color_blend (
+	input [7:0] color_prev,
+	input [7:0] color_curr,
+	input blank_last
+);
+var
+	reg [8:0] sum;
+begin
+	sum = color_curr;
+	if(!blank_last) sum = sum + color_prev;
+	color_blend = sum[8:1];
+end
+endfunction
 
 reg [7:0] red_last;
 reg [7:0] green_last;
