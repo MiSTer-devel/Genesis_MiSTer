@@ -125,7 +125,6 @@ module emu
 );
 
 assign ADC_BUS  = 'Z;
-//assign USER_OUT = '1;
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 assign BUTTONS   = osd_btn;
 assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
@@ -170,8 +169,6 @@ assign LED_POWER = 0;
 assign LED_USER  = cart_download | sav_pending;
 
 
-`define SOUND_DBG
-
 // Status Bit Map:
 //             Upper                             Lower              
 // 0         1         2         3          4         5         6   
@@ -210,11 +207,11 @@ localparam CONF_STR = {
 	"o57,Multitap,Disabled,4-Way,TeamPlayer: Port1,TeamPlayer: Port2,J-Cart;",
 	"OIJ,Mouse,None,Port1,Port2;",
 	"OK,Mouse Flip Y,No,Yes;",
-	"oD,Serial Mode,OFF,SNAC;",
+	"oD,Serial,OFF,SNAC;",
 	"-;",
-	"o89,Gun,Disabled,Joy1,Joy2,Mouse;",
-	"H4oA,Gun Btn,Joy,Mouse;",
-	"H4oBC,Cross,Small,Med,Big,None;",
+	"o89,Gun Control,Disabled,Joy1,Joy2,Mouse;",
+	"H4oA,Gun Fire,Joy,Mouse;",
+	"H4oBC,Cross,Small,Medium,Big,None;",
 	"-;",
 	"o34,ROM Storage,Auto,SDRAM,DDR3;",
 	"-;",
@@ -970,13 +967,10 @@ always @(posedge clk_sys) begin
 		USER_OUT[2] <= SERCTL[4] ? SERJOYSTICKOUT[4] : 1'b1;
 		USER_OUT[6] <= SERCTL[5] ? SERJOYSTICKOUT[5] : 1'b1;
 		USER_OUT[4] <= SERCTL[6] ? SERJOYSTICKOUT[6] : 1'b1;
-		
-		
 	end else begin
 		SER_OPT  <= 0;
 		USER_OUT <= '1;
 	end
 end
-
 
 endmodule
