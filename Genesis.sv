@@ -125,7 +125,7 @@ module emu
 );
 
 assign ADC_BUS  = 'Z;
-assign USER_OUT = '1;
+//assign USER_OUT = '1;
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 assign BUTTONS   = osd_btn;
 assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
@@ -177,7 +177,7 @@ assign LED_USER  = cart_download | sav_pending;
 // 0         1         2         3          4         5         6   
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// XXXXXXXXXXXX XXXXXXXXXXXXXXXXXXX XXXXXXXXXXXXX XXX               
+// XXXXXXXXXXXX XXXXXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXXX               
 
 `include "build_id.v"
 localparam CONF_STR = {
@@ -210,6 +210,7 @@ localparam CONF_STR = {
 	"o57,Multitap,Disabled,4-Way,TeamPlayer: Port1,TeamPlayer: Port2,J-Cart;",
 	"OIJ,Mouse,None,Port1,Port2;",
 	"OK,Mouse Flip Y,No,Yes;",
+	"oD,Serial Mode,OFF,SNAC;",
 	"-;",
 	"o89,Gun,Disabled,Joy1,Joy2,Mouse;",
 	"H4oA,Gun Btn,Joy,Mouse;",
@@ -454,6 +455,11 @@ system system
 	.GUN_B(lg_b),
 	.GUN_C(lg_c),
 	.GUN_START(lg_start),
+
+	.SERJOYSTICK(SERJOYSTICK),
+	.SERJOYSTICKOUT(SERJOYSTICKOUT),
+	.SERCTL(SERCTL),
+	.SER_OPT(SER_OPT),
 
 	.ENABLE_FM(~dbg_menu | ~status[32]),
 	.ENABLE_PSG(~dbg_menu | ~status[33]),
@@ -947,6 +953,38 @@ always @(posedge clk_sys) begin
 				sd_wr  <= ~bk_loading;
 			end
 		end
+	end
+end
+
+wire [7:0] SERJOYSTICK;
+wire [7:0] SERJOYSTICKOUT;
+wire [7:0] SERCTL;
+wire [1:0] SER_OPT;
+
+always @(posedge clk_sys) begin
+	if (status[45]) begin
+		SERJOYSTICK[0] <= USER_IN[1];//up
+		SERJOYSTICK[1] <= USER_IN[0];//down	
+		SERJOYSTICK[2] <= USER_IN[5];//left	
+		SERJOYSTICK[3] <= USER_IN[3];//right
+		SERJOYSTICK[4] <= USER_IN[2];//b TL		
+		SERJOYSTICK[5] <= USER_IN[6];//c TR GPIO7			
+		SERJOYSTICK[6] <= USER_IN[4];//  TH
+		SERJOYSTICK[7] <= 0;
+		SER_OPT[0] <= status[4];
+		SER_OPT[1] <= ~status[4];
+		USER_OUT[1] <= SERCTL[0] ? SERJOYSTICKOUT[0] : 1'b1;
+		USER_OUT[0] <= SERCTL[1] ? SERJOYSTICKOUT[1] : 1'b1;
+		USER_OUT[5] <= SERCTL[2] ? SERJOYSTICKOUT[2] : 1'b1;
+		USER_OUT[3] <= SERCTL[3] ? SERJOYSTICKOUT[3] : 1'b1;
+		USER_OUT[2] <= SERCTL[4] ? SERJOYSTICKOUT[4] : 1'b1;
+		USER_OUT[6] <= SERCTL[5] ? SERJOYSTICKOUT[5] : 1'b1;
+		USER_OUT[4] <= SERCTL[6] ? SERJOYSTICKOUT[6] : 1'b1;
+		
+		
+	end else begin
+		SER_OPT  <= 0;
+		USER_OUT <= '1;
 	end
 end
 
