@@ -125,9 +125,7 @@ module system
 	input         LADDER,
 	input         OBJ_LIMIT_HIGH,
 
-	output		  BG_LAYER_ACTIVE,
-	output		  BGA_DITHER_DETECT,
-	output		  BGB_DITHER_DETECT
+	output		  TRANSP_DETECT
 );
 
 reg reset;
@@ -456,13 +454,9 @@ vdp vdp
 	.CE_PIX(CE_PIX),
 	.HBL(HBL),
 	.VBL(VBL),
-	
-	.BG_LAYER_ACTIVE(BG_LAYER_ACTIVE),
-	
-	.BGA_DITHER_DETECT(BGA_DITHER_DETECT),
-	.BGB_DITHER_DETECT(BGB_DITHER_DETECT)
-);
 
+	.TRANSP_DETECT(TRANSP_DETECT)
+);
 
 // PSG 0x10-0x17 in VDP space
 wire signed [10:0] PSG_SND;

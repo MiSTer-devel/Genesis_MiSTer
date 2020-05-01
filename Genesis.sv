@@ -177,7 +177,7 @@ assign LED_USER  = cart_download | sav_pending;
 // 0         1         2         3          4         5         6   
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// XXXXXXXXXXXX XXXXXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXXX               
+// XXXXXXXXXXXX XXXXXXXXXXXXXXXXXXX XX XXXXXXXXXXXXX               
 
 `include "build_id.v"
 localparam CONF_STR = {
@@ -199,7 +199,7 @@ localparam CONF_STR = {
 	"OU,320x224 Aspect,Original,Corrected;",
 	"O13,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
 	"OT,Border,No,Yes;",
-	"oEG,Composite Blending,Off,On,AutoBGA,AutoBGB,AutoBoth;",
+	"oEF,Composite Blend,Off,On,Adaptive;",
 	"-;",
 	"OEF,Audio Filter,Model 1,Model 2,Minimal,No Filter;",
 	"OB,FM Chip,YM2612,YM3438;",
@@ -488,22 +488,12 @@ system system
 	.ROM_DATA2(rom_data2),
 	.ROM_REQ2(rom_rd2),
 	.ROM_ACK2(rom_rdack2),
-	
-	.BG_LAYER_ACTIVE(BG_LAYER_ACTIVE),
-	
-	.BGA_DITHER_DETECT(BGA_DITHER_DETECT),
-	.BGB_DITHER_DETECT(BGB_DITHER_DETECT)
+
+	.TRANSP_DETECT(TRANSP_DETECT)
 );
 
-wire BG_LAYER_ACTIVE;
-wire BGA_DITHER_DETECT;
-wire BGB_DITHER_DETECT;
-
-
-wire cofi_enable = (status[48:46]==3'd1) ||																							// Force on (whole screen).
-						 (status[48:46]==3'd2 && /*BG_LAYER_ACTIVE &&*/ BGA_DITHER_DETECT) ||								// Auto-detect on Background Layer A.
-						 (status[48:46]==3'd3 && /*BG_LAYER_ACTIVE &&*/ BGB_DITHER_DETECT) ||								// Auto-detect on Background Layer B.
-						 (status[48:46]==3'd4 && /*BG_LAYER_ACTIVE &&*/ (BGA_DITHER_DETECT || BGB_DITHER_DETECT));	// Auto-detect on BOTH Background layers.
+wire TRANSP_DETECT;
+wire cofi_enable = status[46] || (status[47] && TRANSP_DETECT);
 
 wire PAL = status[7];
 
