@@ -63,9 +63,8 @@ module multitap
 	input        GUN_C,
 	input        GUN_START,
 
-	input  [7:0] SERJOYSTICK,
-	output [7:0] SERJOYSTICKOUT,
-	output [7:0] SERCTL,
+	input  [7:0] SERJOYSTICK_IN,
+	output [7:0] SERJOYSTICK_OUT,
 	input  [1:0] SER_OPT,
 
 	input        PAL,

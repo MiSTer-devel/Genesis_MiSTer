@@ -102,9 +102,8 @@ module system
 	input         GUN_C,
 	input         GUN_START,
 
-	input   [7:0] SERJOYSTICK,
-	output  [7:0] SERJOYSTICKOUT,
-	output  [7:0] SERCTL,
+	input   [7:0] SERJOYSTICK_IN,
+	output  [7:0] SERJOYSTICK_OUT,
 	input   [1:0] SER_OPT,
 
 	input  [24:1] ROMSZ,
@@ -571,9 +570,8 @@ multitap multitap
 	.GUN_C(GUN_C),
 	.GUN_START(GUN_START),
 
-	.SERJOYSTICK(SERJOYSTICK),
-	.SERJOYSTICKOUT(SERJOYSTICKOUT),
-	.SERCTL(SERCTL),
+	.SERJOYSTICK_IN(SERJOYSTICK_IN),
+	.SERJOYSTICK_OUT(SERJOYSTICK_OUT),
 	.SER_OPT(SER_OPT),
 
 	.PAL(PAL),
