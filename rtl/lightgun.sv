@@ -1,4 +1,104 @@
 
+module lightguns
+(
+	input        CLK,
+	input        RESET,
+
+	input [24:0] MOUSE,
+	input  [1:0] MOUSE_XY,
+
+	input  [7:0] JOY1_X,
+	input  [7:0] JOY1_Y,
+	input [11:0] JOY1,
+	input  [7:0] JOY2_X,
+	input  [7:0] JOY2_Y,
+	input [11:0] JOY2,
+	
+	input        RELOAD,
+
+	input        HDE,VDE,
+	input        CE_PIX,
+	input        H40,
+	
+	input  [1:0] BTN_MODE,
+	input  [1:0] SIZE,
+	input        GUN2_EN,
+	
+	input  [7:0] SENSOR_DELAY,
+	
+	output [2:0] TARGET,
+	output [4:0] GUN1_OUT,
+	output [4:0] GUN2_OUT
+);
+
+wire target1, target2;
+assign TARGET = {1'b0, GUN2_EN ? target2 : 1'b0, target1};
+
+lightgun lightgun1
+(
+	.CLK(CLK),
+	.RESET(RESET),
+
+	.MOUSE(MOUSE),
+	.MOUSE_XY(MOUSE_XY[0]),
+
+	.JOY_X(JOY1_X),
+	.JOY_Y(JOY1_Y),
+	.JOY(JOY1),
+
+	.RELOAD(RELOAD),
+
+	.HDE(HDE),
+	.VDE(VDE),
+	.CE_PIX(CE_PIX),
+	.H40(H40),
+
+	.BTN_MODE(BTN_MODE[0]),
+	.SIZE(SIZE),
+	.SENSOR_DELAY(SENSOR_DELAY),
+
+	.TARGET(target1),
+	.SENSOR(GUN1_OUT[0]),
+	.BTN_A(GUN1_OUT[1]),
+	.BTN_B(GUN1_OUT[2]),
+	.BTN_C(GUN1_OUT[3]),
+	.BTN_START(GUN1_OUT[4])
+);
+
+lightgun lightgun2
+(
+	.CLK(CLK),
+	.RESET(RESET),
+
+	.MOUSE(MOUSE),
+	.MOUSE_XY(0),
+
+	.JOY_X(JOY2_X),
+	.JOY_Y(JOY2_Y),
+	.JOY(JOY2),
+
+	.RELOAD(RELOAD),
+
+	.HDE(HDE),
+	.VDE(VDE),
+	.CE_PIX(CE_PIX),
+	.H40(H40),
+
+	.BTN_MODE(BTN_MODE[1]),
+	.SIZE(SIZE),
+	.SENSOR_DELAY(SENSOR_DELAY),
+
+	.TARGET(target2),
+	.SENSOR(GUN2_OUT[0]),
+	.BTN_A(GUN2_OUT[1]),
+	.BTN_B(GUN2_OUT[2]),
+	.BTN_C(GUN2_OUT[3]),
+	.BTN_START(GUN2_OUT[4])
+);
+
+endmodule
+
+
 module lightgun
 (
 	input        CLK,
@@ -22,7 +122,7 @@ module lightgun
 	
 	input  [7:0] SENSOR_DELAY,
 	
-	output [2:0] TARGET,
+	output       TARGET,
 	output       SENSOR,
 	output       BTN_A,
 	output       BTN_B,
@@ -30,7 +130,7 @@ module lightgun
 	output       BTN_START
 );
 
-assign TARGET  = { 2'd0, ~offscreen & draw};
+assign TARGET  = ~offscreen & draw;
 
 reg  [9:0] lg_x, x;
 reg  [8:0] lg_y, y;

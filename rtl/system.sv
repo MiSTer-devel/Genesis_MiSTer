@@ -96,11 +96,8 @@ module system
 	
 	input         GUN_OPT,
 	input         GUN_TYPE,
-	input         GUN_SENSOR,
-	input         GUN_A,
-	input         GUN_B,
-	input         GUN_C,
-	input         GUN_START,
+	input  [4:0]  GUN_1,
+	input  [4:0]  GUN_2,
 
 	input   [7:0] SERJOYSTICK_IN,
 	output  [7:0] SERJOYSTICK_OUT,
@@ -564,11 +561,18 @@ multitap multitap
 	
 	.GUN_OPT(GUN_OPT),
 	.GUN_TYPE(GUN_TYPE),
-	.GUN_SENSOR(GUN_SENSOR),
-	.GUN_A(GUN_A),
-	.GUN_B(GUN_B),
-	.GUN_C(GUN_C),
-	.GUN_START(GUN_START),
+
+	.GUN1_SENSOR(GUN_1[0]),
+	.GUN1_A(GUN_1[1]),
+	.GUN1_B(GUN_1[2]),
+	.GUN1_C(GUN_1[3]),
+	.GUN1_START(GUN_1[4]),
+	
+	.GUN2_SENSOR(GUN_2[0]),
+	.GUN2_A(GUN_2[1]),
+	.GUN2_B(GUN_2[2]),
+	.GUN2_C(GUN_2[3]),
+	.GUN2_START(GUN_2[4]),
 
 	.SERJOYSTICK_IN(SERJOYSTICK_IN),
 	.SERJOYSTICK_OUT(SERJOYSTICK_OUT),

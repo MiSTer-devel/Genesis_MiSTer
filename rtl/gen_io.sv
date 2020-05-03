@@ -75,11 +75,18 @@ module gen_io
 	
 	input            GUN_OPT,
 	input            GUN_TYPE,
-	input            GUN_SENSOR,
-	input            GUN_A,
-	input            GUN_B,
-	input            GUN_C,
-	input            GUN_START,
+	
+	input            GUN1_SENSOR,
+	input            GUN1_A,
+	input            GUN1_B,
+	input            GUN1_C,
+	input            GUN1_START,
+	
+	input            GUN2_SENSOR,
+	input            GUN2_A,
+	input            GUN2_B,
+	input            GUN2_C,
+	input            GUN2_START,
 
 	input      [7:0] SERJOYSTICK_IN,
 	output     [7:0] SERJOYSTICK_OUT,
@@ -194,11 +201,18 @@ gun_io gun
 	.CE(CE),
 
 	.GUN_TYPE(GUN_TYPE),
-	.SENSOR(GUN_SENSOR),
-	.P_A(GUN_A),
-	.P_B(GUN_B),
-	.P_C(GUN_C),
-	.P_START(GUN_START),
+	
+	.P1_SENSOR(GUN1_SENSOR),
+	.P1_A(GUN1_A),
+	.P1_B(GUN1_B),
+	.P1_C(GUN1_C),
+	.P1_START(GUN1_START),
+	
+	.P2_SENSOR(GUN2_SENSOR),
+	.P2_A(GUN2_A),
+	.P2_B(GUN2_B),
+	.P2_C(GUN2_C),
+	.P2_START(GUN2_START),
 
 	.DI((CTLB & DATB) | ~CTLB),
 	.DO(GUN_DO)
@@ -377,11 +391,18 @@ module gun_io
 	input CE,
 
 	input GUN_TYPE,
-	input SENSOR,
-	input P_A,
-	input P_B,
-	input P_C,
-	input P_START,
+	
+	input P1_SENSOR,
+	input P1_A,
+	input P1_B,
+	input P1_C,
+	input P1_START,
+	
+	input P2_SENSOR,
+	input P2_A,
+	input P2_B,
+	input P2_C,
+	input P2_START,
 
 	input [7:0] DI,
 	output reg [7:0] DO
@@ -413,8 +434,8 @@ always @(posedge RESET or posedge CLK) begin
 		// Menacer
 		mrsten <= DI[5];
 		if(mrsten & ~DI[5] & ~DI[4]) mth <= 1'b1;
-		if(SENSOR) mth <= 1'b0;
-		mdo <= {2'b00, P_START, P_C, P_A, P_B};
+		if(P1_SENSOR) mth <= 1'b0;
+		mdo <= {2'b00, P1_START, P1_C, P1_A, P1_B};
 
 		// Justifier
 		jgunsel <= DI[5];
@@ -423,12 +444,13 @@ always @(posedge RESET or posedge CLK) begin
 		if(~jgunen) begin
 			if(~jgunsel) begin
 				// Blue gun
-				jdo[2:0] <= {!SENSOR & th, !P_START,!P_A};
-				if(SENSOR) jth <= 1'b0;
+				jdo[2:0] <= {!P1_SENSOR & th, !P1_START,!P1_A};
+				if(P1_SENSOR) jth <= 1'b0;
 			end
 			else begin
 				// Pink gun (2nd player not supported yet)
-				jdo[2:0] <= {th, 2'b11};
+				jdo[2:0] <= {!P2_SENSOR & th, !P2_START,!P2_A};
+				if(P2_SENSOR) jth <= 1'b0;
 			end
 		end
 		else begin
