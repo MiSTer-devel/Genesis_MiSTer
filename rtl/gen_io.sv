@@ -448,7 +448,7 @@ always @(posedge RESET or posedge CLK) begin
 				if(P1_SENSOR) jth <= 1'b0;
 			end
 			else begin
-				// Pink gun (2nd player not supported yet)
+				// Pink gun (2nd player)
 				jdo[2:0] <= {!P2_SENSOR & th, !P2_START,!P2_A};
 				if(P2_SENSOR) jth <= 1'b0;
 			end
