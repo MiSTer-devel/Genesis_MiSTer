@@ -312,7 +312,7 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(1)) hps_io
 
 wire [1:0] gun0_mode = status[41:40];
 wire       gun0_btn_mode = status[42];
-wire [1:0] gun1_mode = status[48];
+wire       gun1_mode = status[48];
 
 wire code_index = &ioctl_index;
 wire cart_download = ioctl_download & ~code_index;
