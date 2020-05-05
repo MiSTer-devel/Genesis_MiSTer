@@ -174,7 +174,7 @@ assign LED_USER  = cart_download | sav_pending;
 // 0         1         2         3          4         5         6   
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// XXXXXXXXXXXX XXXXXXXXXXXXXXXXXXX XX XXXXXXXXXXXXXXX             
+// XXXXXXXXXXXX XXXXXXXXXXXXXXXXXXX XX XXXXXXXXXXXXXX              
 
 `include "build_id.v"
 localparam CONF_STR = {
@@ -209,10 +209,10 @@ localparam CONF_STR = {
 	"OK,Mouse Flip Y,No,Yes;",
 	"oD,Serial,OFF,SNAC;",
 	"-;",
-	"o89,Gun Control,Disabled,Joy1,Joy2,Mouse;",
+	"o89,Gun Control,Disabled,Joy,Mouse;",
 	"H4oA,Gun Fire,Joy,Mouse;",
 	"H4oBC,Cross,Small,Medium,Big,None;",
-	"H4oGH,P2 Gun,Disabled,Joy1,Joy2,Joy3;",
+	"H4oG,P2 Gun,Disabled,Joy;",
 	"-;",
 	"o34,ROM Storage,Auto,SDRAM,DDR3;",
 	"-;",
@@ -312,7 +312,7 @@ hps_io #(.STRLEN($size(CONF_STR)>>3), .WIDE(1)) hps_io
 
 wire [1:0] gun0_mode = status[41:40];
 wire       gun0_btn_mode = status[42];
-wire [1:0] gun1_mode = status[49:48];
+wire [1:0] gun1_mode = status[48];
 
 wire code_index = &ioctl_index;
 wire cart_download = ioctl_download & ~code_index;
@@ -448,10 +448,10 @@ system system
 	.MOUSE(ps2_mouse),
 	.MOUSE_OPT(status[20:18]),
 	
-	.GUN_OPT(|gun0_mode),
+	.GUN_OPT(gun0_mode),
 	.GUN_TYPE(gun_type),
 	.GUN_1(gun0),
-	.GUN_2(|gun1_mode ? gun1 : 5'b00000),
+	.GUN_2(gun1_mode ? gun1 : 5'b00000),
 
 	.SERJOYSTICK_IN(SERJOYSTICK_IN),
 	.SERJOYSTICK_OUT(SERJOYSTICK_OUT),
@@ -608,15 +608,15 @@ lightguns lightguns
 	.RESET(reset),
 
 	.MOUSE(ps2_mouse),
-	.MOUSE_XY(&gun0_mode),
+	.MOUSE_XY(gun0_mode[1]),
 
-	.JOY1_X(gun0_mode[0] ? joy0_x : joy1_x),
-	.JOY1_Y(gun0_mode[0] ? joy0_y : joy1_y),
-	.JOY1(gun0_mode[0] ? joystick_0 : joystick_1),
+	.JOY1_X(status[4] ? joy0_x : joy1_x),
+	.JOY1_Y(status[4] ? joy0_y : joy1_y),
+	.JOY1(status[4] ? joystick_0 : joystick_1),
 	
-	.JOY2_X(&gun1_mode ? joy2_x : (gun1_mode[0] ? joy0_x : joy1_x)),
-	.JOY2_Y(&gun1_mode ? joy2_y : (gun1_mode[0] ? joy0_y : joy1_y)),
-	.JOY2(&gun1_mode ? joystick_2 : gun1_mode[0] ? joystick_0 : joystick_1),
+	.JOY2_X((gun0_mode[0] | ~gun0_btn_mode) ? joy2_x : (status[4] ? joy0_x : joy1_x)),
+	.JOY2_Y((gun0_mode[0] | ~gun0_btn_mode) ? joy2_y : (status[4] ? joy0_y : joy1_y)),
+	.JOY2((gun0_mode[0] | ~gun0_btn_mode) ? joystick_2 : (status[4] ? joystick_0 : joystick_1)),
 
 	.RELOAD(gun_type),
 
