@@ -128,7 +128,11 @@ module system
 );
 
 reg reset;
-always @(posedge MCLK) if(M68K_CLKENn) reset <= ~RESET_N | LOADING;
+reg hard_reset;
+always @(posedge MCLK) if(M68K_CLKENn) begin
+	reset <= ~RESET_N | LOADING;
+	hard_reset <= LOADING;
+end
 
 //--------------------------------------------------------------
 // CLOCK ENABLERS
@@ -247,7 +251,7 @@ fx68k M68K
 (
 	.clk(MCLK),
 	.extReset(reset),
-	.pwrUp(reset),
+	.pwrUp(hard_reset),
 	.enPhi1(M68K_CLKENp),
 	.enPhi2(M68K_CLKENn),
 
@@ -392,7 +396,7 @@ wire HL;
 
 vdp vdp
 (
-	.RST_n(~reset),
+	.RST_n(~hard_reset),
 	.CLK(MCLK),
 
 	.SEL(VDP_SEL),
@@ -485,7 +489,7 @@ wire        JCART_DTACK_N;
 
 multitap multitap
 (
-	.RESET(reset),
+	.RESET(hard_reset),
 	.CLK(MCLK),
 	.CE(M68K_CLKEN),
 
