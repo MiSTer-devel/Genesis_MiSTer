@@ -279,6 +279,7 @@ always@(posedge clk_sys) begin
 		sd_ack_conf <= 0;
 		io_dout <= 0;
 		ps2skip <= 0;
+		img_mounted <= 0;
 	end
 	else if(io_strobe) begin
 
@@ -300,7 +301,6 @@ always@(posedge clk_sys) begin
 			endcase
 
 			sd_buff_addr <= 0;
-			img_mounted <= 0;
 			if(io_din == 5) ps2_key_raw <= 0;
 		end else begin
 

@@ -37,7 +37,7 @@ module video_cleaner
 	// optional aligned blank
 	output reg       HBlank_out,
 	output reg       VBlank_out,
-
+	
 	// optional aligned de
 	output reg       DE_out
 );
