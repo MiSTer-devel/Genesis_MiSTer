@@ -599,15 +599,7 @@ multitap multitap
 // ROM
 //-----------------------------------------------------------------------
 
-wire [23:0] pier_bank = (MBUS_A[23:1] - 23'h140000);
-always_comb begin
-	case(BANK_MODE)
-		2'h2: ROM_ADDR = {BANK_REG[MBUS_A[21:19]], MBUS_A[18:1]};
-		2'h3: ROM_ADDR = {BANK_REG[pier_bank[20:18]], MBUS_A[18:1]};
-		default: ROM_ADDR = MBUS_A;
-	endcase
-end
-
+assign ROM_ADDR = BANK_MODE[0] ? {BANK_REG[MBUS_A[21:19]], MBUS_A[18:1]} : MBUS_A;
 assign ROM_BE = ~{MBUS_UDS_N, MBUS_LDS_N};
 assign ROM_WDATA = MBUS_DO;
 
@@ -764,8 +756,8 @@ reg        MBUS_LDS_N;
 
 reg [15:0] NO_DATA;
 
-reg [4:0]  BANK_REG[0:7];
-reg [2:0]  BANK_MODE; //0 = none, 1 = BANK SRAM, 2 = BANK ROM
+reg  [4:0] BANK_REG[0:7];
+reg  [1:0] BANK_MODE; //0 = none, 1 = BANK ROM, 2 = BANK SRAM
 
 reg  [3:0] mstate;
 reg  [1:0] msrc;
@@ -814,9 +806,7 @@ always @(posedge MCLK) begin
 		pier_count <= 0;
 		MBUS_RNW <= 1;
 		NO_DATA <= 'h4E71;
-
-		if(PIER_QUIRK) BANK_REG <= '{0,0,0,0,0,0,0,0};
-		else BANK_REG <= '{0,1,2,3,4,5,6,7};
+		BANK_REG <= '{0,1,2,3,4,5,6,7};
 	end
 	else begin
 	/*
@@ -891,7 +881,7 @@ always @(posedge MCLK) begin
 
 				if (MBUS_A[23:20]<'hA || (msrc == MSRC_Z80 && MBUS_A[23:20]<'hE && ROMSZ[24:20]>='hA)) begin
 					//ROM: 000000-9FFFFF (A00000-DFFFFF)
-					if (BANK_MODE == 2'h1 && MBUS_A[23:21] == 1) begin
+					if (BANK_MODE == 2 && MBUS_A[23:21] == 1) begin
 						// 200000-3FFFFF SRAM overrides ROM when bank is selected
 						SRAM_SEL <= 1;
 						mstate <= MBUS_SRAM_READ;
@@ -923,7 +913,6 @@ always @(posedge MCLK) begin
 						mstate <= MBUS_ROM_WRITE;
 					end
 					else if (MBUS_A < ROMSZ) begin
-						if (PIER_QUIRK) BANK_MODE <= (MBUS_A >= 23'h140000) ? 3'h3 : 3'h0;
 						if (SVP_QUIRK && msrc == MSRC_VDP) MBUS_A <= MBUS_A - 1'd1;
 						ROM_WE <= 0;
 						ROM_REQ <= ~ROM_ACK;
@@ -965,17 +954,19 @@ always @(posedge MCLK) begin
 					if (~MBUS_RNW) begin
 						if (ROMSZ > 'h200000) begin // SSF2/Pier Solar ROM banking
 							if (MBUS_A[3:1]) begin
+								BANK_MODE <= 1;
 								if (~PIER_QUIRK) begin // SSF2
 									BANK_REG[MBUS_A[3:1]] <= MBUS_DO[4:0];
-									BANK_MODE <= 2'h2;
-								end else if (MBUS_A[3:1] == 'h4) begin // Pier EEPROM
+								end
+								else if (MBUS_A[3:1] == 4) begin // Pier EEPROM
 									{ep_cs, ep_hold , ep_sck, ep_si} <= MBUS_DO[3:0];
-								end else if (~MBUS_A[3]) begin // Pier Banks
-									BANK_REG[MBUS_A[3:1] - 1'b1] <= {1'b0, MBUS_DO[3:0]};
+								end
+								else if (~MBUS_A[3]) begin // Pier Banks
+									BANK_REG[{1'b1,MBUS_A[2:1]}] <= MBUS_DO[3:0];
 								end
 							end
 						end else begin // SRAM Banking
-							BANK_MODE <= {1'b0, MBUS_DO[0]};
+							BANK_MODE <= {MBUS_DO[0], 1'b0};
 						end
 					end else if (PIER_QUIRK && MBUS_A[3:1] == 'h5) begin
 						data <= {15'h7FFF, m95_so};
