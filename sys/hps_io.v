@@ -298,6 +298,7 @@ always@(posedge clk_sys) begin
 				'h2F: io_dout <= 1;
 				'h32: io_dout <= gamma_bus[21];
 				'h36: begin io_dout <= info_n; info_n <= 0; end
+				'h39: io_dout <= 1;
 			endcase
 
 			sd_buff_addr <= 0;
