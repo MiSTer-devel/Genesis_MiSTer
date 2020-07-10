@@ -795,43 +795,41 @@ always @(posedge clk_sys) begin
 	if(ioctl_wr & cart_download) begin
 		if(ioctl_addr == 'h1F0 || ioctl_addr == 'h1F2) begin
 			if(ioctl_data[7:0] == "J") hdr_j <= 1;
-			else if (ioctl_data[7:0] == "U") begin hdr_u <= 1; hdr_j <= 0; hdr_e <= 0; end
-			else if (ioctl_data[7:0] == "E") begin hdr_e <= 1; hdr_j <= 0; hdr_u <= 1; end
-			else if (ioctl_data[7:0] == "1") begin hdr_j <= 1; hdr_u <= 0; hdr_e <= 0; end
-			else if (ioctl_data[7:0] == "2") begin hdr_j <= 0; hdr_u <= 0; hdr_e <= 0; end
-			else if (ioctl_data[7:0] == "3") begin hdr_j <= 1; hdr_u <= 0; hdr_e <= 0; end
-			else if (ioctl_data[7:0] == "4") begin hdr_u <= 1; hdr_j <= 0; hdr_e <= 0; end
-			else if (ioctl_data[7:0] == "5") begin hdr_u <= 1; hdr_j <= 1; hdr_e <= 0; end
-			else if (ioctl_data[7:0] == "6") begin hdr_u <= 1; hdr_j <= 0; hdr_e <= 0; end
-			else if (ioctl_data[7:0] == "7") begin hdr_u <= 1; hdr_j <= 1; hdr_e <= 0; end
-			else if (ioctl_data[7:0] == "8") begin hdr_e <= 1; hdr_j <= 0; hdr_u <= 0; end
-			else if (ioctl_data[7:0] == "9") begin hdr_j <= 1; hdr_u <= 0; hdr_e <= 1; end
-			else if (ioctl_data[7:0] == "A") begin hdr_e <= 1; hdr_j <= 0; hdr_u <= 0; end
-			else if (ioctl_data[7:0] == "B") begin hdr_e <= 1; hdr_j <= 1; hdr_u <= 0; end
-			else if (ioctl_data[7:0] == "C") begin hdr_e <= 1; hdr_j <= 0; hdr_u <= 1; end
-			else if (ioctl_data[7:0] == "D") begin hdr_u <= 1; hdr_j <= 1; hdr_e <= 1; end
-			else if (ioctl_data[7:0] == "F") begin hdr_u <= 1; hdr_j <= 1; hdr_e <= 1; end
-			else if (ioctl_data[7:0] >= "0" && ioctl_data[7:0] <= "Z") hdr_e <= 1;
+			else if (ioctl_data[7:0] == "U") begin hdr_u <= 1; end
+			else if (ioctl_data[7:0] == "E") begin hdr_e <= 1; end
+			else if (ioctl_data[7:0] == "1") begin hdr_j <= 1; end
+			else if (ioctl_data[7:0] == "2") begin hdr_j <= 0; end
+			else if (ioctl_data[7:0] == "3") begin hdr_j <= 1; end
+			else if (ioctl_data[7:0] == "4") begin hdr_u <= 1; end
+			else if (ioctl_data[7:0] == "5") begin hdr_u <= 1; end
+			else if (ioctl_data[7:0] == "6") begin hdr_u <= 1; end
+			else if (ioctl_data[7:0] == "7") begin hdr_u <= 1; end
+			else if (ioctl_data[7:0] == "8") begin hdr_e <= 1; end
+			else if (ioctl_data[7:0] == "9") begin hdr_j <= 1; end
+			else if (ioctl_data[7:0] == "A") begin hdr_e <= 1; end
+			else if (ioctl_data[7:0] == "B") begin hdr_e <= 1; end
+			else if (ioctl_data[7:0] == "C") begin hdr_e <= 1; end
+			else if (ioctl_data[7:0] == "D") begin hdr_u <= 1; end
+			else if (ioctl_data[7:0] == "F") begin hdr_u <= 1; end
 		end
 		if(ioctl_addr == 'h1F0) begin
 			if(ioctl_data[15:8] == "J") hdr_j <= 1;
-			else if (ioctl_data[15:8] == "U") begin hdr_u <= 1; hdr_j <= 0; hdr_e <= 0; end
-			else if (ioctl_data[15:8] == "E") begin hdr_e <= 1; hdr_j <= 0; hdr_u <= 1; end
-			else if (ioctl_data[15:8] == "1") begin hdr_j <= 1; hdr_u <= 0; hdr_e <= 0; end
-			else if (ioctl_data[15:8] == "2") begin hdr_j <= 1; hdr_u <= 0; hdr_e <= 0; end
-			else if (ioctl_data[15:8] == "3") begin hdr_j <= 1; hdr_u <= 0; hdr_e <= 0; end
-			else if (ioctl_data[15:8] == "4") begin hdr_u <= 1; hdr_j <= 0; hdr_e <= 0; end
-			else if (ioctl_data[15:8] == "5") begin hdr_u <= 1; hdr_j <= 1; hdr_e <= 0; end
-			else if (ioctl_data[15:8] == "6") begin hdr_u <= 1; hdr_j <= 0; hdr_e <= 0; end
-			else if (ioctl_data[15:8] == "7") begin hdr_u <= 1; hdr_j <= 1; hdr_e <= 0; end
-			else if (ioctl_data[15:8] == "8") begin hdr_e <= 1; hdr_j <= 0; hdr_u <= 0; end
-			else if (ioctl_data[15:8] == "9") begin hdr_j <= 1; hdr_u <= 0; hdr_e <= 1; end
-			else if (ioctl_data[15:8] == "A") begin hdr_e <= 1; hdr_j <= 0; hdr_u <= 0; end
-			else if (ioctl_data[15:8] == "B") begin hdr_e <= 1; hdr_j <= 1; hdr_u <= 0; end
-			else if (ioctl_data[15:8] == "C") begin hdr_e <= 1; hdr_j <= 0; hdr_u <= 1; end
-			else if (ioctl_data[15:8] == "D") begin hdr_u <= 1; hdr_j <= 1; hdr_e <= 1; end
-			else if (ioctl_data[15:8] == "F") begin hdr_u <= 1; hdr_j <= 1; hdr_e <= 1; end
-			else if (ioctl_data[15:8] >= "0" && ioctl_data[15:8] <= "Z") hdr_e <= 1;
+			else if (ioctl_data[15:8] == "U") begin hdr_u <= 1; end
+			else if (ioctl_data[15:8] == "E") begin hdr_e <= 1; end
+			else if (ioctl_data[15:8] == "1") begin hdr_j <= 1; end
+			else if (ioctl_data[15:8] == "2") begin hdr_j <= 1; end
+			else if (ioctl_data[15:8] == "3") begin hdr_j <= 1; end
+			else if (ioctl_data[15:8] == "4") begin hdr_u <= 1; end
+			else if (ioctl_data[15:8] == "5") begin hdr_u <= 1; end
+			else if (ioctl_data[15:8] == "6") begin hdr_u <= 1; end
+			else if (ioctl_data[15:8] == "7") begin hdr_u <= 1; end
+			else if (ioctl_data[15:8] == "8") begin hdr_e <= 1; end
+			else if (ioctl_data[15:8] == "9") begin hdr_j <= 1; end
+			else if (ioctl_data[15:8] == "A") begin hdr_e <= 1; end
+			else if (ioctl_data[15:8] == "B") begin hdr_e <= 1; end
+			else if (ioctl_data[15:8] == "C") begin hdr_e <= 1; end
+			else if (ioctl_data[15:8] == "D") begin hdr_u <= 1; end
+			else if (ioctl_data[15:8] == "F") begin hdr_u <= 1; end
 		end
 		if(ioctl_addr == 'h200) cart_hdr_ready <= 1;
 	end
