@@ -783,6 +783,8 @@ always @(posedge clk_sys) begin
 	if(old_ready & ~cart_hdr_ready) region_set <= 0;
 end
 
+wire [3:0] hrgn = ioctl_data[3:0] - 4'd7;
+
 reg cart_hdr_ready = 0;
 reg hdr_j=0,hdr_u=0,hdr_e=0;
 always @(posedge clk_sys) begin
@@ -793,15 +795,22 @@ always @(posedge clk_sys) begin
 	if(old_download && ~cart_download) cart_hdr_ready <= 0;
 
 	if(ioctl_wr & cart_download) begin
-		if(ioctl_addr == 'h1F0 || ioctl_addr == 'h1F2) begin
+		if(ioctl_addr == 'h1F0) begin
 			if(ioctl_data[7:0] == "J") hdr_j <= 1;
 			else if(ioctl_data[7:0] == "U") hdr_u <= 1;
-			else if(ioctl_data[7:0] >= "0" && ioctl_data[7:0] <= "Z") hdr_e <= 1;
+			else if(ioctl_data[7:0] == "E") hdr_e <= 1;
+			else if(ioctl_data[7:0] >= "0" && ioctl_data[7:0] <= "9") {hdr_e, hdr_u, hdr_j} <= {ioctl_data[3] | ioctl_data[1], ioctl_data[2], ioctl_data[0]};
+			else if(ioctl_data[7:0] >= "A" && ioctl_data[7:0] <= "F") {hdr_e, hdr_u, hdr_j} <= {hrgn[3]       | hrgn[1],       hrgn[2],       hrgn[0]};
+		end
+		if(ioctl_addr == 'h1F2) begin
+			if(ioctl_data[7:0] == "J") hdr_j <= 1;
+			else if(ioctl_data[7:0] == "U") hdr_u <= 1;
+			else if(ioctl_data[7:0] == "E") hdr_e <= 1;
 		end
 		if(ioctl_addr == 'h1F0) begin
 			if(ioctl_data[15:8] == "J") hdr_j <= 1;
 			else if(ioctl_data[15:8] == "U") hdr_u <= 1;
-			else if(ioctl_data[15:8] >= "0" && ioctl_data[7:0] <= "Z") hdr_e <= 1;
+			else if(ioctl_data[15:8] == "E") hdr_e <= 1;
 		end
 		if(ioctl_addr == 'h200) cart_hdr_ready <= 1;
 	end
