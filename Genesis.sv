@@ -799,8 +799,8 @@ always @(posedge clk_sys) begin
 			if(ioctl_data[7:0] == "J") hdr_j <= 1;
 			else if(ioctl_data[7:0] == "U") hdr_u <= 1;
 			else if(ioctl_data[7:0] == "E") hdr_e <= 1;
-			else if(ioctl_data[7:0] >= "0" && ioctl_data[7:0] <= "9") {hdr_e, hdr_u, hdr_j} <= {ioctl_data[3] | ioctl_data[1], ioctl_data[2], ioctl_data[0]};
-			else if(ioctl_data[7:0] >= "A" && ioctl_data[7:0] <= "F") {hdr_e, hdr_u, hdr_j} <= {hrgn[3]       | hrgn[1],       hrgn[2],       hrgn[0]};
+			else if(ioctl_data[7:0] >= "0" && ioctl_data[7:0] <= "9") {hdr_e, hdr_u, hdr_j} <= {ioctl_data[3], ioctl_data[2], ioctl_data[0]};
+			else if(ioctl_data[7:0] >= "A" && ioctl_data[7:0] <= "F") {hdr_e, hdr_u, hdr_j} <= {      hrgn[3],       hrgn[2],       hrgn[0]};
 		end
 		if(ioctl_addr == 'h1F2) begin
 			if(ioctl_data[7:0] == "J") hdr_j <= 1;
