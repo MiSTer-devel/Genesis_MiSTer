@@ -1191,7 +1191,7 @@ T80s #(.T2Write(1)) Z80
 	.RD_n(Z80_RD_N),
 	.WR_n(Z80_WR_N),
 	.A(Z80_A),
-	.DI((~Z80_ZBUS_DTACK_N) ? Z80_ZBUS_D : Z80_MBUS_D),
+	.DI((~Z80_MBUS_DTACK_N) ? Z80_MBUS_D : Z80_ZBUS_D),
 	.DO(Z80_DO)
 );
 
@@ -1282,19 +1282,23 @@ always @(posedge MCLK) begin
 
 		case (zstate)
 		ZBUS_IDLE:
-			if (ZBUS_SEL & MBUS_ZBUS_DTACK_N) begin
-				ZBUS_A <= {MBUS_A[14:1], MBUS_UDS_N};
-				ZBUS_DO <= (~MBUS_UDS_N) ? MBUS_DO[15:8] : MBUS_DO[7:0];
-				ZBUS_WE <= ~MBUS_RNW & ZBUS_FREE;
-				zsrc <= ZSRC_MBUS;
-				zstate <= ZBUS_READ;
-			end
-			else if (Z80_ZBUS_SEL & Z80_ZBUS_DTACK_N) begin
-				ZBUS_A <= Z80_A[14:0];
-				ZBUS_DO <= Z80_DO;
-				ZBUS_WE <= ~Z80_WR_N;
-				zsrc <= ZSRC_Z80;
-				zstate <= ZBUS_READ;
+			begin
+				if (Z80_RD_N)      Z80_ZBUS_D <= 8'hFF;
+
+				if (ZBUS_SEL & MBUS_ZBUS_DTACK_N) begin
+					ZBUS_A <= {MBUS_A[14:1], MBUS_UDS_N};
+					ZBUS_DO <= (~MBUS_UDS_N) ? MBUS_DO[15:8] : MBUS_DO[7:0];
+					ZBUS_WE <= ~MBUS_RNW & ZBUS_FREE;
+					zsrc <= ZSRC_MBUS;
+					zstate <= ZBUS_READ;
+				end
+				else if (Z80_ZBUS_SEL & Z80_ZBUS_DTACK_N) begin
+					ZBUS_A <= Z80_A[14:0];
+					ZBUS_DO <= Z80_DO;
+					ZBUS_WE <= ~Z80_WR_N;
+					zsrc <= ZSRC_Z80;
+					zstate <= ZBUS_READ;
+				end
 			end
 
 		ZBUS_READ:
