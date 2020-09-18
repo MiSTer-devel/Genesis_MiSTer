@@ -184,7 +184,7 @@ localparam CONF_STR = {
 	"-;",
 	"O67,Region,JP,US,EU;",
 	"O89,Auto Region,File Ext,Header,Disabled;",
-	"D2ORS,Priority,US>EU>JP,EU>US>JP,US>JP>EU,JP>US>EU;",
+	"D2ORS,Priority,US>EU>JP,EU>US>JP,US>JP>EU,JP>US>EU,JP>EU>US,EU>JP>US;",
 	"-;",
 	"C,Cheats;",
 	"H1OO,Cheats Enabled,Yes,No;",
@@ -772,6 +772,16 @@ always @(posedge clk_sys) begin
 					else if(hdr_u) region_req <= 1;
 					else if(hdr_e) region_req <= 2;
 					else region_req <= 0;
+				
+				4: if(hdr_j) region_req <= 0;
+					else if(hdr_e) region_req <= 2;
+					else if(hdr_u) region_req <= 1;
+					else region_req <= 0;
+					
+				5: if(hdr_e) region_req <= 2;
+					else if(hdr_j) region_req <= 0;
+					else if(hdr_u) region_req <= 1;
+					else region_req <= 2;
 			endcase
 		end
 		else begin
