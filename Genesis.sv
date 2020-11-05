@@ -40,8 +40,8 @@ module emu
 	output        CE_PIXEL,
 
 	//Video aspect ratio for HDMI. Most retro systems have ratio 4:3.
-	output  [7:0] VIDEO_ARX,
-	output  [7:0] VIDEO_ARY,
+	output [11:0] VIDEO_ARX,
+	output [11:0] VIDEO_ARY,
 
 	output  [7:0] VGA_R,
 	output  [7:0] VGA_G,
@@ -51,6 +51,7 @@ module emu
 	output        VGA_DE,    // = ~(VBlank | HBlank)
 	output        VGA_F1,
 	output [1:0]  VGA_SL,
+	output        VGA_SCALER, // Force VGA scaler
 
 	output        LED_USER,  // 1 - ON, 0 - OFF.
 
@@ -130,37 +131,36 @@ assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 assign BUTTONS   = osd_btn;
 assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 
+wire [1:0] ar = status[49:48];
+wire [7:0] arx,ary;
+
 always_comb begin
-	if (status[10]) begin
-		VIDEO_ARX = 8'd16;
-		VIDEO_ARY = 8'd9;
-	end else begin
-		case(res) // {V30, H40}
-			2'b00: begin // 256 x 224
-				VIDEO_ARX = 8'd64;
-				VIDEO_ARY = 8'd49;
-			end
+	case(res) // {V30, H40}
+		2'b00: begin // 256 x 224
+			arx = 8'd64;
+			ary = 8'd49;
+		end
 
-			2'b01: begin // 320 x 224
-				VIDEO_ARX = status[30] ? 8'd10: 8'd64;
-				VIDEO_ARY = status[30] ? 8'd7 : 8'd49;
-			end
+		2'b01: begin // 320 x 224
+			arx = status[30] ? 8'd10: 8'd64;
+			ary = status[30] ? 8'd7 : 8'd49;
+		end
 
-			2'b10: begin // 256 x 240
-				VIDEO_ARX = 8'd128;
-				VIDEO_ARY = 8'd105;
-			end
+		2'b10: begin // 256 x 240
+			arx = 8'd128;
+			ary = 8'd105;
+		end
 
-			2'b11: begin // 320 x 240
-				VIDEO_ARX = status[30] ? 8'd4 : 8'd128;
-				VIDEO_ARY = status[30] ? 8'd3 : 8'd105;
-			end
-		endcase
-	end
+		2'b11: begin // 320 x 240
+			arx = status[30] ? 8'd4 : 8'd128;
+			ary = status[30] ? 8'd3 : 8'd105;
+		end
+	endcase
 end
 
-//assign VIDEO_ARX = status[10] ? 8'd16 : ((status[30] && wide_ar) ? 8'd10 : 8'd64);
-//assign VIDEO_ARY = status[10] ? 8'd9  : ((status[30] && wide_ar) ? 8'd7  : 8'd49);
+assign VIDEO_ARX  = (!ar) ? arx : (ar - 1'd1);
+assign VIDEO_ARY  = (!ar) ? ary : 12'd0;
+assign VGA_SCALER = 0;
 
 assign AUDIO_S = 1;
 assign AUDIO_MIX = 0;
@@ -175,7 +175,7 @@ assign LED_USER  = cart_download | sav_pending;
 // 0         1         2         3          4         5         6   
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// XXXXXXXXXXXX XXXXXXXXXXXXXXXXXXX XX XXXXXXXXXXXXX               
+// XXXXXXXXXX X XXXXXXXXXXXXXXXXXXX XX XXXXXXXXXXXXXXX             
 
 `include "build_id.v"
 localparam CONF_STR = {
@@ -196,7 +196,7 @@ localparam CONF_STR = {
 
 	"P1,Audio & Video;",
 	"P1-;",
-	"P1OA,Aspect Ratio,4:3,16:9;",
+	"P1oGH,Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
 	"P1OU,320x224 Aspect,Original,Corrected;",
 	"P1O13,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
 	"P1-;",
