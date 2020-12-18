@@ -175,7 +175,7 @@ assign LED_USER  = cart_download | sav_pending;
 // 0         1         2         3          4         5         6   
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// XXXXXXXXXX X XXXXXXXXXXXXXXXXXXX XX XXXXXXXXXXXXXXX             
+// XXXXXXXXXXXX XXXXXXXXXXXXXXXXXXX XX XXXXXXXXXXXXXXX             
 
 `include "build_id.v"
 localparam CONF_STR = {
@@ -202,6 +202,7 @@ localparam CONF_STR = {
 	"P1-;",
 	"P1OT,Border,No,Yes;",
 	"P1oEF,Composite Blend,Off,On,Adaptive;",
+	"P1OA,CRAM Dots,Off,On;",
 	"P1-;",
 	"P1OEF,Audio Filter,Model 1,Model 2,Minimal,No Filter;",
 	"P1OB,FM Chip,YM2612,YM3438;",
@@ -434,6 +435,7 @@ system system
 	.HBL(hblank),
 	.VBL(vblank),
 	.BORDER(status[29]),
+	.CRAM_DOTS(status[10]),
 	.CE_PIX(ce_pix),
 	.FIELD(VGA_F1),
 	.INTERLACE(interlace),
