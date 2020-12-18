@@ -78,6 +78,7 @@ module system
 	output        VBL,
 	output        CE_PIX,
 	input         BORDER,
+	input         CRAM_DOTS,
 
 	output        INTERLACE,
 	output        FIELD,
@@ -441,6 +442,7 @@ vdp vdp
 	.VRAM_SPEED(~(FAST_FIFO|TURBO)),
 	.VSCROLL_BUG(0),
 	.BORDER_EN(BORDER),
+	.CRAM_DOTS(CRAM_DOTS),
 	.SVP_QUIRK(SVP_QUIRK),
 	.OBJ_LIMIT_HIGH_EN(OBJ_LIMIT_HIGH),
 
