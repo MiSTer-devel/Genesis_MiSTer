@@ -111,7 +111,12 @@ entity vdp is
 		CRAM_DOTS   : in  std_logic := '0';  -- Enable CRAM dots
 		OBJ_LIMIT_HIGH_EN : in std_logic := '0'; -- Enable more sprites and pixels per line
 
-		TRANSP_DETECT : out std_logic
+		TRANSP_DETECT : out std_logic;
+		
+		--debug
+		BGA_EN		: in  std_logic;
+		BGB_EN		: in  std_logic;
+		SPR_EN		: in  std_logic
 	);
 end vdp;
 
@@ -215,6 +220,7 @@ signal VINT_TG68_FF				: std_logic;
 signal VINT_T80_SET				: std_logic;
 signal VINT_T80_CLR				: std_logic;
 signal VINT_T80_FF				: std_logic;
+signal VINT_T80_WAIT				: unsigned(11 downto 0);
 
 signal INTACK_D					: std_logic;
 ----------------------------------------------------------------
@@ -2459,9 +2465,7 @@ begin
 					FIELD <= not FIELD;
 					VINT_TG68_PENDING_SET <= '1';
 					VINT_T80_SET <= '1';
-				elsif HV_VCNT = V_INT_POS + 1
-				then
-					VINT_T80_CLR <= '1';
+					VINT_T80_WAIT <= x"975";	--2422 MCLK
 				end if;
 			end if;
 
@@ -2505,6 +2509,14 @@ begin
 				REFRESH_EN <= '1';
 			end if;
 
+		end if;
+		
+		if VINT_T80_WAIT = 0 then
+			if VINT_T80_FF = '1' then
+				VINT_T80_CLR <= '1';
+			end if;
+		else
+			VINT_T80_WAIT <= VINT_T80_WAIT - 1;
 		end if;
 	end if;
 end process;
@@ -2618,18 +2630,18 @@ begin
 				end if;
 
 				if OBJ_COLINFO2_Q(3 downto 0) /= "0000" and OBJ_COLINFO2_Q(6) = '1' and
-					(SHI='0' or OBJ_COLINFO2_Q(5 downto 1) /= "11111") then
+					(SHI='0' or OBJ_COLINFO2_Q(5 downto 1) /= "11111") and SPR_EN = '1' then
 					col := OBJ_COLINFO2_Q(5 downto 0);
-				elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" and BGA_COLINFO_Q_B(6) = '1' then
+				elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" and BGA_COLINFO_Q_B(6) = '1' and BGA_EN = '1' then
 					col := BGA_COLINFO_Q_B(5 downto 0);
-				elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" and BGB_COLINFO_Q_B(6) = '1' then
+				elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" and BGB_COLINFO_Q_B(6) = '1' and BGB_EN = '1' then
 					col := BGB_COLINFO_Q_B(5 downto 0);
 				elsif OBJ_COLINFO2_Q(3 downto 0) /= "0000" and
-					(SHI='0' or OBJ_COLINFO2_Q(5 downto 1) /= "11111") then
+					(SHI='0' or OBJ_COLINFO2_Q(5 downto 1) /= "11111") and SPR_EN = '1' then
 					col := OBJ_COLINFO2_Q(5 downto 0);
-				elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" then
+				elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" and BGA_EN = '1' then
 					col := BGA_COLINFO_Q_B(5 downto 0);
-				elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" then
+				elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" and BGB_EN = '1' then
 					col := BGB_COLINFO_Q_B(5 downto 0);
 				else
 					col := BGCOL;

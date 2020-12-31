@@ -125,7 +125,15 @@ module system
 	input         LADDER,
 	input         OBJ_LIMIT_HIGH,
 
-	output		  TRANSP_DETECT
+	output		  TRANSP_DETECT,
+	
+	//debug
+	input         PAUSE_EN,
+	input         BGA_EN,
+	input         BGB_EN,
+	input         SPR_EN,
+	output [23:0] DBG_M68K_A,
+	output [23:0] DBG_VBUS_A
 );
 
 reg reset;
@@ -168,40 +176,40 @@ always @(negedge MCLK) begin
 		ZCLKCNT <= ZCLKCNT + 1'b1;
 		if (ZCLKCNT == 14) begin
 			ZCLKCNT <= 0;
-			Z80_CLKENn <= 1;
+			Z80_CLKENn <= ~PAUSE_EN;
 		end
 		
 		Z80_CLKENp <= 0;
 		if (ZCLKCNT == 7) begin
-			Z80_CLKENp <= 1;
+			Z80_CLKENp <= ~PAUSE_EN;
 		end
 
 		PSG_CLKEN <= 0;
 		PCLKCNT <= PCLKCNT + 1'b1;
 		if (PCLKCNT == 14) begin
 			PCLKCNT <= 0;
-			PSG_CLKEN <= 1;
+			PSG_CLKEN <= ~PAUSE_EN;
 		end
 
 		M68K_CLKENp <= 0;
 		VCLKCNT <= VCLKCNT + 1'b1;
 		if (VCLKCNT == VCLKMAX) begin
 			VCLKCNT <= 0;
-			M68K_CLKENp <= 1;
+			M68K_CLKENp <= ~PAUSE_EN;
 			VCLKMAX <= (TURBO == 2) ? 4'd1 : (TURBO == 1) ? 4'd3 : 4'd6;
 			VCLKMID <= (TURBO == 2) ? 4'd0 : (TURBO == 1) ? 4'd1 : 4'd3;
 		end
 
 		M68K_CLKENn <= 0;
 		if (VCLKCNT == VCLKMID) begin
-			M68K_CLKENn <= 1;
+			M68K_CLKENn <= ~PAUSE_EN;
 		end
 
 		FM_CLKEN <= 0;
 		FCLKCNT <= FCLKCNT + 1'b1;
 		if (FCLKCNT == 6) begin
 			FCLKCNT <= 0;
-			FM_CLKEN <= 1;
+			FM_CLKEN <= ~PAUSE_EN;
 		end
 	end
 end
@@ -279,6 +287,10 @@ fx68k M68K
 	.oEdb(M68K_DO),
 	.eab(M68K_A)
 );
+
+
+assign DBG_M68K_A = {M68K_A,1'b0};
+assign DBG_VBUS_A = {VBUS_A,1'b0};
 
 //--------------------------------------------------------------
 // CHEAT CODES
@@ -460,7 +472,11 @@ vdp vdp
 	.HBL(HBL),
 	.VBL(VBL),
 
-	.TRANSP_DETECT(TRANSP_DETECT)
+	.TRANSP_DETECT(TRANSP_DETECT),
+	
+	.BGA_EN(BGA_EN),
+	.BGB_EN(BGB_EN),
+	.SPR_EN(SPR_EN)
 );
 
 // PSG 0x10-0x17 in VDP space
