@@ -40,8 +40,8 @@ module emu
 	output        CE_PIXEL,
 
 	//Video aspect ratio for HDMI. Most retro systems have ratio 4:3.
-	output  [7:0] VIDEO_ARX,
-	output  [7:0] VIDEO_ARY,
+	output [11:0] VIDEO_ARX,
+	output [11:0] VIDEO_ARY,
 
 	output  [7:0] VGA_R,
 	output  [7:0] VGA_G,
@@ -51,6 +51,7 @@ module emu
 	output        VGA_DE,    // = ~(VBlank | HBlank)
 	output        VGA_F1,
 	output [1:0]  VGA_SL,
+	output        VGA_SCALER, // Force VGA scaler
 
 	output        LED_USER,  // 1 - ON, 0 - OFF.
 
@@ -65,6 +66,7 @@ module emu
 	// b[0]: osd button
 	output  [1:0] BUTTONS,
 
+	input         CLK_AUDIO, // 24.576 MHz
 	output [15:0] AUDIO_L,
 	output [15:0] AUDIO_R,
 	output        AUDIO_S, // 1 - signed audio samples, 0 - unsigned
@@ -129,37 +131,36 @@ assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 assign BUTTONS   = osd_btn;
 assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 
+wire [1:0] ar = status[49:48];
+wire [7:0] arx,ary;
+
 always_comb begin
-	if (status[10]) begin
-		VIDEO_ARX = 8'd16;
-		VIDEO_ARY = 8'd9;
-	end else begin
-		case(res) // {V30, H40}
-			2'b00: begin // 256 x 224
-				VIDEO_ARX = 8'd64;
-				VIDEO_ARY = 8'd49;
-			end
+	case(res) // {V30, H40}
+		2'b00: begin // 256 x 224
+			arx = 8'd64;
+			ary = 8'd49;
+		end
 
-			2'b01: begin // 320 x 224
-				VIDEO_ARX = status[30] ? 8'd10: 8'd64;
-				VIDEO_ARY = status[30] ? 8'd7 : 8'd49;
-			end
+		2'b01: begin // 320 x 224
+			arx = status[30] ? 8'd10: 8'd64;
+			ary = status[30] ? 8'd7 : 8'd49;
+		end
 
-			2'b10: begin // 256 x 240
-				VIDEO_ARX = 8'd128;
-				VIDEO_ARY = 8'd105;
-			end
+		2'b10: begin // 256 x 240
+			arx = 8'd128;
+			ary = 8'd105;
+		end
 
-			2'b11: begin // 320 x 240
-				VIDEO_ARX = status[30] ? 8'd4 : 8'd128;
-				VIDEO_ARY = status[30] ? 8'd3 : 8'd105;
-			end
-		endcase
-	end
+		2'b11: begin // 320 x 240
+			arx = status[30] ? 8'd4 : 8'd128;
+			ary = status[30] ? 8'd3 : 8'd105;
+		end
+	endcase
 end
 
-//assign VIDEO_ARX = status[10] ? 8'd16 : ((status[30] && wide_ar) ? 8'd10 : 8'd64);
-//assign VIDEO_ARY = status[10] ? 8'd9  : ((status[30] && wide_ar) ? 8'd7  : 8'd49);
+assign VIDEO_ARX  = (!ar) ? arx : (ar - 1'd1);
+assign VIDEO_ARY  = (!ar) ? ary : 12'd0;
+assign VGA_SCALER = 0;
 
 assign AUDIO_S = 1;
 assign AUDIO_MIX = 0;
@@ -174,7 +175,7 @@ assign LED_USER  = cart_download | sav_pending;
 // 0         1         2         3          4         5         6   
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// XXXXXXXXXXXX XXXXXXXXXXXXXXXXXXX XX XXXXXXXXXXXXX               
+// XXXXXXXXXXXX XXXXXXXXXXXXXXXXXXX XX XXXXXXXXXXXXXXX             
 
 `include "build_id.v"
 localparam CONF_STR = {
@@ -195,12 +196,13 @@ localparam CONF_STR = {
 
 	"P1,Audio & Video;",
 	"P1-;",
-	"P1OA,Aspect Ratio,4:3,16:9;",
+	"P1oGH,Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
 	"P1OU,320x224 Aspect,Original,Corrected;",
 	"P1O13,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
 	"P1-;",
 	"P1OT,Border,No,Yes;",
 	"P1oEF,Composite Blend,Off,On,Adaptive;",
+	"P1OA,CRAM Dots,Off,On;",
 	"P1-;",
 	"P1OEF,Audio Filter,Model 1,Model 2,Minimal,No Filter;",
 	"P1OB,FM Chip,YM2612,YM3438;",
@@ -433,6 +435,7 @@ system system
 	.HBL(hblank),
 	.VBL(vblank),
 	.BORDER(status[29]),
+	.CRAM_DOTS(status[10]),
 	.CE_PIX(ce_pix),
 	.FIELD(VGA_F1),
 	.INTERLACE(interlace),
@@ -447,8 +450,8 @@ system system
 	.GG_AVAILABLE(gg_available),
 
 	.J3BUT(~status[5]),
-	.JOY_1(status[4] ? joystick_1 : joystick_0),
-	.JOY_2(status[4] ? joystick_0 : joystick_1),
+	.JOY_1(status[4] ^ status[45] ? joystick_1 : joystick_0),
+	.JOY_2(status[4] ^ status[45] ? joystick_0 : joystick_1),
 	.JOY_3(joystick_2),
 	.JOY_4(joystick_3),
 	.JOY_5(joystick_4),
@@ -782,6 +785,8 @@ always @(posedge clk_sys) begin
 	if(old_ready & ~cart_hdr_ready) region_set <= 0;
 end
 
+wire [3:0] hrgn = ioctl_data[3:0] - 4'd7;
+
 reg cart_hdr_ready = 0;
 reg hdr_j=0,hdr_u=0,hdr_e=0;
 always @(posedge clk_sys) begin
@@ -792,15 +797,22 @@ always @(posedge clk_sys) begin
 	if(old_download && ~cart_download) cart_hdr_ready <= 0;
 
 	if(ioctl_wr & cart_download) begin
-		if(ioctl_addr == 'h1F0 || ioctl_addr == 'h1F2) begin
+		if(ioctl_addr == 'h1F0) begin
 			if(ioctl_data[7:0] == "J") hdr_j <= 1;
 			else if(ioctl_data[7:0] == "U") hdr_u <= 1;
-			else if(ioctl_data[7:0] >= "0" && ioctl_data[7:0] <= "Z") hdr_e <= 1;
+			else if(ioctl_data[7:0] == "E") hdr_e <= 1;
+			else if(ioctl_data[7:0] >= "0" && ioctl_data[7:0] <= "9") {hdr_e, hdr_u, hdr_j} <= {ioctl_data[3], ioctl_data[2], ioctl_data[0]};
+			else if(ioctl_data[7:0] >= "A" && ioctl_data[7:0] <= "F") {hdr_e, hdr_u, hdr_j} <= {      hrgn[3],       hrgn[2],       hrgn[0]};
+		end
+		if(ioctl_addr == 'h1F2) begin
+			if(ioctl_data[7:0] == "J") hdr_j <= 1;
+			else if(ioctl_data[7:0] == "U") hdr_u <= 1;
+			else if(ioctl_data[7:0] == "E") hdr_e <= 1;
 		end
 		if(ioctl_addr == 'h1F0) begin
 			if(ioctl_data[15:8] == "J") hdr_j <= 1;
 			else if(ioctl_data[15:8] == "U") hdr_u <= 1;
-			else if(ioctl_data[15:8] >= "0" && ioctl_data[7:0] <= "Z") hdr_e <= 1;
+			else if(ioctl_data[15:8] == "E") hdr_e <= 1;
 		end
 		if(ioctl_addr == 'h200) cart_hdr_ready <= 1;
 	end
@@ -968,8 +980,8 @@ always @(posedge clk_sys) begin
 		SERJOYSTICK_IN[5] <= USER_IN[6];//c TR GPIO7			
 		SERJOYSTICK_IN[6] <= USER_IN[4];//  TH
 		SERJOYSTICK_IN[7] <= 0;
-		SER_OPT[0] <= status[4];
-		SER_OPT[1] <= ~status[4];
+		SER_OPT[0] <= ~status[4];
+		SER_OPT[1] <= status[4];
 		USER_OUT[1] <= SERJOYSTICK_OUT[0];
 		USER_OUT[0] <= SERJOYSTICK_OUT[1];
 		USER_OUT[5] <= SERJOYSTICK_OUT[2];
