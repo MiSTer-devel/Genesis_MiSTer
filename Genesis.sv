@@ -126,6 +126,8 @@ module emu
 	input         OSD_STATUS
 );
 
+//`define DEBUG_BUILD
+
 assign ADC_BUS  = 'Z;
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 assign BUTTONS   = osd_btn;
@@ -500,7 +502,12 @@ system system
 	.ROM_REQ2(rom_rd2),
 	.ROM_ACK2(rom_rdack2),
 
-	.TRANSP_DETECT(TRANSP_DETECT)
+	.TRANSP_DETECT(TRANSP_DETECT),
+	
+	.PAUSE_EN(DBG_PAUSE_EN),
+	.BGA_EN(VDP_BGA_EN),
+	.BGB_EN(VDP_BGB_EN),
+	.SPR_EN(VDP_SPR_EN)
 );
 
 wire TRANSP_DETECT;
@@ -994,5 +1001,33 @@ always @(posedge clk_sys) begin
 		USER_OUT <= '1;
 	end
 end
+
+
+//debug
+reg       VDP_BGA_EN = 1;
+reg       VDP_BGB_EN = 1;
+reg       VDP_SPR_EN = 1;
+reg [1:0] VDP_GRID_EN = '0;
+reg       DBG_PAUSE_EN = 0;
+
+`ifdef DEBUG_BUILD
+
+always @(posedge clk_sys) begin
+	reg old_state = 0;
+
+	old_state <= ps2_key[10];
+
+	if((ps2_key[10] != old_state) && pressed) begin
+		casex(code)
+			'h003: begin VDP_BGA_EN <= ~VDP_BGA_EN; end 	// F5
+			'h00B: begin VDP_BGB_EN <= ~VDP_BGB_EN; end 	// F6
+			'h083: begin VDP_SPR_EN <= ~VDP_SPR_EN; end 	// F7
+			'h00A: begin VDP_GRID_EN <= VDP_GRID_EN + 2'd1; end 	// F8
+			'h001: begin DBG_PAUSE_EN <= ~DBG_PAUSE_EN; end 	// F9
+		endcase
+	end
+end
+
+`endif
 
 endmodule
