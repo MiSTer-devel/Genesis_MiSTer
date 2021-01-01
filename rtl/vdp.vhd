@@ -2382,7 +2382,8 @@ begin
 			end if;
 
 			if HV_HCNT = H_INT_POS then
-				if HV_VCNT = V_DISP_START + V_TOTAL_HEIGHT - 1 then --VDISP_START is negative
+				if HV_VCNT = V_DISP_START + V_TOTAL_HEIGHT - 1 and --VDISP_START is negative
+				   (V30 = '0' or PAL = '1') then -- NTSC with V30 will not reload the VCounter
 					--just after VSYNC
 					HV_VCNT <= V_DISP_START;
 				else
