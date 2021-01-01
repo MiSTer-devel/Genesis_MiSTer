@@ -119,7 +119,7 @@ always @(posedge RESET or posedge CLK) begin
 						0: DO <= {EXPORT, PAL, ~DISK, 5'd0};
 						1: DO <= (CTLA & DATA) | (~CTLA & (SER_OPT[0] ? SERJOYSTICK_IN : (MOUSE_OPT[0] ? mdata : PAD1_DO)));
 						2: DO <= (CTLB & DATB) | (~CTLB & (GUN_OPT ? GUN_DO : (SER_OPT[1] ? SERJOYSTICK_IN : (MOUSE_OPT[1] ? mdata : PAD2_DO))));
-						3: DO <= R[3] & R[6]; // Unconnected port
+						3: DO <= R[3] | ~R[6]; // Unconnected port
 				default: DO <= R[A];
 				endcase
 			end
