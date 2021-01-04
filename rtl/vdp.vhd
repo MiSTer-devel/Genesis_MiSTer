@@ -2382,7 +2382,8 @@ begin
 			end if;
 
 			if HV_HCNT = H_INT_POS then
-				if HV_VCNT = V_DISP_START + V_TOTAL_HEIGHT - 1 then --VDISP_START is negative
+				if HV_VCNT = V_DISP_START + V_TOTAL_HEIGHT - 1 and --VDISP_START is negative
+				   (V30 = '0' or PAL = '1') then -- NTSC with V30 will not reload the VCounter
 					--just after VSYNC
 					HV_VCNT <= V_DISP_START;
 				else
@@ -2944,7 +2945,7 @@ begin
 						FIFO_ADDR( CONV_INTEGER( FIFO_WR_POS ) ) <= ADDR;
 						FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) ) <= DI;
 						FIFO_CODE( CONV_INTEGER( FIFO_WR_POS ) ) <= CODE(3 downto 0);
-						FIFO_DELAY( CONV_INTEGER( FIFO_WR_POS ) ) <= "10";
+						FIFO_DELAY( CONV_INTEGER( FIFO_WR_POS ) ) <= "00"; -- should be delayed, too? (no, according to Zsenilla by RSE demo)
 						FIFO_WR_POS <= FIFO_WR_POS + 1;
 						FIFO_QUEUE <= FIFO_QUEUE + 1;
 						ADDR <= ADDR + ADDR_STEP;
