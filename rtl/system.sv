@@ -954,7 +954,7 @@ always @(posedge MCLK) begin
 				end
 
 				//ZBUS: A00000-A07FFF (A08000-A0FFFF)
-				else if(MBUS_A[23:16] == 'hA0) mstate <= MBUS_ZBUS_PRE;
+				else if(MBUS_A[23:16] == 'hA0) mstate <= !Z80_BUSRQ_N ? MBUS_ZBUS_PRE : MBUS_FINISH;
 
 				//I/O: A10000-A1001F (+mirrors)
 				else if(MBUS_A[23:5] == {16'hA100, 3'b000}) begin
