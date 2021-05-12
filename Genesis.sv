@@ -127,7 +127,7 @@ module emu
 assign ADC_BUS  = 'Z;
 assign USER_OUT = '1;
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
-assign BUTTONS[1]   = 0;
+assign BUTTONS   = 0;
 assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 assign {SDRAM_DQ, SDRAM_A, SDRAM_BA, SDRAM_CLK, SDRAM_CKE, SDRAM_DQML, SDRAM_DQMH, SDRAM_nWE, SDRAM_nCAS, SDRAM_nRAS, SDRAM_nCS} = 'Z;
 
@@ -441,23 +441,6 @@ system system
 	.ROM_REQ2(rom_rd2),
 	.ROM_ACK2(rom_rdack2) 
 );
-
-// Pop OSD menu if no rom has been loaded automatically
-assign BUTTONS[0] = osd_btn;
-
-reg osd_btn = 0;
-always @(posedge clk_sys) begin : osd_block
-    integer timeout = 0;
-
-    if(!RESET) begin
-        osd_btn <= 0;
-        if(timeout < 61000000) begin
-            timeout <= timeout + 1;
-            if(timeout > 50000000)
-                osd_btn <= ~cart_download;
-        end
-    end
-end
 
 wire PAL = status[7];
 
