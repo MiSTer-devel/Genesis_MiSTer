@@ -220,8 +220,8 @@ localparam CONF_STR = {
 	"H3-;",
 	"R0,Reset;",
 	"J1,A,B,C,Start,Mode,X,Y,Z;",
-	"jn,A,B,R,Start,Select,X,Y,L;", // name map to SNES layout.
-	"jp,Y,B,A,Start,Select,L,X,R;", // positional map to SNES layout (3 button friendly) 
+	"jn,Y,B,A,Start,Select,L,X,R;", // positional map to SNES layout (3 button friendly) 
+	"jp,A,B,R,Start,Select,X,Y,L;", // name map to SNES layout.
 	"V,v",`BUILD_DATE
 };
 
