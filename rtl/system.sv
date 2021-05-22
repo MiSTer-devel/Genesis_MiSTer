@@ -1173,9 +1173,9 @@ always @(posedge MCLK) begin
 						VDP_MBUS_DTACK_N <= 0;
 						mstate <= MBUS_IDLE;
 					end
-				endcase;
+				endcase
 			end
-		endcase;
+		endcase
 	end
 end
 
