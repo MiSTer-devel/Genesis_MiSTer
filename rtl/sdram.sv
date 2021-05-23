@@ -225,7 +225,7 @@ always @(posedge clk) begin
 		casex(state)
 			STATE_START: SDRAM_A <= a[13:1];
 			STATE_CONT:  SDRAM_A <= {dqm, 2'b10, a[22:14]};
-		endcase;
+		endcase
 	end
 	else if(mode == MODE_LDM && state == STATE_START) SDRAM_A <= MODE;
 	else if(mode == MODE_PRE && state == STATE_START) SDRAM_A <= 13'b0010000000000;
